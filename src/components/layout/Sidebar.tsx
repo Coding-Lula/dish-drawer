@@ -9,10 +9,10 @@ import {
   Moon,
   Store,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  PieChart
 } from 'lucide-react';
-import { useState } from 'react';
-import { useStore } from '@/contexts/StoreContext';
+import { useState, useEffect } from 'react';
 import { 
   Select,
   SelectContent,
@@ -20,6 +20,8 @@ import {
   SelectTrigger,
   SelectValue
 } from '@/components/ui/select';
+import { NewStoreModal } from '@/components/modals/NewStoreModal';
+import { useStores, type Store as StoreType } from '@/hooks/useSupabaseData';
 
 const navItems = [
   { path: '/', label: 'Dashboard', icon: LayoutDashboard },
@@ -28,12 +30,24 @@ const navItems = [
   { path: '/recipes', label: 'Technical Sheets', icon: UtensilsCrossed },
   { path: '/expenses', label: 'Expenses', icon: Receipt },
   { path: '/end-of-day', label: 'End of Day', icon: Moon },
+  { path: '/revenue-allocation', label: 'Revenue Allocation', icon: PieChart },
 ];
 
-export function Sidebar() {
+interface SidebarProps {
+  currentStore: StoreType | null;
+  onStoreChange: (store: StoreType) => void;
+}
+
+export function Sidebar({ currentStore, onStoreChange }: SidebarProps) {
   const [collapsed, setCollapsed] = useState(false);
   const location = useLocation();
-  const { currentStore, stores, setCurrentStore } = useStore();
+  const { stores, loading, addStore } = useStores();
+
+  useEffect(() => {
+    if (!currentStore && stores.length > 0) {
+      onStoreChange(stores[0]);
+    }
+  }, [stores, currentStore, onStoreChange]);
 
   return (
     <aside className={cn(
@@ -65,29 +79,36 @@ export function Sidebar() {
             <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2 block">
               Current Store
             </label>
-            <Select 
-              value={currentStore.id} 
-              onValueChange={(id) => {
-                const store = stores.find(s => s.id === id);
-                if (store) setCurrentStore(store);
-              }}
-            >
-              <SelectTrigger className="w-full bg-background">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {stores.map(store => (
-                  <SelectItem key={store.id} value={store.id}>
-                    {store.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            {loading ? (
+              <div className="h-10 bg-muted animate-pulse rounded-md" />
+            ) : (
+              <>
+                <Select 
+                  value={currentStore?.id || ''} 
+                  onValueChange={(id) => {
+                    const store = stores.find(s => s.id === id);
+                    if (store) onStoreChange(store);
+                  }}
+                >
+                  <SelectTrigger className="w-full bg-background">
+                    <SelectValue placeholder="Select store" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {stores.map(store => (
+                      <SelectItem key={store.id} value={store.id}>
+                        {store.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <NewStoreModal onSubmit={addStore} />
+              </>
+            )}
           </div>
         )}
 
         {/* Navigation */}
-        <nav className="flex-1 p-3 space-y-1">
+        <nav className="flex-1 p-3 space-y-1 overflow-y-auto">
           {navItems.map((item) => {
             const isActive = location.pathname === item.path;
             return (
