@@ -1,17 +1,28 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { useStore } from '@/contexts/StoreContext';
-import { paymentMethods } from '@/data/mockData';
+import { useCurrentStore } from '@/components/layout/MainLayout';
+import { useTransactions } from '@/hooks/useSupabaseData';
+
+const PAYMENT_METHODS_CONFIG = [
+  { id: 'cash', name: 'Cash', icon: '💵', isRevenue: true },
+  { id: 'card', name: 'Card', icon: '💳', isRevenue: true },
+  { id: 'mpesa', name: 'M-Pesa', icon: '📱', isRevenue: true },
+  { id: 'credit', name: 'Credit', icon: '📝', isRevenue: false },
+  { id: 'self', name: 'Self Consumption', icon: '🍽️', isRevenue: false },
+];
 
 export function RevenueBreakdown() {
-  const { transactions, currentStore } = useStore();
+  const { currentStore } = useCurrentStore();
+  const { transactions } = useTransactions(currentStore?.id || null);
   
-  const storeTransactions = transactions.filter(t => t.storeId === currentStore.id);
+  if (!currentStore) {
+    return null;
+  }
   
-  const totalSales = storeTransactions.reduce((sum, t) => sum + t.totalAmount, 0);
+  const totalSales = transactions.reduce((sum, t) => sum + Number(t.total_amount), 0);
   
-  const breakdown = paymentMethods.map(method => {
-    const methodTransactions = storeTransactions.filter(t => t.paymentMethodId === method.id);
-    const amount = methodTransactions.reduce((sum, t) => sum + t.totalAmount, 0);
+  const breakdown = PAYMENT_METHODS_CONFIG.map(method => {
+    const methodTransactions = transactions.filter(t => t.payment_method === method.id);
+    const amount = methodTransactions.reduce((sum, t) => sum + Number(t.total_amount), 0);
     const count = methodTransactions.length;
     return {
       ...method,
@@ -21,11 +32,11 @@ export function RevenueBreakdown() {
     };
   }).filter(m => m.count > 0);
 
-  const revenueTransactions = storeTransactions.filter(t => {
-    const method = paymentMethods.find(m => m.id === t.paymentMethodId);
+  const revenueTransactions = transactions.filter(t => {
+    const method = PAYMENT_METHODS_CONFIG.find(m => m.id === t.payment_method);
     return method?.isRevenue;
   });
-  const netRevenue = revenueTransactions.reduce((sum, t) => sum + t.totalAmount, 0);
+  const netRevenue = revenueTransactions.reduce((sum, t) => sum + Number(t.total_amount), 0);
 
   return (
     <Card>
@@ -58,6 +69,9 @@ export function RevenueBreakdown() {
               </div>
             </div>
           ))}
+          {breakdown.length === 0 && (
+            <p className="text-sm text-muted-foreground text-center">No sales yet today</p>
+          )}
         </div>
         
         <div className="h-px bg-border" />

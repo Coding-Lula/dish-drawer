@@ -1,34 +1,50 @@
-import { MainLayout } from '@/components/layout/MainLayout';
+import { MainLayout, useCurrentStore } from '@/components/layout/MainLayout';
 import { StatCard } from '@/components/dashboard/StatCard';
 import { LowStockAlerts } from '@/components/dashboard/LowStockAlerts';
 import { RevenueBreakdown } from '@/components/dashboard/RevenueBreakdown';
-import { useStore } from '@/contexts/StoreContext';
-import { paymentMethods } from '@/data/mockData';
+import { useTransactions, useExpenses, useStoreStock } from '@/hooks/useSupabaseData';
 import { DollarSign, ShoppingCart, TrendingUp, Package, Clock } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
+const PAYMENT_METHODS_CONFIG = [
+  { id: 'cash', name: 'Cash', icon: '💵', isRevenue: true },
+  { id: 'card', name: 'Card', icon: '💳', isRevenue: true },
+  { id: 'mpesa', name: 'M-Pesa', icon: '📱', isRevenue: true },
+  { id: 'credit', name: 'Credit', icon: '📝', isRevenue: false },
+  { id: 'self', name: 'Self Consumption', icon: '🍽️', isRevenue: false },
+];
+
 export default function Dashboard() {
-  const { transactions, expenses, currentStore, storeStocks } = useStore();
+  const { currentStore } = useCurrentStore();
+  const { transactions } = useTransactions(currentStore?.id || null);
+  const { expenses } = useExpenses(currentStore?.id || null);
+  const { stocks } = useStoreStock(currentStore?.id || null);
   
-  const storeTransactions = transactions.filter(t => t.storeId === currentStore.id);
-  const storeExpenses = expenses.filter(e => e.storeId === currentStore.id);
+  if (!currentStore) {
+    return (
+      <MainLayout>
+        <div className="flex items-center justify-center h-64">
+          <p className="text-muted-foreground">Loading store data...</p>
+        </div>
+      </MainLayout>
+    );
+  }
+
+  const totalSales = transactions.reduce((sum, t) => sum + Number(t.total_amount), 0);
   
-  const totalSales = storeTransactions.reduce((sum, t) => sum + t.totalAmount, 0);
-  
-  const revenueTransactions = storeTransactions.filter(t => {
-    const method = paymentMethods.find(m => m.id === t.paymentMethodId);
+  const revenueTransactions = transactions.filter(t => {
+    const method = PAYMENT_METHODS_CONFIG.find(m => m.id === t.payment_method);
     return method?.isRevenue;
   });
-  const netRevenue = revenueTransactions.reduce((sum, t) => sum + t.totalAmount, 0);
+  const netRevenue = revenueTransactions.reduce((sum, t) => sum + Number(t.total_amount), 0);
   
-  const totalExpenses = storeExpenses.reduce((sum, e) => sum + e.amount, 0);
+  const totalExpenses = expenses.reduce((sum, e) => sum + Number(e.amount), 0);
   
-  const stockExpenses = storeExpenses
-    .filter(e => e.category === 'stock' && !e.isDeducted)
-    .reduce((sum, e) => sum + e.amount, 0);
+  const stockExpenses = expenses
+    .filter(e => e.category === 'stock' && !e.is_deducted)
+    .reduce((sum, e) => sum + Number(e.amount), 0);
   
-  const currentStoreStocks = storeStocks.filter(s => s.storeId === currentStore.id);
-  const lowStockCount = currentStoreStocks.filter(s => s.currentQuantity < s.minThreshold).length;
+  const lowStockCount = stocks.filter(s => s.current_quantity < s.min_threshold).length;
 
   return (
     <MainLayout>
@@ -44,7 +60,7 @@ export default function Dashboard() {
           <StatCard
             title="Total Sales"
             value={`${totalSales.toLocaleString()} MT`}
-            subtitle={`${storeTransactions.length} transactions`}
+            subtitle={`${transactions.length} transactions`}
             icon={ShoppingCart}
             variant="default"
             trend={{ value: 12.5, isPositive: true }}
@@ -95,33 +111,36 @@ export default function Dashboard() {
               </CardHeader>
               <CardContent>
                 <div className="space-y-3">
-                  {storeTransactions.slice(-5).reverse().map((t, i) => {
-                    const method = paymentMethods.find(m => m.id === t.paymentMethodId);
+                  {transactions.slice(0, 5).map((t) => {
+                    const method = PAYMENT_METHODS_CONFIG.find(m => m.id === t.payment_method);
                     return (
                       <div 
                         key={t.id} 
                         className="flex items-center justify-between p-3 rounded-lg bg-muted/30 border border-border/50"
                       >
                         <div className="flex items-center gap-3">
-                          <span className="text-xl">{method?.icon}</span>
+                          <span className="text-xl">{method?.icon || '💰'}</span>
                           <div>
                             <p className="text-sm font-medium text-foreground">
-                              Sale #{t.id.split('-')[1]}
+                              Sale #{t.id.split('-')[0]}
                             </p>
                             <p className="text-xs text-muted-foreground">
-                              {t.items.length} item{t.items.length > 1 ? 's' : ''}
+                              {method?.name || t.payment_method}
                             </p>
                           </div>
                         </div>
                         <div className="text-right">
-                          <p className="font-semibold text-foreground">{t.totalAmount.toLocaleString()} MT</p>
-                          {!method?.isRevenue && (
+                          <p className="font-semibold text-foreground">{Number(t.total_amount).toLocaleString()} MT</p>
+                          {method && !method.isRevenue && (
                             <p className="text-xs text-amber-600">No Revenue</p>
                           )}
                         </div>
                       </div>
                     );
                   })}
+                  {transactions.length === 0 && (
+                    <p className="text-sm text-muted-foreground text-center py-4">No transactions yet today</p>
+                  )}
                 </div>
               </CardContent>
             </Card>
