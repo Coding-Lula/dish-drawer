@@ -1,16 +1,22 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { AlertTriangle } from 'lucide-react';
-import { useStore } from '@/contexts/StoreContext';
-import { ingredients } from '@/data/mockData';
+import { useCurrentStore } from '@/components/layout/MainLayout';
+import { useStoreStock, useIngredients } from '@/hooks/useSupabaseData';
 
 export function LowStockAlerts() {
-  const { storeStocks, currentStore } = useStore();
+  const { currentStore } = useCurrentStore();
+  const { stocks } = useStoreStock(currentStore?.id || null);
+  const { ingredients } = useIngredients();
   
-  const lowStockItems = storeStocks
-    .filter(stock => stock.storeId === currentStore.id && stock.currentQuantity < stock.minThreshold)
+  if (!currentStore) {
+    return null;
+  }
+  
+  const lowStockItems = stocks
+    .filter(stock => stock.current_quantity < stock.min_threshold)
     .map(stock => {
-      const ingredient = ingredients.find(i => i.id === stock.ingredientId);
+      const ingredient = ingredients.find(i => i.id === stock.ingredient_id);
       return {
         ...stock,
         ingredientName: ingredient?.name || 'Unknown',
@@ -33,7 +39,7 @@ export function LowStockAlerts() {
       </CardHeader>
       <CardContent>
         {lowStockItems.length === 0 ? (
-          <p className="text-sm text-muted-foreground">All stock levels are healthy! ✓</p>
+          <p className="text-sm text-muted-foreground">All stock levels are healthy!</p>
         ) : (
           <div className="space-y-3">
             {lowStockItems.map(item => (
@@ -44,13 +50,13 @@ export function LowStockAlerts() {
                 <div>
                   <p className="font-medium text-foreground">{item.ingredientName}</p>
                   <p className="text-xs text-muted-foreground">
-                    Min: {item.minThreshold} {item.unit}
+                    Min: {item.min_threshold} {item.unit}
                   </p>
                 </div>
                 <div className="text-right">
-                  <p className="font-bold text-destructive">{item.currentQuantity} {item.unit}</p>
+                  <p className="font-bold text-destructive">{item.current_quantity} {item.unit}</p>
                   <p className="text-xs text-muted-foreground">
-                    Need: {item.minThreshold - item.currentQuantity} more
+                    Need: {item.min_threshold - item.current_quantity} more
                   </p>
                 </div>
               </div>
