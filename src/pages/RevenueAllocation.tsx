@@ -31,7 +31,7 @@ const paymentMethods: Record<string, { isRevenue: boolean }> = {
   self_consumption: { isRevenue: false },
 };
 
-export default function RevenueAllocation() {
+function RevenueAllocationContent() {
   const { toast } = useToast();
   const { currentStore } = useCurrentStore();
   const { transactions } = useTransactions(currentStore?.id || null);
@@ -149,123 +149,129 @@ export default function RevenueAllocation() {
   );
 
   return (
-    <MainLayout>
-      <div className="space-y-6 max-w-4xl mx-auto">
-        {/* Header */}
-        <div className="text-center">
-          <div className="inline-flex items-center justify-center p-3 rounded-full bg-primary/20 mb-4">
-            <PieChart className="w-8 h-8 text-primary" />
-          </div>
-          <h1 className="text-3xl font-bold text-foreground">Revenue Allocation</h1>
-          <p className="text-muted-foreground">{currentStore?.name} • {new Date().toLocaleDateString()}</p>
+    <div className="space-y-6 max-w-4xl mx-auto">
+      {/* Header */}
+      <div className="text-center">
+        <div className="inline-flex items-center justify-center p-3 rounded-full bg-primary/20 mb-4">
+          <PieChart className="w-8 h-8 text-primary" />
         </div>
-
-        {/* Grand Total */}
-        <Card className="bg-gradient-to-r from-primary/10 to-accent/10 border-primary/30">
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-muted-foreground mb-1">Grand Total (Today's Sales)</p>
-                <p className="text-4xl font-bold text-primary">{grandTotal.toLocaleString()} MT</p>
-              </div>
-              <div className={cn(
-                "text-right p-4 rounded-lg",
-                isOverAllocated ? "bg-destructive/20" : "bg-primary/20"
-              )}>
-                <p className="text-sm text-muted-foreground">Unallocated</p>
-                <p className={cn(
-                  "text-2xl font-bold",
-                  isOverAllocated ? "text-destructive" : "text-primary"
-                )}>
-                  {Math.abs(unallocated).toLocaleString()} MT
-                </p>
-                {isOverAllocated && (
-                  <div className="flex items-center gap-1 text-destructive text-sm mt-1">
-                    <AlertTriangle className="w-4 h-4" />
-                    Over-allocated!
-                  </div>
-                )}
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Allocation Sliders */}
-        <div className="grid gap-4 md:grid-cols-2">
-          <AllocationCard
-            icon={Users}
-            label="Salaries"
-            percent={salaryPercent}
-            onPercentChange={setSalaryPercent}
-            amount={salaryAmount}
-            color="border-l-purple-500"
-          />
-          <AllocationCard
-            icon={Package}
-            label="Restock Fund"
-            percent={restockPercent}
-            onPercentChange={setRestockPercent}
-            amount={restockAmount}
-            color="border-l-green-500"
-          />
-          <AllocationCard
-            icon={Building2}
-            label="Tax Vault"
-            percent={taxPercent}
-            onPercentChange={setTaxPercent}
-            amount={taxAmount}
-            color="border-l-blue-500"
-          />
-          <AllocationCard
-            icon={MoreHorizontal}
-            label="Miscellaneous"
-            percent={miscPercent}
-            onPercentChange={setMiscPercent}
-            amount={miscAmount}
-            color="border-l-amber-500"
-          />
-        </div>
-
-        {/* Stock Expense Deduction */}
-        {stockExpenses > 0 && (
-          <Card className="border-amber-500/30">
-            <CardContent className="p-4">
-              <p className="text-sm text-amber-700 mb-2">Stock expenses will be deducted from Restock Fund:</p>
-              <p className="text-lg font-semibold">{restockAmount.toLocaleString()} - {stockExpenses.toLocaleString()} = <span className="text-primary">{(restockAmount - stockExpenses).toLocaleString()} MT</span></p>
-            </CardContent>
-          </Card>
-        )}
-
-        {/* Net Profit */}
-        <Card className="border-primary/50 bg-primary/5">
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <TrendingUp className="w-6 h-6 text-primary" />
-                <div>
-                  <p className="text-sm text-muted-foreground">Net Profit (Remaining)</p>
-                  <p className="text-3xl font-bold text-primary">{netProfitAmount.toLocaleString()} MT</p>
-                </div>
-              </div>
-              <Badge variant="secondary" className="text-lg px-4 py-2">
-                {netProfitPercent.toFixed(1)}%
-              </Badge>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Actions */}
-        <div className="flex justify-center gap-4 pb-8">
-          <Button variant="outline" onClick={handleExport} className="gap-2">
-            <FileDown className="w-4 h-4" />
-            Export Daily Report
-          </Button>
-          <Button onClick={handleSaveAllocation} disabled={!isValid} className="gap-2 px-8">
-            <Save className="w-4 h-4" />
-            Confirm Allocation
-          </Button>
-        </div>
+        <h1 className="text-3xl font-bold text-foreground">Revenue Allocation</h1>
+        <p className="text-muted-foreground">{currentStore?.name} • {new Date().toLocaleDateString()}</p>
       </div>
+
+      {/* Grand Total */}
+      <Card className="bg-gradient-to-r from-primary/10 to-accent/10 border-primary/30">
+        <CardContent className="p-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm text-muted-foreground mb-1">Grand Total (Today's Sales)</p>
+              <p className="text-4xl font-bold text-primary">{grandTotal.toLocaleString()} MT</p>
+            </div>
+            <div className={cn(
+              "text-right p-4 rounded-lg",
+              isOverAllocated ? "bg-destructive/20" : "bg-primary/20"
+            )}>
+              <p className="text-sm text-muted-foreground">Unallocated</p>
+              <p className={cn(
+                "text-2xl font-bold",
+                isOverAllocated ? "text-destructive" : "text-primary"
+              )}>
+                {Math.abs(unallocated).toLocaleString()} MT
+              </p>
+              {isOverAllocated && (
+                <div className="flex items-center gap-1 text-destructive text-sm mt-1">
+                  <AlertTriangle className="w-4 h-4" />
+                  Over-allocated!
+                </div>
+              )}
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Allocation Sliders */}
+      <div className="grid gap-4 md:grid-cols-2">
+        <AllocationCard
+          icon={Users}
+          label="Salaries"
+          percent={salaryPercent}
+          onPercentChange={setSalaryPercent}
+          amount={salaryAmount}
+          color="border-l-purple-500"
+        />
+        <AllocationCard
+          icon={Package}
+          label="Restock Fund"
+          percent={restockPercent}
+          onPercentChange={setRestockPercent}
+          amount={restockAmount}
+          color="border-l-green-500"
+        />
+        <AllocationCard
+          icon={Building2}
+          label="Tax Vault"
+          percent={taxPercent}
+          onPercentChange={setTaxPercent}
+          amount={taxAmount}
+          color="border-l-blue-500"
+        />
+        <AllocationCard
+          icon={MoreHorizontal}
+          label="Miscellaneous"
+          percent={miscPercent}
+          onPercentChange={setMiscPercent}
+          amount={miscAmount}
+          color="border-l-amber-500"
+        />
+      </div>
+
+      {/* Stock Expense Deduction */}
+      {stockExpenses > 0 && (
+        <Card className="border-amber-500/30">
+          <CardContent className="p-4">
+            <p className="text-sm text-amber-700 mb-2">Stock expenses will be deducted from Restock Fund:</p>
+            <p className="text-lg font-semibold">{restockAmount.toLocaleString()} - {stockExpenses.toLocaleString()} = <span className="text-primary">{(restockAmount - stockExpenses).toLocaleString()} MT</span></p>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Net Profit */}
+      <Card className="border-primary/50 bg-primary/5">
+        <CardContent className="p-6">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <TrendingUp className="w-6 h-6 text-primary" />
+              <div>
+                <p className="text-sm text-muted-foreground">Net Profit (Remaining)</p>
+                <p className="text-3xl font-bold text-primary">{netProfitAmount.toLocaleString()} MT</p>
+              </div>
+            </div>
+            <Badge variant="secondary" className="text-lg px-4 py-2">
+              {netProfitPercent.toFixed(1)}%
+            </Badge>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Actions */}
+      <div className="flex justify-center gap-4 pb-8">
+        <Button variant="outline" onClick={handleExport} className="gap-2">
+          <FileDown className="w-4 h-4" />
+          Export Daily Report
+        </Button>
+        <Button onClick={handleSaveAllocation} disabled={!isValid} className="gap-2 px-8">
+          <Save className="w-4 h-4" />
+          Confirm Allocation
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+export default function RevenueAllocation() {
+  return (
+    <MainLayout>
+      <RevenueAllocationContent />
     </MainLayout>
   );
 }
