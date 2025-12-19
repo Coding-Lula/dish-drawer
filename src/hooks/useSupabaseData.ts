@@ -719,3 +719,256 @@ export function useDailySummaries(storeId: string | null) {
 
   return { summaries, loading, saveSummary, refetch: fetchSummaries };
 }
+
+// Credits hook for debt tracking
+export interface Credit {
+  id: string;
+  store_id: string;
+  customer_name: string;
+  sale_amount: number;
+  transaction_id: string | null;
+  date: string;
+  status: 'unsettled' | 'settled';
+  settled_at: string | null;
+  created_at: string;
+}
+
+export function useCredits(storeId: string | null) {
+  const [credits, setCredits] = useState<Credit[]>([]);
+  const [loading, setLoading] = useState(true);
+  const { toast } = useToast();
+
+  const fetchCredits = useCallback(async () => {
+    if (!storeId) return;
+    const { data, error } = await supabase
+      .from('credits')
+      .select('*')
+      .eq('store_id', storeId)
+      .order('date', { ascending: false });
+    if (error) {
+      toast({ title: 'Error fetching credits', description: error.message, variant: 'destructive' });
+    } else {
+      setCredits((data as Credit[]) || []);
+    }
+    setLoading(false);
+  }, [storeId, toast]);
+
+  const addCredit = async (credit: { customer_name: string; sale_amount: number; transaction_id?: string }) => {
+    if (!storeId) return null;
+    
+    const { data, error } = await supabase
+      .from('credits')
+      .insert([{ ...credit, store_id: storeId }])
+      .select()
+      .single();
+    
+    if (error) {
+      toast({ title: 'Error creating credit', description: error.message, variant: 'destructive' });
+      return null;
+    }
+    
+    setCredits(prev => [data as Credit, ...prev]);
+    return data;
+  };
+
+  const settleCredit = async (creditId: string) => {
+    const { error } = await supabase
+      .from('credits')
+      .update({ status: 'settled', settled_at: new Date().toISOString() })
+      .eq('id', creditId);
+    
+    if (error) {
+      toast({ title: 'Error settling credit', description: error.message, variant: 'destructive' });
+      return false;
+    }
+    
+    setCredits(prev => prev.map(c => 
+      c.id === creditId ? { ...c, status: 'settled' as const, settled_at: new Date().toISOString() } : c
+    ));
+    toast({ title: 'Credit marked as settled' });
+    return true;
+  };
+
+  useEffect(() => {
+    fetchCredits();
+  }, [fetchCredits]);
+
+  return { credits, loading, addCredit, settleCredit, refetch: fetchCredits };
+}
+
+// Allocation Categories hook
+export interface AllocationCategory {
+  id: string;
+  name: string;
+  percent: number;
+  icon: string;
+  color: string;
+  display_order: number;
+  is_system: boolean;
+  created_at: string;
+}
+
+export function useAllocationCategories() {
+  const [categories, setCategories] = useState<AllocationCategory[]>([]);
+  const [loading, setLoading] = useState(true);
+  const { toast } = useToast();
+
+  const fetchCategories = useCallback(async () => {
+    const { data, error } = await supabase
+      .from('allocation_categories')
+      .select('*')
+      .order('display_order');
+    if (error) {
+      toast({ title: 'Error fetching allocation categories', description: error.message, variant: 'destructive' });
+    } else {
+      setCategories((data as AllocationCategory[]) || []);
+    }
+    setLoading(false);
+  }, [toast]);
+
+  const addCategory = async (category: { name: string; percent?: number; color?: string }) => {
+    const maxOrder = categories.reduce((max, c) => Math.max(max, c.display_order), 0);
+    const { data, error } = await supabase
+      .from('allocation_categories')
+      .insert([{ ...category, display_order: maxOrder + 1, is_system: false }])
+      .select()
+      .single();
+    
+    if (error) {
+      toast({ title: 'Error creating category', description: error.message, variant: 'destructive' });
+      return null;
+    }
+    
+    setCategories(prev => [...prev, data as AllocationCategory].sort((a, b) => a.display_order - b.display_order));
+    toast({ title: 'Category created' });
+    return data;
+  };
+
+  const updateCategory = async (id: string, updates: Partial<AllocationCategory>) => {
+    const { error } = await supabase
+      .from('allocation_categories')
+      .update(updates)
+      .eq('id', id);
+    
+    if (error) {
+      toast({ title: 'Error updating category', description: error.message, variant: 'destructive' });
+      return false;
+    }
+    
+    setCategories(prev => prev.map(c => c.id === id ? { ...c, ...updates } : c));
+    return true;
+  };
+
+  const deleteCategory = async (id: string) => {
+    const { error } = await supabase
+      .from('allocation_categories')
+      .delete()
+      .eq('id', id);
+    
+    if (error) {
+      toast({ title: 'Error deleting category', description: error.message, variant: 'destructive' });
+      return false;
+    }
+    
+    setCategories(prev => prev.filter(c => c.id !== id));
+    toast({ title: 'Category deleted' });
+    return true;
+  };
+
+  useEffect(() => {
+    fetchCategories();
+  }, [fetchCategories]);
+
+  return { categories, loading, addCategory, updateCategory, deleteCategory, refetch: fetchCategories };
+}
+
+// Restaurant Tables hook with add/delete
+export function useRestaurantTablesManagement(storeId: string | null) {
+  const [tables, setTables] = useState<RestaurantTable[]>([]);
+  const [loading, setLoading] = useState(true);
+  const { toast } = useToast();
+
+  const fetchTables = useCallback(async () => {
+    if (!storeId) return;
+    const { data, error } = await supabase
+      .from('restaurant_tables')
+      .select('*')
+      .eq('store_id', storeId)
+      .order('table_number');
+    if (error) {
+      toast({ title: 'Error fetching tables', description: error.message, variant: 'destructive' });
+    } else {
+      setTables(data || []);
+    }
+    setLoading(false);
+  }, [storeId, toast]);
+
+  const addTable = async () => {
+    if (!storeId) return null;
+    const maxNumber = tables.reduce((max, t) => Math.max(max, t.table_number), 0);
+    const newNumber = maxNumber + 1;
+    
+    const { data, error } = await supabase
+      .from('restaurant_tables')
+      .insert([{ store_id: storeId, table_number: newNumber, name: `Table ${newNumber}` }])
+      .select()
+      .single();
+    
+    if (error) {
+      toast({ title: 'Error adding table', description: error.message, variant: 'destructive' });
+      return null;
+    }
+    
+    setTables(prev => [...prev, data].sort((a, b) => a.table_number - b.table_number));
+    toast({ title: `Table ${newNumber} added` });
+    return data;
+  };
+
+  const deleteTable = async (tableId: string) => {
+    const { error } = await supabase
+      .from('restaurant_tables')
+      .delete()
+      .eq('id', tableId);
+    
+    if (error) {
+      toast({ title: 'Error deleting table', description: error.message, variant: 'destructive' });
+      return false;
+    }
+    
+    setTables(prev => prev.filter(t => t.id !== tableId));
+    toast({ title: 'Table removed' });
+    return true;
+  };
+
+  const initializeTables = async (count: number = 15) => {
+    if (!storeId) return;
+    
+    // Check if tables already exist
+    if (tables.length >= count) return;
+    
+    const tablesToCreate = [];
+    for (let i = tables.length + 1; i <= count; i++) {
+      tablesToCreate.push({
+        store_id: storeId,
+        table_number: i,
+        name: `Table ${i}`
+      });
+    }
+    
+    if (tablesToCreate.length > 0) {
+      const { error } = await supabase
+        .from('restaurant_tables')
+        .insert(tablesToCreate);
+      
+      if (!error) {
+        fetchTables();
+      }
+    }
+  };
+
+  useEffect(() => {
+    fetchTables();
+  }, [fetchTables]);
+
+  return { tables, loading, addTable, deleteTable, initializeTables, refetch: fetchTables };
+}

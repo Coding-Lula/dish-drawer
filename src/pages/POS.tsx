@@ -1,11 +1,13 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { MainLayout, useCurrentStore } from '@/components/layout/MainLayout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
-import { useDishes, useRecipes, useRestaurantTables, useTransactions, useStoreStock, useIngredients } from '@/hooks/useSupabaseData';
+import { useDishes, useRecipes, useTransactions, useStoreStock, useCredits, useRestaurantTablesManagement } from '@/hooks/useSupabaseData';
 import type { Dish } from '@/hooks/useSupabaseData';
+import { ManageTablesModal } from '@/components/modals/ManageTablesModal';
+import { CreditCustomerModal } from '@/components/modals/CreditCustomerModal';
 import { Plus, Minus, Trash2, ShoppingBag, CreditCard, Printer, Table } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -29,16 +31,24 @@ function POSContent() {
   const { currentStore } = useCurrentStore();
   const { dishes } = useDishes();
   const { recipes } = useRecipes();
-  const { tables } = useRestaurantTables(currentStore?.id || null);
+  const { tables, addTable, deleteTable, initializeTables } = useRestaurantTablesManagement(currentStore?.id || null);
   const { addTransaction } = useTransactions(currentStore?.id || null);
   const { deductStock } = useStoreStock(currentStore?.id || null);
-  const { ingredients } = useIngredients();
+  const { addCredit } = useCredits(currentStore?.id || null);
 
   const [cart, setCart] = useState<CartItem[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [selectedPayment, setSelectedPayment] = useState('cash');
   const [selectedTable, setSelectedTable] = useState<string | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [showCreditModal, setShowCreditModal] = useState(false);
+
+  // Initialize 15 tables on first load
+  useEffect(() => {
+    if (currentStore?.id && tables.length < 15) {
+      initializeTables(15);
+    }
+  }, [currentStore?.id, tables.length, initializeTables]);
 
   const categories = [...new Set(dishes.map(d => d.category).filter(Boolean))];
   const filteredDishes = selectedCategory ? dishes.filter(d => d.category === selectedCategory) : dishes;
@@ -68,6 +78,16 @@ function POSContent() {
       return;
     }
 
+    // If credit payment, show customer name modal first
+    if (selectedPayment === 'credit') {
+      setShowCreditModal(true);
+      return;
+    }
+
+    await processCheckout();
+  };
+
+  const processCheckout = async (customerName?: string) => {
     setIsProcessing(true);
 
     // Deduct stock based on recipes
@@ -79,18 +99,35 @@ function POSContent() {
     }
 
     // Create transaction
-    await addTransaction(
+    const transaction = await addTransaction(
       cartTotal,
       selectedPayment,
       selectedTable,
       cart.map(item => ({ dishId: item.dish.id, quantity: item.quantity, unitPrice: Number(item.dish.selling_price) }))
     );
 
+    // If credit payment, create credit record
+    if (selectedPayment === 'credit' && customerName && transaction) {
+      await addCredit({
+        customer_name: customerName,
+        sale_amount: cartTotal,
+        transaction_id: transaction.id
+      });
+    }
+
     const method = paymentMethods.find(m => m.id === selectedPayment);
-    toast({ title: 'Sale Complete!', description: `${cartTotal.toLocaleString()} MT via ${method?.name}${!method?.isRevenue ? ' (No Revenue)' : ''}` });
+    toast({ 
+      title: 'Sale Complete!', 
+      description: `${cartTotal.toLocaleString()} MT via ${method?.name}${!method?.isRevenue ? ' (No Revenue)' : ''}${customerName ? ` - ${customerName}` : ''}` 
+    });
     
     setCart([]);
     setIsProcessing(false);
+    setShowCreditModal(false);
+  };
+
+  const handleCreditConfirm = (customerName: string) => {
+    processCheckout(customerName);
   };
 
   const handlePrintReceipt = () => {
@@ -121,18 +158,25 @@ function POSContent() {
             <h1 className="text-2xl font-bold text-foreground">Point of Sale</h1>
             <p className="text-muted-foreground">Select items to add to cart</p>
           </div>
-          <div className="flex items-center gap-2">
-            <Table className="w-4 h-4 text-muted-foreground" />
-            <Select value={selectedTable || ''} onValueChange={setSelectedTable}>
-              <SelectTrigger className="w-40">
-                <SelectValue placeholder="Select Table" />
-              </SelectTrigger>
-              <SelectContent>
-                {tables.map(table => (
-                  <SelectItem key={table.id} value={table.id}>{table.name}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+          <div className="flex items-center gap-3">
+            <ManageTablesModal 
+              tables={tables}
+              onAddTable={addTable}
+              onDeleteTable={deleteTable}
+            />
+            <div className="flex items-center gap-2">
+              <Table className="w-4 h-4 text-muted-foreground" />
+              <Select value={selectedTable || ''} onValueChange={setSelectedTable}>
+                <SelectTrigger className="w-40">
+                  <SelectValue placeholder="Select Table" />
+                </SelectTrigger>
+                <SelectContent>
+                  {tables.map(table => (
+                    <SelectItem key={table.id} value={table.id}>{table.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
           </div>
         </div>
 
@@ -227,6 +271,13 @@ function POSContent() {
           </div>
         </div>
       </Card>
+
+      <CreditCustomerModal
+        open={showCreditModal}
+        onOpenChange={setShowCreditModal}
+        amount={cartTotal}
+        onConfirm={handleCreditConfirm}
+      />
     </div>
   );
 }
