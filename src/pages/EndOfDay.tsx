@@ -18,7 +18,7 @@ const paymentMethods: Record<string, { isRevenue: boolean; isCash: boolean }> = 
   self_consumption: { isRevenue: false, isCash: false },
 };
 
-export default function EndOfDay() {
+function EndOfDayContent() {
   const { toast } = useToast();
   const { currentStore } = useCurrentStore();
   const { transactions } = useTransactions(currentStore?.id || null);
@@ -54,77 +54,83 @@ export default function EndOfDay() {
   };
 
   return (
-    <MainLayout>
-      <div className="space-y-6 max-w-4xl mx-auto">
-        <div className="text-center">
-          <div className="inline-flex items-center justify-center p-3 rounded-full bg-primary/20 mb-4"><Moon className="w-8 h-8 text-primary" /></div>
-          <h1 className="text-3xl font-bold">End of Day</h1>
-          <p className="text-muted-foreground">{currentStore?.name} • {new Date().toLocaleDateString()}</p>
-        </div>
-
-        <Card>
-          <CardHeader className="pb-3"><CardTitle className="text-lg">Revenue Split Configuration</CardTitle></CardHeader>
-          <CardContent>
-            <div className="flex flex-wrap gap-2">
-              {configs.map(c => (<Button key={c.id} variant={config?.id === c.id ? "default" : "outline"} onClick={() => setSelectedConfig(c)}>{c.name}</Button>))}
-            </div>
-            {config && <div className="flex items-center gap-4 mt-4 text-sm text-muted-foreground">
-              <span>Tax: {config.tax_percent}%</span><span>•</span>
-              <span>Bank: {config.bank_percent}%</span><span>•</span>
-              <span>Restock: {config.restock_percent}%</span><span>•</span>
-              <span>Ops: {config.ops_percent}%</span>
-            </div>}
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="pb-3 border-b"><CardTitle className="flex items-center gap-2"><DollarSign className="w-5 h-5 text-primary" />Revenue Breakdown</CardTitle></CardHeader>
-          <CardContent className="pt-6 space-y-4">
-            <div className="flex justify-between items-center"><span className="text-muted-foreground">Total Sales</span><span className="text-2xl font-bold">{totalSales.toLocaleString()} MT</span></div>
-            <div className="flex justify-between items-center text-destructive"><span>Less: Non-Revenue</span><span className="font-semibold">- {nonRevenueAmount.toLocaleString()} MT</span></div>
-            <Separator />
-            <div className="flex justify-between items-center"><span className="font-semibold text-primary">Net Revenue</span><span className="text-3xl font-bold text-primary">{netRevenue.toLocaleString()} MT</span></div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="pb-3 border-b"><CardTitle className="flex items-center gap-2"><Percent className="w-5 h-5 text-primary" />The Split</CardTitle></CardHeader>
-          <CardContent className="pt-6">
-            <div className="grid gap-4 md:grid-cols-2">
-              <div className="p-4 rounded-lg bg-blue-500/10 border border-blue-500/20"><div className="flex items-center gap-2 mb-2"><Building2 className="w-5 h-5 text-blue-600" /><span className="font-semibold">Tax ({config?.tax_percent}%)</span></div><p className="text-2xl font-bold text-blue-600">{taxAmount.toLocaleString()} MT</p></div>
-              <div className="p-4 rounded-lg bg-purple-500/10 border border-purple-500/20"><div className="flex items-center gap-2 mb-2"><DollarSign className="w-5 h-5 text-purple-600" /><span className="font-semibold">Bank ({config?.bank_percent}%)</span></div><p className="text-2xl font-bold text-purple-600">{bankAmount.toLocaleString()} MT</p></div>
-              <div className="p-4 rounded-lg bg-primary/10 border border-primary/20"><div className="flex items-center gap-2 mb-2"><Briefcase className="w-5 h-5 text-primary" /><span className="font-semibold">Operations ({config?.ops_percent}%)</span></div><p className="text-2xl font-bold text-primary">{opsAmount.toLocaleString()} MT</p></div>
-              <div className={cn("p-4 rounded-lg", stockExpenses > 0 ? "bg-amber-500/10 border border-amber-500/20" : "bg-green-500/10 border border-green-500/20")}><div className="flex items-center gap-2 mb-2"><Package className={cn("w-5 h-5", stockExpenses > 0 ? "text-amber-600" : "text-green-600")} /><span className="font-semibold">Restock ({config?.restock_percent}%)</span></div><p className={cn("text-2xl font-bold", stockExpenses > 0 ? "text-amber-600" : "text-green-600")}>{restockAmount.toLocaleString()} MT</p></div>
-            </div>
-          </CardContent>
-        </Card>
-
-        {stockExpenses > 0 && (
-          <Card className="border-amber-500/30">
-            <CardHeader className="pb-3 border-b bg-amber-500/5"><CardTitle className="flex items-center gap-2 text-amber-700"><AlertCircle className="w-5 h-5" />Stock Expense Adjustment</CardTitle></CardHeader>
-            <CardContent className="pt-6 space-y-4">
-              <div className="flex justify-between items-center"><span>Original Restock Allocation</span><span className="font-semibold">{restockAmount.toLocaleString()} MT</span></div>
-              <div className="flex justify-between items-center text-amber-700"><span>Less: Today's Stock Expenses</span><span className="font-semibold">- {stockExpenses.toLocaleString()} MT</span></div>
-              <Separator />
-              <div className="p-4 rounded-lg bg-gradient-to-r from-primary/20 to-green-500/20 border border-primary/30">
-                <div className="flex items-center justify-between"><div><p className="text-sm text-muted-foreground">Action Required</p><p className="font-semibold">Deposit to Restock Account</p></div><div className="flex items-center gap-3"><ArrowRight className="w-5 h-5 text-primary" /><span className="text-3xl font-bold text-primary">{finalRestockTransfer.toLocaleString()} MT</span></div></div>
-              </div>
-            </CardContent>
-          </Card>
-        )}
-
-        <Card>
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between"><div><p className="text-sm text-muted-foreground">Expected Cash in Drawer</p><p className="text-3xl font-bold">{cashInDrawer.toLocaleString()} MT</p></div><Badge variant="outline" className="text-base px-4 py-2">{transactions.length} transactions</Badge></div>
-          </CardContent>
-        </Card>
-
-        <div className="flex justify-center pb-8">
-          {isClosed ? (<div className="flex items-center gap-3 text-primary"><CheckCircle2 className="w-6 h-6" /><span className="text-lg font-semibold">Day Closed Successfully</span></div>) : (
-            <Button size="lg" className="px-12 h-14 text-lg" onClick={handleCloseDay} disabled={isClosing}>{isClosing ? 'Closing Day...' : <><Moon className="w-5 h-5 mr-2" />Close Day</>}</Button>
-          )}
-        </div>
+    <div className="space-y-6 max-w-4xl mx-auto">
+      <div className="text-center">
+        <div className="inline-flex items-center justify-center p-3 rounded-full bg-primary/20 mb-4"><Moon className="w-8 h-8 text-primary" /></div>
+        <h1 className="text-3xl font-bold">End of Day</h1>
+        <p className="text-muted-foreground">{currentStore?.name} • {new Date().toLocaleDateString()}</p>
       </div>
+
+      <Card>
+        <CardHeader className="pb-3"><CardTitle className="text-lg">Revenue Split Configuration</CardTitle></CardHeader>
+        <CardContent>
+          <div className="flex flex-wrap gap-2">
+            {configs.map(c => (<Button key={c.id} variant={config?.id === c.id ? "default" : "outline"} onClick={() => setSelectedConfig(c)}>{c.name}</Button>))}
+          </div>
+          {config && <div className="flex items-center gap-4 mt-4 text-sm text-muted-foreground">
+            <span>Tax: {config.tax_percent}%</span><span>•</span>
+            <span>Bank: {config.bank_percent}%</span><span>•</span>
+            <span>Restock: {config.restock_percent}%</span><span>•</span>
+            <span>Ops: {config.ops_percent}%</span>
+          </div>}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader className="pb-3 border-b"><CardTitle className="flex items-center gap-2"><DollarSign className="w-5 h-5 text-primary" />Revenue Breakdown</CardTitle></CardHeader>
+        <CardContent className="pt-6 space-y-4">
+          <div className="flex justify-between items-center"><span className="text-muted-foreground">Total Sales</span><span className="text-2xl font-bold">{totalSales.toLocaleString()} MT</span></div>
+          <div className="flex justify-between items-center text-destructive"><span>Less: Non-Revenue</span><span className="font-semibold">- {nonRevenueAmount.toLocaleString()} MT</span></div>
+          <Separator />
+          <div className="flex justify-between items-center"><span className="font-semibold text-primary">Net Revenue</span><span className="text-3xl font-bold text-primary">{netRevenue.toLocaleString()} MT</span></div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader className="pb-3 border-b"><CardTitle className="flex items-center gap-2"><Percent className="w-5 h-5 text-primary" />The Split</CardTitle></CardHeader>
+        <CardContent className="pt-6">
+          <div className="grid gap-4 md:grid-cols-2">
+            <div className="p-4 rounded-lg bg-blue-500/10 border border-blue-500/20"><div className="flex items-center gap-2 mb-2"><Building2 className="w-5 h-5 text-blue-600" /><span className="font-semibold">Tax ({config?.tax_percent}%)</span></div><p className="text-2xl font-bold text-blue-600">{taxAmount.toLocaleString()} MT</p></div>
+            <div className="p-4 rounded-lg bg-purple-500/10 border border-purple-500/20"><div className="flex items-center gap-2 mb-2"><DollarSign className="w-5 h-5 text-purple-600" /><span className="font-semibold">Bank ({config?.bank_percent}%)</span></div><p className="text-2xl font-bold text-purple-600">{bankAmount.toLocaleString()} MT</p></div>
+            <div className="p-4 rounded-lg bg-primary/10 border border-primary/20"><div className="flex items-center gap-2 mb-2"><Briefcase className="w-5 h-5 text-primary" /><span className="font-semibold">Operations ({config?.ops_percent}%)</span></div><p className="text-2xl font-bold text-primary">{opsAmount.toLocaleString()} MT</p></div>
+            <div className={cn("p-4 rounded-lg", stockExpenses > 0 ? "bg-amber-500/10 border border-amber-500/20" : "bg-green-500/10 border border-green-500/20")}><div className="flex items-center gap-2 mb-2"><Package className={cn("w-5 h-5", stockExpenses > 0 ? "text-amber-600" : "text-green-600")} /><span className="font-semibold">Restock ({config?.restock_percent}%)</span></div><p className={cn("text-2xl font-bold", stockExpenses > 0 ? "text-amber-600" : "text-green-600")}>{restockAmount.toLocaleString()} MT</p></div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {stockExpenses > 0 && (
+        <Card className="border-amber-500/30">
+          <CardHeader className="pb-3 border-b bg-amber-500/5"><CardTitle className="flex items-center gap-2 text-amber-700"><AlertCircle className="w-5 h-5" />Stock Expense Adjustment</CardTitle></CardHeader>
+          <CardContent className="pt-6 space-y-4">
+            <div className="flex justify-between items-center"><span>Original Restock Allocation</span><span className="font-semibold">{restockAmount.toLocaleString()} MT</span></div>
+            <div className="flex justify-between items-center text-amber-700"><span>Less: Today's Stock Expenses</span><span className="font-semibold">- {stockExpenses.toLocaleString()} MT</span></div>
+            <Separator />
+            <div className="p-4 rounded-lg bg-gradient-to-r from-primary/20 to-green-500/20 border border-primary/30">
+              <div className="flex items-center justify-between"><div><p className="text-sm text-muted-foreground">Action Required</p><p className="font-semibold">Deposit to Restock Account</p></div><div className="flex items-center gap-3"><ArrowRight className="w-5 h-5 text-primary" /><span className="text-3xl font-bold text-primary">{finalRestockTransfer.toLocaleString()} MT</span></div></div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      <Card>
+        <CardContent className="p-6">
+          <div className="flex items-center justify-between"><div><p className="text-sm text-muted-foreground">Expected Cash in Drawer</p><p className="text-3xl font-bold">{cashInDrawer.toLocaleString()} MT</p></div><Badge variant="outline" className="text-base px-4 py-2">{transactions.length} transactions</Badge></div>
+        </CardContent>
+      </Card>
+
+      <div className="flex justify-center pb-8">
+        {isClosed ? (<div className="flex items-center gap-3 text-primary"><CheckCircle2 className="w-6 h-6" /><span className="text-lg font-semibold">Day Closed Successfully</span></div>) : (
+          <Button size="lg" className="px-12 h-14 text-lg" onClick={handleCloseDay} disabled={isClosing}>{isClosing ? 'Closing Day...' : <><Moon className="w-5 h-5 mr-2" />Close Day</>}</Button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+export default function EndOfDay() {
+  return (
+    <MainLayout>
+      <EndOfDayContent />
     </MainLayout>
   );
 }
