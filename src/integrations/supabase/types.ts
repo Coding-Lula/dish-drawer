@@ -14,6 +14,90 @@ export type Database = {
   }
   public: {
     Tables: {
+      allocation_categories: {
+        Row: {
+          color: string | null
+          created_at: string
+          display_order: number
+          icon: string | null
+          id: string
+          is_system: boolean | null
+          name: string
+          percent: number
+        }
+        Insert: {
+          color?: string | null
+          created_at?: string
+          display_order?: number
+          icon?: string | null
+          id?: string
+          is_system?: boolean | null
+          name: string
+          percent?: number
+        }
+        Update: {
+          color?: string | null
+          created_at?: string
+          display_order?: number
+          icon?: string | null
+          id?: string
+          is_system?: boolean | null
+          name?: string
+          percent?: number
+        }
+        Relationships: []
+      }
+      credits: {
+        Row: {
+          created_at: string
+          customer_name: string
+          date: string
+          id: string
+          sale_amount: number
+          settled_at: string | null
+          status: string
+          store_id: string
+          transaction_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          customer_name: string
+          date?: string
+          id?: string
+          sale_amount: number
+          settled_at?: string | null
+          status?: string
+          store_id: string
+          transaction_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          customer_name?: string
+          date?: string
+          id?: string
+          sale_amount?: number
+          settled_at?: string | null
+          status?: string
+          store_id?: string
+          transaction_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "credits_store_id_fkey"
+            columns: ["store_id"]
+            isOneToOne: false
+            referencedRelation: "stores"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "credits_transaction_id_fkey"
+            columns: ["transaction_id"]
+            isOneToOne: false
+            referencedRelation: "transactions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       daily_summaries: {
         Row: {
           created_at: string

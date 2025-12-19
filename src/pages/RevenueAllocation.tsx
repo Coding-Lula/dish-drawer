@@ -6,11 +6,10 @@ import { Badge } from '@/components/ui/badge';
 import { Slider } from '@/components/ui/slider';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
-import { useTransactions, useDailySummaries, useExpenses } from '@/hooks/useSupabaseData';
+import { useTransactions, useDailySummaries, useExpenses, useCredits, useAllocationCategories } from '@/hooks/useSupabaseData';
 import { exportDailyReportPDF } from '@/utils/exportUtils';
 import { 
   PieChart, 
-  DollarSign, 
   Users, 
   Package, 
   Building2, 
@@ -18,17 +17,20 @@ import {
   TrendingUp,
   AlertTriangle,
   FileDown,
-  Save
+  Save,
+  Plus,
+  Trash2,
+  Check,
+  CreditCard
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
-const paymentMethods: Record<string, { isRevenue: boolean }> = {
-  cash: { isRevenue: true },
-  mpesa: { isRevenue: true },
-  mkesh: { isRevenue: true },
-  paga_facil: { isRevenue: true },
-  credit: { isRevenue: false },
-  self_consumption: { isRevenue: false },
+const iconMap: Record<string, any> = {
+  users: Users,
+  package: Package,
+  building2: Building2,
+  'more-horizontal': MoreHorizontal,
+  circle: MoreHorizontal,
 };
 
 function RevenueAllocationContent() {
@@ -36,121 +38,64 @@ function RevenueAllocationContent() {
   const { currentStore } = useCurrentStore();
   const { transactions } = useTransactions(currentStore?.id || null);
   const { expenses } = useExpenses(currentStore?.id || null);
+  const { credits, settleCredit } = useCredits(currentStore?.id || null);
+  const { categories, addCategory, updateCategory, deleteCategory } = useAllocationCategories();
   const { saveSummary } = useDailySummaries(currentStore?.id || null);
 
-  // Calculate grand total from all sales
+  const [newCategoryName, setNewCategoryName] = useState('');
+  const [localPercents, setLocalPercents] = useState<Record<string, number>>({});
+
   const grandTotal = transactions.reduce((sum, t) => sum + Number(t.total_amount), 0);
+  const stockExpenses = expenses.filter(e => e.category === 'Stock' && !e.is_deducted).reduce((sum, e) => sum + Number(e.amount), 0);
   
-  // Stock expenses
-  const stockExpenses = expenses
-    .filter(e => e.category === 'Stock' && !e.is_deducted)
-    .reduce((sum, e) => sum + Number(e.amount), 0);
+  const unsettledCredits = credits.filter(c => c.status === 'unsettled');
+  const totalOutstandingCredits = unsettledCredits.reduce((sum, c) => sum + Number(c.sale_amount), 0);
 
-  // Allocation state (percentages)
-  const [salaryPercent, setSalaryPercent] = useState(25);
-  const [restockPercent, setRestockPercent] = useState(30);
-  const [taxPercent, setTaxPercent] = useState(10);
-  const [miscPercent, setMiscPercent] = useState(5);
-
-  // Calculate amounts
-  const salaryAmount = (grandTotal * salaryPercent) / 100;
-  const restockAmount = (grandTotal * restockPercent) / 100;
-  const taxAmount = (grandTotal * taxPercent) / 100;
-  const miscAmount = (grandTotal * miscPercent) / 100;
-  const totalAllocated = salaryPercent + restockPercent + taxPercent + miscPercent;
+  const getPercent = (catId: string, defaultPercent: number) => localPercents[catId] ?? defaultPercent;
+  const totalAllocated = categories.reduce((sum, c) => sum + getPercent(c.id, c.percent), 0);
   const netProfitPercent = Math.max(0, 100 - totalAllocated);
   const netProfitAmount = (grandTotal * netProfitPercent) / 100;
-  const unallocated = grandTotal - (salaryAmount + restockAmount + taxAmount + miscAmount + netProfitAmount);
-
   const isOverAllocated = totalAllocated > 100;
-  const isValid = totalAllocated <= 100;
+
+  const handlePercentChange = (catId: string, value: number) => {
+    setLocalPercents(prev => ({ ...prev, [catId]: value }));
+  };
+
+  const handleAddCategory = async () => {
+    if (!newCategoryName.trim()) return;
+    await addCategory({ name: newCategoryName, percent: 0, color: 'border-l-gray-500' });
+    setNewCategoryName('');
+  };
 
   const handleSaveAllocation = async () => {
-    if (!isValid) {
+    if (isOverAllocated) {
       toast({ title: 'Invalid allocation', description: 'Total cannot exceed 100%', variant: 'destructive' });
       return;
     }
-
+    for (const cat of categories) {
+      const newPercent = getPercent(cat.id, cat.percent);
+      if (newPercent !== cat.percent) {
+        await updateCategory(cat.id, { percent: newPercent });
+      }
+    }
     await saveSummary({
       date: new Date().toISOString().split('T')[0],
       grand_total: grandTotal,
-      salary_amount: salaryAmount,
-      salary_percent: salaryPercent,
-      restock_amount: restockAmount - stockExpenses,
-      restock_percent: restockPercent,
-      tax_amount: taxAmount,
-      tax_percent: taxPercent,
-      misc_amount: miscAmount,
-      misc_percent: miscPercent,
       net_profit: netProfitAmount,
       net_profit_percent: netProfitPercent,
     });
   };
 
   const handleExport = () => {
-    exportDailyReportPDF(
-      currentStore?.name || 'Store',
-      grandTotal,
-      [
-        { name: 'Salaries', amount: salaryAmount, percent: salaryPercent },
-        { name: 'Restock Fund', amount: restockAmount - stockExpenses, percent: restockPercent },
-        { name: 'Tax Vault', amount: taxAmount, percent: taxPercent },
-        { name: 'Miscellaneous', amount: miscAmount, percent: miscPercent },
-        { name: 'Net Profit', amount: netProfitAmount, percent: netProfitPercent },
-      ],
+    exportDailyReportPDF(currentStore?.name || 'Store', grandTotal, 
+      categories.map(c => ({ name: c.name, amount: (grandTotal * getPercent(c.id, c.percent)) / 100, percent: getPercent(c.id, c.percent) }))
+        .concat([{ name: 'Net Profit', amount: netProfitAmount, percent: netProfitPercent }]),
       stockExpenses
     );
   };
 
-  const AllocationCard = ({ 
-    icon: Icon, 
-    label, 
-    percent, 
-    onPercentChange, 
-    amount, 
-    color 
-  }: { 
-    icon: any; 
-    label: string; 
-    percent: number; 
-    onPercentChange: (v: number) => void; 
-    amount: number;
-    color: string;
-  }) => (
-    <Card className={cn("border-l-4", color)}>
-      <CardContent className="p-4">
-        <div className="flex items-center gap-3 mb-3">
-          <Icon className="w-5 h-5 text-muted-foreground" />
-          <span className="font-semibold text-foreground">{label}</span>
-        </div>
-        <div className="space-y-3">
-          <div className="flex items-center gap-3">
-            <Slider
-              value={[percent]}
-              onValueChange={([v]) => onPercentChange(v)}
-              max={100}
-              step={1}
-              className="flex-1"
-            />
-            <Input
-              type="number"
-              value={percent}
-              onChange={(e) => onPercentChange(Math.min(100, Math.max(0, Number(e.target.value))))}
-              className="w-20 text-center"
-              min={0}
-              max={100}
-            />
-            <span className="text-muted-foreground">%</span>
-          </div>
-          <p className="text-2xl font-bold text-foreground">{amount.toLocaleString()} MT</p>
-        </div>
-      </CardContent>
-    </Card>
-  );
-
   return (
     <div className="space-y-6 max-w-4xl mx-auto">
-      {/* Header */}
       <div className="text-center">
         <div className="inline-flex items-center justify-center p-3 rounded-full bg-primary/20 mb-4">
           <PieChart className="w-8 h-8 text-primary" />
@@ -159,7 +104,6 @@ function RevenueAllocationContent() {
         <p className="text-muted-foreground">{currentStore?.name} • {new Date().toLocaleDateString()}</p>
       </div>
 
-      {/* Grand Total */}
       <Card className="bg-gradient-to-r from-primary/10 to-accent/10 border-primary/30">
         <CardContent className="p-6">
           <div className="flex items-center justify-between">
@@ -167,73 +111,52 @@ function RevenueAllocationContent() {
               <p className="text-sm text-muted-foreground mb-1">Grand Total (Today's Sales)</p>
               <p className="text-4xl font-bold text-primary">{grandTotal.toLocaleString()} MT</p>
             </div>
-            <div className={cn(
-              "text-right p-4 rounded-lg",
-              isOverAllocated ? "bg-destructive/20" : "bg-primary/20"
-            )}>
-              <p className="text-sm text-muted-foreground">Unallocated</p>
-              <p className={cn(
-                "text-2xl font-bold",
-                isOverAllocated ? "text-destructive" : "text-primary"
-              )}>
-                {Math.abs(unallocated).toLocaleString()} MT
-              </p>
-              {isOverAllocated && (
-                <div className="flex items-center gap-1 text-destructive text-sm mt-1">
-                  <AlertTriangle className="w-4 h-4" />
-                  Over-allocated!
-                </div>
-              )}
+            <div className={cn("text-right p-4 rounded-lg", isOverAllocated ? "bg-destructive/20" : "bg-primary/20")}>
+              <p className="text-sm text-muted-foreground">Remaining</p>
+              <p className={cn("text-2xl font-bold", isOverAllocated ? "text-destructive" : "text-primary")}>{netProfitPercent.toFixed(1)}%</p>
+              {isOverAllocated && <div className="flex items-center gap-1 text-destructive text-sm mt-1"><AlertTriangle className="w-4 h-4" />Over-allocated!</div>}
             </div>
           </div>
         </CardContent>
       </Card>
 
-      {/* Allocation Sliders */}
+      {/* Dynamic Allocation Cards */}
       <div className="grid gap-4 md:grid-cols-2">
-        <AllocationCard
-          icon={Users}
-          label="Salaries"
-          percent={salaryPercent}
-          onPercentChange={setSalaryPercent}
-          amount={salaryAmount}
-          color="border-l-purple-500"
-        />
-        <AllocationCard
-          icon={Package}
-          label="Restock Fund"
-          percent={restockPercent}
-          onPercentChange={setRestockPercent}
-          amount={restockAmount}
-          color="border-l-green-500"
-        />
-        <AllocationCard
-          icon={Building2}
-          label="Tax Vault"
-          percent={taxPercent}
-          onPercentChange={setTaxPercent}
-          amount={taxAmount}
-          color="border-l-blue-500"
-        />
-        <AllocationCard
-          icon={MoreHorizontal}
-          label="Miscellaneous"
-          percent={miscPercent}
-          onPercentChange={setMiscPercent}
-          amount={miscAmount}
-          color="border-l-amber-500"
-        />
+        {categories.map(cat => {
+          const Icon = iconMap[cat.icon] || MoreHorizontal;
+          const percent = getPercent(cat.id, cat.percent);
+          const amount = (grandTotal * percent) / 100;
+          return (
+            <Card key={cat.id} className={cn("border-l-4", cat.color)}>
+              <CardContent className="p-4">
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center gap-3">
+                    <Icon className="w-5 h-5 text-muted-foreground" />
+                    <span className="font-semibold text-foreground">{cat.name}</span>
+                  </div>
+                  {!cat.is_system && (
+                    <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => deleteCategory(cat.id)}>
+                      <Trash2 className="w-4 h-4" />
+                    </Button>
+                  )}
+                </div>
+                <div className="flex items-center gap-3">
+                  <Slider value={[percent]} onValueChange={([v]) => handlePercentChange(cat.id, v)} max={100} step={1} className="flex-1" />
+                  <Input type="number" value={percent} onChange={(e) => handlePercentChange(cat.id, Math.min(100, Math.max(0, Number(e.target.value))))} className="w-20 text-center" min={0} max={100} />
+                  <span className="text-muted-foreground">%</span>
+                </div>
+                <p className="text-2xl font-bold text-foreground mt-2">{amount.toLocaleString()} MT</p>
+              </CardContent>
+            </Card>
+          );
+        })}
       </div>
 
-      {/* Stock Expense Deduction */}
-      {stockExpenses > 0 && (
-        <Card className="border-amber-500/30">
-          <CardContent className="p-4">
-            <p className="text-sm text-amber-700 mb-2">Stock expenses will be deducted from Restock Fund:</p>
-            <p className="text-lg font-semibold">{restockAmount.toLocaleString()} - {stockExpenses.toLocaleString()} = <span className="text-primary">{(restockAmount - stockExpenses).toLocaleString()} MT</span></p>
-          </CardContent>
-        </Card>
-      )}
+      {/* Add Category */}
+      <div className="flex gap-2">
+        <Input placeholder="New category name..." value={newCategoryName} onChange={(e) => setNewCategoryName(e.target.value)} />
+        <Button onClick={handleAddCategory} disabled={!newCategoryName.trim()} className="gap-2"><Plus className="w-4 h-4" />Add</Button>
+      </div>
 
       {/* Net Profit */}
       <Card className="border-primary/50 bg-primary/5">
@@ -246,23 +169,43 @@ function RevenueAllocationContent() {
                 <p className="text-3xl font-bold text-primary">{netProfitAmount.toLocaleString()} MT</p>
               </div>
             </div>
-            <Badge variant="secondary" className="text-lg px-4 py-2">
-              {netProfitPercent.toFixed(1)}%
-            </Badge>
+            <Badge variant="secondary" className="text-lg px-4 py-2">{netProfitPercent.toFixed(1)}%</Badge>
           </div>
         </CardContent>
       </Card>
 
-      {/* Actions */}
+      {/* Outstanding Credits */}
+      {unsettledCredits.length > 0 && (
+        <Card className="border-amber-500/30">
+          <CardHeader className="pb-3">
+            <CardTitle className="flex items-center gap-2 text-amber-700">
+              <CreditCard className="w-5 h-5" />
+              Outstanding Credits ({unsettledCredits.length})
+              <Badge variant="outline" className="ml-auto">{totalOutstandingCredits.toLocaleString()} MT</Badge>
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            {unsettledCredits.map(credit => (
+              <div key={credit.id} className="flex items-center justify-between p-3 rounded-lg bg-amber-500/10 border border-amber-500/20">
+                <div>
+                  <p className="font-medium">{credit.customer_name}</p>
+                  <p className="text-xs text-muted-foreground">{new Date(credit.date).toLocaleDateString()}</p>
+                </div>
+                <div className="flex items-center gap-3">
+                  <span className="font-bold text-amber-700">{Number(credit.sale_amount).toLocaleString()} MT</span>
+                  <Button size="sm" variant="outline" onClick={() => settleCredit(credit.id)} className="gap-1">
+                    <Check className="w-3 h-3" />Settle
+                  </Button>
+                </div>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+      )}
+
       <div className="flex justify-center gap-4 pb-8">
-        <Button variant="outline" onClick={handleExport} className="gap-2">
-          <FileDown className="w-4 h-4" />
-          Export Daily Report
-        </Button>
-        <Button onClick={handleSaveAllocation} disabled={!isValid} className="gap-2 px-8">
-          <Save className="w-4 h-4" />
-          Confirm Allocation
-        </Button>
+        <Button variant="outline" onClick={handleExport} className="gap-2"><FileDown className="w-4 h-4" />Export</Button>
+        <Button onClick={handleSaveAllocation} disabled={isOverAllocated} className="gap-2 px-8"><Save className="w-4 h-4" />Save Allocation</Button>
       </div>
     </div>
   );

@@ -21,18 +21,27 @@ function InventoryContent() {
 
   const loading = stocksLoading || ingredientsLoading;
 
-  const currentStoreStocks = stocks.map(stock => {
-    const ingredient = ingredients.find(i => i.id === stock.ingredient_id);
-    const percentageOfTarget = stock.target_stock > 0 ? (stock.current_quantity / stock.target_stock) * 100 : 0;
-    const isLow = stock.current_quantity < stock.min_threshold;
-    const amountToBuy = Math.max(0, stock.target_stock - stock.current_quantity);
+  // Merge ingredients with their stock data (show ALL ingredients, even with 0 quantity)
+  const inventoryItems = ingredients.map(ingredient => {
+    const stock = stocks.find(s => s.ingredient_id === ingredient.id);
+    const currentQuantity = stock?.current_quantity ?? 0;
+    const minThreshold = stock?.min_threshold ?? 10;
+    const targetStock = stock?.target_stock ?? 100;
+    const percentageOfTarget = targetStock > 0 ? (currentQuantity / targetStock) * 100 : 0;
+    const isLow = currentQuantity < minThreshold;
+    const amountToBuy = Math.max(0, targetStock - currentQuantity);
     
     return {
-      ...stock,
+      id: stock?.id || `ingredient-${ingredient.id}`,
+      ingredient_id: ingredient.id,
       ingredient,
+      current_quantity: currentQuantity,
+      min_threshold: minThreshold,
+      target_stock: targetStock,
       percentageOfTarget,
       isLow,
       amountToBuy,
+      hasStock: !!stock
     };
   }).sort((a, b) => {
     if (a.isLow && !b.isLow) return -1;
@@ -40,14 +49,14 @@ function InventoryContent() {
     return a.percentageOfTarget - b.percentageOfTarget;
   });
 
-  const filteredStocks = currentStoreStocks.filter(stock => {
-    if (filter === 'low') return stock.isLow;
-    if (filter === 'ok') return !stock.isLow;
+  const filteredItems = inventoryItems.filter(item => {
+    if (filter === 'low') return item.isLow;
+    if (filter === 'ok') return !item.isLow;
     return true;
   });
 
-  const lowStockCount = currentStoreStocks.filter(s => s.isLow).length;
-  const restockList = currentStoreStocks.filter(s => s.amountToBuy > 0);
+  const lowStockCount = inventoryItems.filter(s => s.isLow).length;
+  const restockList = inventoryItems.filter(s => s.amountToBuy > 0);
 
   const handleExportRestock = () => {
     const content = restockList.map(item => 
@@ -178,7 +187,7 @@ function InventoryContent() {
           size="sm"
           onClick={() => setFilter('all')}
         >
-          All Items ({currentStoreStocks.length})
+          All Items ({inventoryItems.length})
         </Button>
         <Button 
           variant={filter === 'low' ? "default" : "outline"}
@@ -193,26 +202,26 @@ function InventoryContent() {
           size="sm"
           onClick={() => setFilter('ok')}
         >
-          OK ({currentStoreStocks.length - lowStockCount})
+          OK ({inventoryItems.length - lowStockCount})
         </Button>
       </div>
 
       {/* Stock List */}
       <div className="grid gap-3">
-        {filteredStocks.length === 0 ? (
+        {filteredItems.length === 0 ? (
           <Card>
             <CardContent className="py-12 text-center text-muted-foreground">
               <Package className="w-12 h-12 mx-auto mb-3 opacity-30" />
-              <p>No stock items found. Add stock to get started.</p>
+              <p>No inventory items found. Add ingredients to get started.</p>
             </CardContent>
           </Card>
         ) : (
-          filteredStocks.map(stock => (
+          filteredItems.map(item => (
             <Card 
-              key={stock.id}
+              key={item.id}
               className={cn(
                 "transition-all",
-                stock.isLow && "border-destructive/50 bg-destructive/5"
+                item.isLow && "border-destructive/50 bg-destructive/5"
               )}
             >
               <CardContent className="p-4">
@@ -220,14 +229,19 @@ function InventoryContent() {
                   {/* Item Info */}
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-1">
-                      <h3 className="font-semibold text-foreground">{stock.ingredient?.name}</h3>
+                      <h3 className="font-semibold text-foreground">{item.ingredient?.name}</h3>
                       <Badge variant="outline" className="text-xs">
-                        {stock.ingredient?.category}
+                        {item.ingredient?.category}
                       </Badge>
-                      {stock.isLow && (
+                      {item.isLow && (
                         <Badge variant="destructive" className="gap-1">
                           <Flame className="w-3 h-3" />
                           Low Stock
+                        </Badge>
+                      )}
+                      {!item.hasStock && (
+                        <Badge variant="secondary" className="text-xs">
+                          No stock entry
                         </Badge>
                       )}
                     </div>
@@ -235,14 +249,14 @@ function InventoryContent() {
                     {/* Progress Bar */}
                     <div className="flex items-center gap-3 mt-2">
                       <Progress 
-                        value={Math.min(100, stock.percentageOfTarget)} 
+                        value={Math.min(100, item.percentageOfTarget)} 
                         className={cn(
                           "h-2 flex-1",
-                          stock.isLow && "[&>div]:bg-destructive"
+                          item.isLow && "[&>div]:bg-destructive"
                         )}
                       />
                       <span className="text-sm text-muted-foreground w-12 text-right">
-                        {Math.round(stock.percentageOfTarget)}%
+                        {Math.round(item.percentageOfTarget)}%
                       </span>
                     </div>
                   </div>
@@ -252,51 +266,53 @@ function InventoryContent() {
                     <div className="flex items-baseline gap-1 justify-end">
                       <span className={cn(
                         "text-2xl font-bold",
-                        stock.isLow ? "text-destructive" : "text-foreground"
+                        item.isLow ? "text-destructive" : "text-foreground"
                       )}>
-                        {stock.current_quantity}
+                        {item.current_quantity}
                       </span>
                       <span className="text-sm text-muted-foreground">
-                        / {stock.target_stock} {stock.ingredient?.unit}
+                        / {item.target_stock} {item.ingredient?.unit}
                       </span>
                     </div>
                     
                     {/* Editable Min Threshold */}
-                    <div className="flex items-center gap-1 justify-end">
-                      {editingThreshold === stock.id ? (
-                        <div className="flex items-center gap-1">
-                          <Input
-                            type="number"
-                            value={thresholdValue}
-                            onChange={(e) => setThresholdValue(e.target.value)}
-                            className="w-16 h-6 text-xs p-1"
-                            min="0"
-                          />
-                          <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => handleSaveThreshold(stock.id)}>
-                            <Check className="w-3 h-3 text-primary" />
-                          </Button>
-                          <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => setEditingThreshold(null)}>
-                            <X className="w-3 h-3 text-destructive" />
-                          </Button>
-                        </div>
-                      ) : (
-                        <button 
-                          onClick={() => handleEditThreshold(stock.id, stock.min_threshold)}
-                          className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
-                        >
-                          Min: {stock.min_threshold} {stock.ingredient?.unit}
-                          <Edit2 className="w-3 h-3" />
-                        </button>
-                      )}
-                    </div>
+                    {item.hasStock && (
+                      <div className="flex items-center gap-1 justify-end">
+                        {editingThreshold === item.id ? (
+                          <div className="flex items-center gap-1">
+                            <Input
+                              type="number"
+                              value={thresholdValue}
+                              onChange={(e) => setThresholdValue(e.target.value)}
+                              className="w-16 h-6 text-xs p-1"
+                              min="0"
+                            />
+                            <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => handleSaveThreshold(item.id)}>
+                              <Check className="w-3 h-3 text-primary" />
+                            </Button>
+                            <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => setEditingThreshold(null)}>
+                              <X className="w-3 h-3 text-destructive" />
+                            </Button>
+                          </div>
+                        ) : (
+                          <button 
+                            onClick={() => handleEditThreshold(item.id, item.min_threshold)}
+                            className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
+                          >
+                            Min: {item.min_threshold} {item.ingredient?.unit}
+                            <Edit2 className="w-3 h-3" />
+                          </button>
+                        )}
+                      </div>
+                    )}
                     
-                    {stock.amountToBuy > 0 && (
+                    {item.amountToBuy > 0 && (
                       <p className="text-xs font-medium text-amber-600">
-                        Need: +{stock.amountToBuy} {stock.ingredient?.unit}
+                        Need: +{item.amountToBuy} {item.ingredient?.unit}
                       </p>
                     )}
                     <p className="text-xs text-muted-foreground">
-                      Unit Cost: {stock.ingredient?.average_cost?.toFixed(2)} MT
+                      Unit Cost: {item.ingredient?.average_cost?.toFixed(2)} MT
                     </p>
                   </div>
                 </div>
