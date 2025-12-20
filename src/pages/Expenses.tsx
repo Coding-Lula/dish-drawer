@@ -93,7 +93,7 @@ function ExpensesContent() {
           <CardContent className="p-4 flex items-center gap-4">
             <div className="p-3 rounded-lg bg-destructive/20"><Receipt className="w-6 h-6 text-destructive" /></div>
             <div>
-              <p className="text-sm text-muted-foreground">Total Expenses</p>
+              <p className="text-sm text-muted-foreground">Despesas Totais</p>
               <p className="text-2xl font-bold">{totalExpenses.toLocaleString()} MT</p>
             </div>
           </CardContent>
@@ -102,7 +102,7 @@ function ExpensesContent() {
           <CardContent className="p-4 flex items-center gap-4">
             <div className="p-3 rounded-lg bg-amber-500/20"><Package className="w-6 h-6 text-amber-600" /></div>
             <div>
-              <p className="text-sm text-muted-foreground">Stock Pre-Spent</p>
+              <p className="text-sm text-muted-foreground">Mercadoria Pre-Spent</p>
               <p className="text-2xl font-bold text-amber-600">{stockExpenses.toLocaleString()} MT</p>
             </div>
           </CardContent>
@@ -126,7 +126,7 @@ function ExpensesContent() {
               <div className="grid gap-4 md:grid-cols-2">
                 <div className="space-y-2">
                   <Label>Amount (MT)</Label>
-                  <Input type="number" placeholder="500" value={amount} onChange={(e) => setAmount(e.target.value)} />
+                  <Input type="number" placeholder="" value={amount} onChange={(e) => setAmount(e.target.value)} />
                 </div>
                 <div className="space-y-2">
                   <Label>Category</Label>
@@ -158,8 +158,8 @@ function ExpensesContent() {
               )}
 
               <div className="space-y-2">
-                <Label>Description</Label>
-                <Input placeholder="Emergency purchase" value={description} onChange={(e) => setDescription(e.target.value)} />
+                <Label>Descrição</Label>
+                <Input placeholder="Descrição da despesa" value={description} onChange={(e) => setDescription(e.target.value)} />
               </div>
 
               <div className="flex gap-2 justify-end">

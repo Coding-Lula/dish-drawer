@@ -353,6 +353,42 @@ export function useStoreStock(storeId: string | null) {
     return true;
   };
 
+  const updateTargetStock = async (stockId: string, targetStock: number) => {
+  try {
+    const { error } = await supabase
+      .from('store_stock')
+      .update({ 
+        target_stock: targetStock,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', stockId);
+    
+    if (error) throw error;
+    
+    // Update local state immediately for better UX
+    setStocks(prev => prev.map(stock => 
+      stock.id === stockId 
+        ? { ...stock, target_stock: targetStock }
+        : stock
+    ));
+    
+    toast({ 
+      title: 'Success', 
+      description: `Target stock updated to ${targetStock}` 
+    });
+    
+    return { success: true };
+  } catch (error: any) {
+    console.error('Error updating target stock:', error);
+    toast({ 
+      title: 'Error', 
+      description: error.message || 'Failed to update target stock', 
+      variant: 'destructive' 
+    });
+    return { success: false, error: error.message };
+  }
+};
+
   const deductStock = async (ingredientId: string, amount: number) => {
     const stock = stocks.find(s => s.ingredient_id === ingredientId);
     if (!stock) return false;
@@ -376,7 +412,15 @@ export function useStoreStock(storeId: string | null) {
     fetchStocks();
   }, [fetchStocks]);
 
-  return { stocks, loading, addStock, updateMinThreshold, deductStock, refetch: fetchStocks };
+  return { 
+    stocks, 
+    loading, 
+    addStock, 
+    updateMinThreshold, 
+    updateTargetStock, 
+    deductStock, 
+    refetch: fetchStocks 
+  };
 }
 
 export function useDishes() {

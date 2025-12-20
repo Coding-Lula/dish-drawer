@@ -177,15 +177,15 @@ function RecipesContent() {
                   <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-3">Cost Analysis</h3>
                   <div className="grid grid-cols-3 gap-4">
                     <div>
-                      <p className="text-xs text-muted-foreground">Total Cost</p>
+                      <p className="text-xs text-muted-foreground">Custo Total</p>
                       <p className="text-xl font-bold">{totalIngredientCost.toFixed(2)} MT</p>
                     </div>
                     <div>
-                      <p className="text-xs text-muted-foreground">Selling Price</p>
+                      <p className="text-xs text-muted-foreground">Preço de Venda</p>
                       <p className="text-xl font-bold">{Number(selectedDishData?.selling_price).toLocaleString()} MT</p>
                     </div>
                     <div>
-                      <p className="text-xs text-muted-foreground">Gross Profit</p>
+                      <p className="text-xs text-muted-foreground">Lucro Bruto</p>
                       <p className="text-xl font-bold text-primary">{((Number(selectedDishData?.selling_price) || 0) - totalIngredientCost).toFixed(2)} MT</p>
                     </div>
                   </div>

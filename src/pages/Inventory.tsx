@@ -13,11 +13,21 @@ import { useState } from 'react';
 
 function InventoryContent() {
   const { currentStore } = useCurrentStore();
-  const { stocks, addStock, updateMinThreshold, loading: stocksLoading, refetch: refetchStocks } = useStoreStock(currentStore?.id || null);
+  const { 
+    stocks, 
+    addStock, 
+    updateMinThreshold, 
+    updateTargetStock, // Make sure this is included here
+    loading: stocksLoading, 
+    refetch: refetchStocks 
+  } = useStoreStock(currentStore?.id || null);
   const { ingredients, addIngredient, loading: ingredientsLoading } = useIngredients();
+  
   const [filter, setFilter] = useState<'all' | 'low' | 'ok'>('all');
   const [editingThreshold, setEditingThreshold] = useState<string | null>(null);
   const [thresholdValue, setThresholdValue] = useState('');
+  const [editingTarget, setEditingTarget] = useState<string | null>(null);
+  const [targetValue, setTargetValue] = useState('');
 
   const loading = stocksLoading || ingredientsLoading;
 
@@ -97,6 +107,20 @@ function InventoryContent() {
     }
     setEditingThreshold(null);
     setThresholdValue('');
+  };
+
+  const handleEditTarget = (stockId: string, currentValue: number) => {
+    setEditingTarget(stockId);
+    setTargetValue(currentValue.toString());
+  };
+
+  const handleSaveTarget = async (stockId: string) => {
+    const value = parseFloat(targetValue);
+    if (!isNaN(value) && value >= 0) {
+      await updateTargetStock(stockId, value);
+    }
+    setEditingTarget(null);
+    setTargetValue('');
   };
 
   if (loading) {
@@ -262,7 +286,7 @@ function InventoryContent() {
                   </div>
 
                   {/* Stock Numbers */}
-                  <div className="text-right space-y-1">
+                  <div className="text-right space-y-2">
                     <div className="flex items-baseline gap-1 justify-end">
                       <span className={cn(
                         "text-2xl font-bold",
@@ -275,9 +299,43 @@ function InventoryContent() {
                       </span>
                     </div>
                     
-                    {/* Editable Min Threshold */}
+                    {/* Target Stock Editing */}
                     {item.hasStock && (
                       <div className="flex items-center gap-1 justify-end">
+                        <span className="text-xs text-muted-foreground">Target:</span>
+                        {editingTarget === item.id ? (
+                          <div className="flex items-center gap-1">
+                            <Input
+                              type="number"
+                              value={targetValue}
+                              onChange={(e) => setTargetValue(e.target.value)}
+                              className="w-16 h-6 text-xs p-1"
+                              min="0"
+                              step="0.1"
+                            />
+                            <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => handleSaveTarget(item.id)}>
+                              <Check className="w-3 h-3 text-primary" />
+                            </Button>
+                            <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => setEditingTarget(null)}>
+                              <X className="w-3 h-3 text-destructive" />
+                            </Button>
+                          </div>
+                        ) : (
+                          <button 
+                            onClick={() => handleEditTarget(item.id, item.target_stock)}
+                            className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
+                          >
+                            {item.target_stock} {item.ingredient?.unit}
+                            <Edit2 className="w-3 h-3" />
+                          </button>
+                        )}
+                      </div>
+                    )}
+                    
+                    {/* Min Threshold Editing */}
+                    {item.hasStock && (
+                      <div className="flex items-center gap-1 justify-end">
+                        <span className="text-xs text-muted-foreground">Min:</span>
                         {editingThreshold === item.id ? (
                           <div className="flex items-center gap-1">
                             <Input
@@ -286,6 +344,7 @@ function InventoryContent() {
                               onChange={(e) => setThresholdValue(e.target.value)}
                               className="w-16 h-6 text-xs p-1"
                               min="0"
+                              step="0.1"
                             />
                             <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => handleSaveThreshold(item.id)}>
                               <Check className="w-3 h-3 text-primary" />
@@ -299,7 +358,7 @@ function InventoryContent() {
                             onClick={() => handleEditThreshold(item.id, item.min_threshold)}
                             className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
                           >
-                            Min: {item.min_threshold} {item.ingredient?.unit}
+                            {item.min_threshold} {item.ingredient?.unit}
                             <Edit2 className="w-3 h-3" />
                           </button>
                         )}

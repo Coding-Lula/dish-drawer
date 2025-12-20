@@ -49,7 +49,7 @@ export function AddCategoryModal({ onSubmit }: AddCategoryModalProps) {
             <Input
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="Marketing"
+              placeholder=""
               required
             />
           </div>

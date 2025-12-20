@@ -17,6 +17,10 @@ interface CartItem {
   quantity: number;
 }
 
+interface TableCart {
+  [tableId: string]: CartItem[];
+}
+
 const paymentMethods = [
   { id: 'cash', name: 'Cash', icon: '💵', isRevenue: true, isCash: true },
   { id: 'mpesa', name: 'M-Pesa', icon: '📱', isRevenue: true, isCash: true },
@@ -36,7 +40,8 @@ function POSContent() {
   const { deductStock } = useStoreStock(currentStore?.id || null);
   const { addCredit } = useCredits(currentStore?.id || null);
 
-  const [cart, setCart] = useState<CartItem[]>([]);
+  // Change 1: Change cart state to store carts per table
+  const [tableCarts, setTableCarts] = useState<TableCart>({});
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [selectedPayment, setSelectedPayment] = useState('cash');
   const [selectedTable, setSelectedTable] = useState<string | null>(null);
@@ -52,29 +57,69 @@ function POSContent() {
 
   const categories = [...new Set(dishes.map(d => d.category).filter(Boolean))];
   const filteredDishes = selectedCategory ? dishes.filter(d => d.category === selectedCategory) : dishes;
-  const cartTotal = cart.reduce((sum, item) => sum + (Number(item.dish.selling_price) * item.quantity), 0);
+  
+  // Change 2: Get current cart based on selected table
+  const currentCart = selectedTable ? tableCarts[selectedTable] || [] : [];
+  const cartTotal = currentCart.reduce((sum, item) => sum + (Number(item.dish.selling_price) * item.quantity), 0);
 
   const addToCart = (dish: Dish) => {
-    setCart(prev => {
-      const existing = prev.find(i => i.dish.id === dish.id);
-      if (existing) {
-        return prev.map(i => i.dish.id === dish.id ? { ...i, quantity: i.quantity + 1 } : i);
-      }
-      return [...prev, { dish, quantity: 1 }];
+    if (!selectedTable) {
+      toast({ title: 'Please select a table first', variant: 'destructive' });
+      return;
+    }
+    
+    setTableCarts(prev => {
+      const tableCart = prev[selectedTable] || [];
+      const existing = tableCart.find(i => i.dish.id === dish.id);
+      
+      const updatedCart = existing 
+        ? tableCart.map(i => i.dish.id === dish.id ? { ...i, quantity: i.quantity + 1 } : i)
+        : [...tableCart, { dish, quantity: 1 }];
+      
+      return {
+        ...prev,
+        [selectedTable]: updatedCart
+      };
     });
   };
 
   const updateQuantity = (dishId: string, quantity: number) => {
-    if (quantity <= 0) {
-      setCart(prev => prev.filter(i => i.dish.id !== dishId));
-    } else {
-      setCart(prev => prev.map(i => i.dish.id === dishId ? { ...i, quantity } : i));
-    }
+    if (!selectedTable) return;
+    
+    setTableCarts(prev => {
+      const tableCart = prev[selectedTable] || [];
+      let updatedCart;
+      
+      if (quantity <= 0) {
+        updatedCart = tableCart.filter(i => i.dish.id !== dishId);
+      } else {
+        updatedCart = tableCart.map(i => i.dish.id === dishId ? { ...i, quantity } : i);
+      }
+      
+      return {
+        ...prev,
+        [selectedTable]: updatedCart
+      };
+    });
+  };
+
+  const clearCurrentCart = () => {
+    if (!selectedTable) return;
+    
+    setTableCarts(prev => ({
+      ...prev,
+      [selectedTable]: []
+    }));
   };
 
   const handleCheckout = async () => {
-    if (cart.length === 0 || !selectedTable) {
-      toast({ title: !selectedTable ? 'Select a table' : 'Cart is empty', variant: 'destructive' });
+    if (!selectedTable) {
+      toast({ title: 'Select a table', variant: 'destructive' });
+      return;
+    }
+    
+    if (currentCart.length === 0) {
+      toast({ title: 'Cart is empty', variant: 'destructive' });
       return;
     }
 
@@ -88,10 +133,12 @@ function POSContent() {
   };
 
   const processCheckout = async (customerName?: string) => {
+    if (!selectedTable) return;
+    
     setIsProcessing(true);
 
     // Deduct stock based on recipes
-    for (const cartItem of cart) {
+    for (const cartItem of currentCart) {
       const dishRecipes = recipes.filter(r => r.dish_id === cartItem.dish.id);
       for (const recipe of dishRecipes) {
         await deductStock(recipe.ingredient_id, Number(recipe.quantity_required) * cartItem.quantity);
@@ -103,7 +150,7 @@ function POSContent() {
       cartTotal,
       selectedPayment,
       selectedTable,
-      cart.map(item => ({ dishId: item.dish.id, quantity: item.quantity, unitPrice: Number(item.dish.selling_price) }))
+      currentCart.map(item => ({ dishId: item.dish.id, quantity: item.quantity, unitPrice: Number(item.dish.selling_price) }))
     );
 
     // If credit payment, create credit record
@@ -115,13 +162,16 @@ function POSContent() {
       });
     }
 
+    // Clear the cart after successful checkout
+    clearCurrentCart();
+    
     const method = paymentMethods.find(m => m.id === selectedPayment);
+    const tableName = tables.find(t => t.id === selectedTable)?.name || `Table`;
     toast({ 
       title: 'Sale Complete!', 
-      description: `${cartTotal.toLocaleString()} MT via ${method?.name}${!method?.isRevenue ? ' (No Revenue)' : ''}${customerName ? ` - ${customerName}` : ''}` 
+      description: `${tableName}: ${cartTotal.toLocaleString()} MT via ${method?.name}${!method?.isRevenue ? ' (No Revenue)' : ''}${customerName ? ` - ${customerName}` : ''}` 
     });
     
-    setCart([]);
     setIsProcessing(false);
     setShowCreditModal(false);
   };
@@ -131,12 +181,15 @@ function POSContent() {
   };
 
   const handlePrintReceipt = () => {
+    if (!selectedTable) return;
+    
+    const tableName = tables.find(t => t.id === selectedTable)?.name || 'N/A';
     const receipt = [
       `${currentStore?.name}`,
-      `Table: ${tables.find(t => t.id === selectedTable)?.name || 'N/A'}`,
+      `Table: ${tableName}`,
       `Date: ${new Date().toLocaleString()}`,
       '─'.repeat(30),
-      ...cart.map(item => `${item.dish.name} x${item.quantity} - ${(Number(item.dish.selling_price) * item.quantity).toLocaleString()} MT`),
+      ...currentCart.map(item => `${item.dish.name} x${item.quantity} - ${(Number(item.dish.selling_price) * item.quantity).toLocaleString()} MT`),
       '─'.repeat(30),
       `TOTAL: ${cartTotal.toLocaleString()} MT`
     ].join('\n');
@@ -145,9 +198,14 @@ function POSContent() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `receipt-${Date.now()}.txt`;
+    a.download = `receipt-${tableName.toLowerCase().replace(/\s/g, '-')}-${Date.now()}.txt`;
     a.click();
     toast({ title: 'Receipt downloaded' });
+  };
+
+  // Add effect to update cart display when table changes
+  const handleTableChange = (tableId: string) => {
+    setSelectedTable(tableId);
   };
 
   return (
@@ -166,13 +224,20 @@ function POSContent() {
             />
             <div className="flex items-center gap-2">
               <Table className="w-4 h-4 text-muted-foreground" />
-              <Select value={selectedTable || ''} onValueChange={setSelectedTable}>
+              <Select value={selectedTable || ''} onValueChange={handleTableChange}>
                 <SelectTrigger className="w-40">
                   <SelectValue placeholder="Select Table" />
                 </SelectTrigger>
                 <SelectContent>
                   {tables.map(table => (
-                    <SelectItem key={table.id} value={table.id}>{table.name}</SelectItem>
+                    <SelectItem key={table.id} value={table.id}>
+                      {table.name} 
+                      {(tableCarts[table.id]?.length || 0) > 0 && (
+                        <Badge variant="secondary" className="ml-2 text-xs">
+                          {tableCarts[table.id]?.reduce((sum, item) => sum + item.quantity, 0)} items
+                        </Badge>
+                      )}
+                    </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -208,20 +273,32 @@ function POSContent() {
       <Card className="w-96 flex flex-col shrink-0">
         <CardHeader className="pb-3 border-b">
           <CardTitle className="flex items-center justify-between">
-            <span className="flex items-center gap-2"><ShoppingBag className="w-5 h-5" />Cart</span>
-            {cart.length > 0 && <Button variant="ghost" size="sm" onClick={() => setCart([])} className="text-destructive">Clear</Button>}
+            <span className="flex items-center gap-2">
+              <ShoppingBag className="w-5 h-5" />
+              Cart {selectedTable && `- ${tables.find(t => t.id === selectedTable)?.name}`}
+            </span>
+            {currentCart.length > 0 && (
+              <Button variant="ghost" size="sm" onClick={clearCurrentCart} className="text-destructive">
+                Clear
+              </Button>
+            )}
           </CardTitle>
         </CardHeader>
         
         <CardContent className="flex-1 overflow-auto py-4">
-          {cart.length === 0 ? (
+          {!selectedTable ? (
+            <div className="h-full flex flex-col items-center justify-center text-muted-foreground">
+              <Table className="w-12 h-12 mb-2 opacity-30" />
+              <p>Select a table to start</p>
+            </div>
+          ) : currentCart.length === 0 ? (
             <div className="h-full flex flex-col items-center justify-center text-muted-foreground">
               <ShoppingBag className="w-12 h-12 mb-2 opacity-30" />
-              <p>Cart is empty</p>
+              <p>Cart is empty for {tables.find(t => t.id === selectedTable)?.name}</p>
             </div>
           ) : (
             <div className="space-y-3">
-              {cart.map(item => (
+              {currentCart.map(item => (
                 <div key={item.dish.id} className="flex items-center gap-3 p-3 rounded-lg bg-muted/30 border">
                   <div className="flex-1 min-w-0">
                     <p className="font-medium truncate">{item.dish.name}</p>
@@ -261,10 +338,10 @@ function POSContent() {
               <span className="text-3xl font-bold">{cartTotal.toLocaleString()} MT</span>
             </div>
             <div className="flex gap-2">
-              <Button variant="outline" onClick={handlePrintReceipt} disabled={cart.length === 0} className="gap-2">
+              <Button variant="outline" onClick={handlePrintReceipt} disabled={currentCart.length === 0 || !selectedTable} className="gap-2">
                 <Printer className="w-4 h-4" />
               </Button>
-              <Button className="flex-1 h-12 text-lg" onClick={handleCheckout} disabled={cart.length === 0 || isProcessing || !selectedTable}>
+              <Button className="flex-1 h-12 text-lg" onClick={handleCheckout} disabled={currentCart.length === 0 || isProcessing || !selectedTable}>
                 {isProcessing ? 'Processing...' : <><CreditCard className="w-5 h-5 mr-2" />Complete Sale</>}
               </Button>
             </div>

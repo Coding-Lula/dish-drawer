@@ -64,7 +64,7 @@ export function AddInventoryModal({ onSubmit }: AddInventoryModalProps) {
             <Input
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="Tomatoes"
+              placeholder=""
               required
             />
           </div>
@@ -106,7 +106,7 @@ export function AddInventoryModal({ onSubmit }: AddInventoryModalProps) {
               min="0"
               value={averageCost}
               onChange={(e) => setAverageCost(e.target.value)}
-              placeholder="10"
+              placeholder=""
             />
           </div>
           <div className="flex justify-end gap-2">

@@ -51,7 +51,7 @@ export function CreditCustomerModal({ open, onOpenChange, amount, onConfirm }: C
                 id="customerName"
                 value={customerName}
                 onChange={(e) => setCustomerName(e.target.value)}
-                placeholder="Enter customer name"
+                placeholder="Digite o nome do cliente"
                 className="pl-10"
                 autoFocus
                 required

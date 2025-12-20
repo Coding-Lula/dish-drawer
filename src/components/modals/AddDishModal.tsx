@@ -61,7 +61,7 @@ export function AddDishModal({ categories, onSubmit }: AddDishModalProps) {
             <Input
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="Grilled Chicken"
+              placeholder=""
               required
             />
           </div>
@@ -87,11 +87,11 @@ export function AddDishModal({ categories, onSubmit }: AddDishModalProps) {
               <Label>Selling Price (MT)</Label>
               <Input
                 type="number"
-                step="0.01"
+                step="1"
                 min="0"
                 value={sellingPrice}
                 onChange={(e) => setSellingPrice(e.target.value)}
-                placeholder="250"
+                placeholder=""
                 required
               />
             </div>
@@ -100,11 +100,11 @@ export function AddDishModal({ categories, onSubmit }: AddDishModalProps) {
             <Label>Cost of Production (MT)</Label>
             <Input
               type="number"
-              step="0.01"
+              step="1"
               min="0"
               value={costOfProduction}
               onChange={(e) => setCostOfProduction(e.target.value)}
-              placeholder="20"
+              placeholder=""
             />
             <p className="text-xs text-muted-foreground">
               Virtual cost added to every dish (default: 20 MT)

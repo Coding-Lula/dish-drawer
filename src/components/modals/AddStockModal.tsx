@@ -80,7 +80,7 @@ export function AddStockModal({ ingredients, onSubmit }: AddStockModalProps) {
                 min="0"
                 value={quantity}
                 onChange={(e) => setQuantity(e.target.value)}
-                placeholder="5"
+                placeholder=""
               />
             </div>
             <div className="space-y-2">
@@ -91,7 +91,7 @@ export function AddStockModal({ ingredients, onSubmit }: AddStockModalProps) {
                 min="0"
                 value={totalCost}
                 onChange={(e) => setTotalCost(e.target.value)}
-                placeholder="500"
+                placeholder=""
               />
             </div>
           </div>

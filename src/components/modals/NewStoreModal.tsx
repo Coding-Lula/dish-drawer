@@ -52,7 +52,7 @@ export function NewStoreModal({ onSubmit }: NewStoreModalProps) {
               id="store-name"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="Main Branch"
+              placeholder="Digite o nome da nova loja"
               required
             />
           </div>
@@ -62,7 +62,7 @@ export function NewStoreModal({ onSubmit }: NewStoreModalProps) {
               id="store-location"
               value={location}
               onChange={(e) => setLocation(e.target.value)}
-              placeholder="123 Main Street"
+              placeholder=""
             />
           </div>
           <div className="flex justify-end gap-2">
