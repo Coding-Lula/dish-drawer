@@ -8,13 +8,21 @@ import { useDishes, useRecipes, useTransactions, useStoreStock, useCredits, useR
 import type { Dish } from '@/hooks/useSupabaseData';
 import { ManageTablesModal } from '@/components/modals/ManageTablesModal';
 import { CreditCustomerModal } from '@/components/modals/CreditCustomerModal';
-import { Plus, Minus, Trash2, ShoppingBag, CreditCard, Printer, Table } from 'lucide-react';
+import { SplitBillModal } from '@/components/modals/SplitBillModal';
+import { Plus, Minus, Trash2, ShoppingBag, CreditCard, Printer, Table, Split } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 interface CartItem {
   dish: Dish;
   quantity: number;
+}
+
+interface SplitBill {
+  id: string;
+  items: CartItem[];
+  paymentMethod: string | null;
+  isPaid: boolean;
 }
 
 const paymentMethods = [
@@ -42,8 +50,8 @@ function POSContent() {
   const [selectedTable, setSelectedTable] = useState<string | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [showCreditModal, setShowCreditModal] = useState(false);
+  const [showSplitBillModal, setShowSplitBillModal] = useState(false);
 
-  // Initialize 15 tables on first load
   useEffect(() => {
     if (currentStore?.id && tables.length < 15) {
       initializeTables(15);
@@ -78,7 +86,6 @@ function POSContent() {
       return;
     }
 
-    // If credit payment, show customer name modal first
     if (selectedPayment === 'credit') {
       setShowCreditModal(true);
       return;
@@ -90,7 +97,6 @@ function POSContent() {
   const processCheckout = async (customerName?: string) => {
     setIsProcessing(true);
 
-    // Deduct stock based on recipes
     for (const cartItem of cart) {
       const dishRecipes = recipes.filter(r => r.dish_id === cartItem.dish.id);
       for (const recipe of dishRecipes) {
@@ -98,7 +104,6 @@ function POSContent() {
       }
     }
 
-    // Create transaction
     const transaction = await addTransaction(
       cartTotal,
       selectedPayment,
@@ -106,7 +111,6 @@ function POSContent() {
       cart.map(item => ({ dishId: item.dish.id, quantity: item.quantity, unitPrice: Number(item.dish.selling_price) }))
     );
 
-    // If credit payment, create credit record
     if (selectedPayment === 'credit' && customerName && transaction) {
       await addCredit({
         customer_name: customerName,
@@ -128,6 +132,52 @@ function POSContent() {
 
   const handleCreditConfirm = (customerName: string) => {
     processCheckout(customerName);
+  };
+
+  const handleSplitBillProcess = async (bills: SplitBill[]) => {
+    for (const bill of bills) {
+      const billTotal = bill.items.reduce((sum, item) => sum + (Number(item.dish.selling_price) * item.quantity), 0);
+      
+      // Deduct stock for each bill's items
+      for (const cartItem of bill.items) {
+        const dishRecipes = recipes.filter(r => r.dish_id === cartItem.dish.id);
+        for (const recipe of dishRecipes) {
+          await deductStock(recipe.ingredient_id, Number(recipe.quantity_required) * cartItem.quantity);
+        }
+      }
+
+      // Create transaction for each bill
+      await addTransaction(
+        billTotal,
+        bill.paymentMethod || 'cash',
+        selectedTable,
+        bill.items.map(item => ({ dishId: item.dish.id, quantity: item.quantity, unitPrice: Number(item.dish.selling_price) }))
+      );
+    }
+
+    toast({ title: 'Split bills processed!', description: `${bills.length} bills completed` });
+    setCart([]);
+  };
+
+  const handlePrintBill = (bill: SplitBill, billNumber: number) => {
+    const billTotal = bill.items.reduce((sum, item) => sum + (Number(item.dish.selling_price) * item.quantity), 0);
+    const receipt = [
+      `${currentStore?.name}`,
+      `Table: ${tables.find(t => t.id === selectedTable)?.name || 'N/A'} - Bill ${billNumber}`,
+      `Date: ${new Date().toLocaleString()}`,
+      '─'.repeat(30),
+      ...bill.items.map(item => `${item.dish.name} x${item.quantity} - ${(Number(item.dish.selling_price) * item.quantity).toLocaleString()} MT`),
+      '─'.repeat(30),
+      `TOTAL: ${billTotal.toLocaleString()} MT`
+    ].join('\n');
+    
+    const blob = new Blob([receipt], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `receipt-bill${billNumber}-${Date.now()}.txt`;
+    a.click();
+    toast({ title: `Bill ${billNumber} receipt downloaded` });
   };
 
   const handlePrintReceipt = () => {
@@ -159,11 +209,7 @@ function POSContent() {
             <p className="text-muted-foreground">Select items to add to cart</p>
           </div>
           <div className="flex items-center gap-3">
-            <ManageTablesModal 
-              tables={tables}
-              onAddTable={addTable}
-              onDeleteTable={deleteTable}
-            />
+            <ManageTablesModal tables={tables} onAddTable={addTable} onDeleteTable={deleteTable} />
             <div className="flex items-center gap-2">
               <Table className="w-4 h-4 text-muted-foreground" />
               <Select value={selectedTable || ''} onValueChange={setSelectedTable}>
@@ -209,7 +255,14 @@ function POSContent() {
         <CardHeader className="pb-3 border-b">
           <CardTitle className="flex items-center justify-between">
             <span className="flex items-center gap-2"><ShoppingBag className="w-5 h-5" />Cart</span>
-            {cart.length > 0 && <Button variant="ghost" size="sm" onClick={() => setCart([])} className="text-destructive">Clear</Button>}
+            <div className="flex gap-1">
+              {cart.length > 1 && (
+                <Button variant="ghost" size="sm" onClick={() => setShowSplitBillModal(true)} className="gap-1">
+                  <Split className="w-4 h-4" /> Split
+                </Button>
+              )}
+              {cart.length > 0 && <Button variant="ghost" size="sm" onClick={() => setCart([])} className="text-destructive">Clear</Button>}
+            </div>
           </CardTitle>
         </CardHeader>
         
@@ -277,6 +330,17 @@ function POSContent() {
         onOpenChange={setShowCreditModal}
         amount={cartTotal}
         onConfirm={handleCreditConfirm}
+      />
+
+      <SplitBillModal
+        open={showSplitBillModal}
+        onOpenChange={setShowSplitBillModal}
+        cart={cart}
+        paymentMethods={paymentMethods}
+        onProcessBills={handleSplitBillProcess}
+        onPrintBill={handlePrintBill}
+        storeName={currentStore?.name || ''}
+        tableName={tables.find(t => t.id === selectedTable)?.name || 'Table'}
       />
     </div>
   );

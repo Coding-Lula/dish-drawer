@@ -1,27 +1,29 @@
 import { MainLayout, useCurrentStore } from '@/components/layout/MainLayout';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { Input } from '@/components/ui/input';
 import { AddStockModal } from '@/components/modals/AddStockModal';
 import { AddInventoryModal } from '@/components/modals/AddInventoryModal';
-import { useStoreStock, useIngredients } from '@/hooks/useSupabaseData';
-import { Package, AlertTriangle, TrendingDown, FileDown, Flame, Edit2, Check, X } from 'lucide-react';
+import { RestockListModal } from '@/components/modals/RestockListModal';
+import { useStoreStock, useIngredients, useInventoryLogs } from '@/hooks/useSupabaseData';
+import { Package, AlertTriangle, TrendingDown, Flame, Edit2, Check, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useState } from 'react';
 
 function InventoryContent() {
   const { currentStore } = useCurrentStore();
-  const { stocks, addStock, updateMinThreshold, loading: stocksLoading, refetch: refetchStocks } = useStoreStock(currentStore?.id || null);
+  const { stocks, addStock, updateMinThreshold, updateTargetStock, loading: stocksLoading, refetch: refetchStocks } = useStoreStock(currentStore?.id || null);
   const { ingredients, addIngredient, loading: ingredientsLoading } = useIngredients();
+  const { getLastUnitCost, loading: logsLoading } = useInventoryLogs(currentStore?.id || null);
   const [filter, setFilter] = useState<'all' | 'low' | 'ok'>('all');
-  const [editingThreshold, setEditingThreshold] = useState<string | null>(null);
-  const [thresholdValue, setThresholdValue] = useState('');
+  const [editingField, setEditingField] = useState<{ id: string; field: 'min' | 'target' } | null>(null);
+  const [editValue, setEditValue] = useState('');
 
-  const loading = stocksLoading || ingredientsLoading;
+  const loading = stocksLoading || ingredientsLoading || logsLoading;
 
-  // Merge ingredients with their stock data (show ALL ingredients, even with 0 quantity)
+  // Merge ingredients with their stock data
   const inventoryItems = ingredients.map(ingredient => {
     const stock = stocks.find(s => s.ingredient_id === ingredient.id);
     const currentQuantity = stock?.current_quantity ?? 0;
@@ -30,6 +32,8 @@ function InventoryContent() {
     const percentageOfTarget = targetStock > 0 ? (currentQuantity / targetStock) * 100 : 0;
     const isLow = currentQuantity < minThreshold;
     const amountToBuy = Math.max(0, targetStock - currentQuantity);
+    const lastUnitCost = getLastUnitCost(ingredient.id);
+    const estimatedCost = lastUnitCost ? amountToBuy * lastUnitCost : null;
     
     return {
       id: stock?.id || `ingredient-${ingredient.id}`,
@@ -41,7 +45,9 @@ function InventoryContent() {
       percentageOfTarget,
       isLow,
       amountToBuy,
-      hasStock: !!stock
+      hasStock: !!stock,
+      lastUnitCost,
+      estimatedCost
     };
   }).sort((a, b) => {
     if (a.isLow && !b.isLow) return -1;
@@ -57,20 +63,16 @@ function InventoryContent() {
 
   const lowStockCount = inventoryItems.filter(s => s.isLow).length;
   const restockList = inventoryItems.filter(s => s.amountToBuy > 0);
-
-  const handleExportRestock = () => {
-    const content = restockList.map(item => 
-      `${item.ingredient?.name}: ${item.amountToBuy} ${item.ingredient?.unit} (Current: ${item.current_quantity})`
-    ).join('\n');
-    
-    const blob = new Blob([`Restock List - ${currentStore?.name}\n${new Date().toLocaleDateString()}\n\n${content}`], 
-      { type: 'text/plain' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `restock-list-${currentStore?.name?.toLowerCase().replace(/\s/g, '-')}.txt`;
-    a.click();
-  };
+  const restockItems = restockList.map(item => ({
+    ingredient_id: item.ingredient_id,
+    ingredientName: item.ingredient?.name || '',
+    unit: item.ingredient?.unit || '',
+    currentQuantity: item.current_quantity,
+    targetStock: item.target_stock,
+    amountToBuy: item.amountToBuy,
+    lastUnitCost: item.lastUnitCost,
+    estimatedCost: item.estimatedCost
+  }));
 
   const handleAddStock = async (ingredientId: string, quantity: number, totalCost: number) => {
     const result = await addStock(ingredientId, quantity, totalCost);
@@ -85,18 +87,23 @@ function InventoryContent() {
     return result;
   };
 
-  const handleEditThreshold = (stockId: string, currentValue: number) => {
-    setEditingThreshold(stockId);
-    setThresholdValue(currentValue.toString());
+  const handleEditField = (stockId: string, field: 'min' | 'target', currentValue: number) => {
+    setEditingField({ id: stockId, field });
+    setEditValue(currentValue.toString());
   };
 
-  const handleSaveThreshold = async (stockId: string) => {
-    const value = parseFloat(thresholdValue);
+  const handleSaveField = async () => {
+    if (!editingField) return;
+    const value = parseFloat(editValue);
     if (!isNaN(value) && value >= 0) {
-      await updateMinThreshold(stockId, value);
+      if (editingField.field === 'min') {
+        await updateMinThreshold(editingField.id, value);
+      } else {
+        await updateTargetStock(editingField.id, value);
+      }
     }
-    setEditingThreshold(null);
-    setThresholdValue('');
+    setEditingField(null);
+    setEditValue('');
   };
 
   if (loading) {
@@ -127,10 +134,7 @@ function InventoryContent() {
         <div className="flex gap-2">
           <AddInventoryModal onSubmit={handleAddIngredient} />
           <AddStockModal ingredients={ingredients} onSubmit={handleAddStock} />
-          <Button onClick={handleExportRestock} variant="outline" className="gap-2">
-            <FileDown className="w-4 h-4" />
-            Export Restock List
-          </Button>
+          <RestockListModal storeName={currentStore?.name || ''} restockItems={restockItems} />
         </div>
       </div>
 
@@ -149,21 +153,12 @@ function InventoryContent() {
         </Card>
         <Card className={lowStockCount > 0 ? "border-destructive/50" : ""}>
           <CardContent className="p-4 flex items-center gap-4">
-            <div className={cn(
-              "p-3 rounded-lg",
-              lowStockCount > 0 ? "bg-destructive/20" : "bg-primary/20"
-            )}>
-              <AlertTriangle className={cn(
-                "w-6 h-6",
-                lowStockCount > 0 ? "text-destructive" : "text-primary"
-              )} />
+            <div className={cn("p-3 rounded-lg", lowStockCount > 0 ? "bg-destructive/20" : "bg-primary/20")}>
+              <AlertTriangle className={cn("w-6 h-6", lowStockCount > 0 ? "text-destructive" : "text-primary")} />
             </div>
             <div>
               <p className="text-sm text-muted-foreground">Low Stock Items</p>
-              <p className={cn(
-                "text-2xl font-bold",
-                lowStockCount > 0 ? "text-destructive" : "text-foreground"
-              )}>{lowStockCount}</p>
+              <p className={cn("text-2xl font-bold", lowStockCount > 0 ? "text-destructive" : "text-foreground")}>{lowStockCount}</p>
             </div>
           </CardContent>
         </Card>
@@ -182,26 +177,16 @@ function InventoryContent() {
 
       {/* Filter Tabs */}
       <div className="flex gap-2">
-        <Button 
-          variant={filter === 'all' ? "default" : "outline"}
-          size="sm"
-          onClick={() => setFilter('all')}
-        >
+        <Button variant={filter === 'all' ? "default" : "outline"} size="sm" onClick={() => setFilter('all')}>
           All Items ({inventoryItems.length})
         </Button>
         <Button 
-          variant={filter === 'low' ? "default" : "outline"}
-          size="sm"
-          onClick={() => setFilter('low')}
+          variant={filter === 'low' ? "default" : "outline"} size="sm" onClick={() => setFilter('low')}
           className={filter === 'low' ? "bg-destructive hover:bg-destructive/90" : ""}
         >
           Low Stock ({lowStockCount})
         </Button>
-        <Button 
-          variant={filter === 'ok' ? "default" : "outline"}
-          size="sm"
-          onClick={() => setFilter('ok')}
-        >
+        <Button variant={filter === 'ok' ? "default" : "outline"} size="sm" onClick={() => setFilter('ok')}>
           OK ({inventoryItems.length - lowStockCount})
         </Button>
       </div>
@@ -217,88 +202,53 @@ function InventoryContent() {
           </Card>
         ) : (
           filteredItems.map(item => (
-            <Card 
-              key={item.id}
-              className={cn(
-                "transition-all",
-                item.isLow && "border-destructive/50 bg-destructive/5"
-              )}
-            >
+            <Card key={item.id} className={cn("transition-all", item.isLow && "border-destructive/50 bg-destructive/5")}>
               <CardContent className="p-4">
                 <div className="flex items-center gap-4">
-                  {/* Item Info */}
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-1">
                       <h3 className="font-semibold text-foreground">{item.ingredient?.name}</h3>
-                      <Badge variant="outline" className="text-xs">
-                        {item.ingredient?.category}
-                      </Badge>
+                      <Badge variant="outline" className="text-xs">{item.ingredient?.category}</Badge>
                       {item.isLow && (
-                        <Badge variant="destructive" className="gap-1">
-                          <Flame className="w-3 h-3" />
-                          Low Stock
-                        </Badge>
+                        <Badge variant="destructive" className="gap-1"><Flame className="w-3 h-3" />Low Stock</Badge>
                       )}
-                      {!item.hasStock && (
-                        <Badge variant="secondary" className="text-xs">
-                          No stock entry
-                        </Badge>
-                      )}
+                      {!item.hasStock && <Badge variant="secondary" className="text-xs">No stock entry</Badge>}
                     </div>
-                    
-                    {/* Progress Bar */}
                     <div className="flex items-center gap-3 mt-2">
-                      <Progress 
-                        value={Math.min(100, item.percentageOfTarget)} 
-                        className={cn(
-                          "h-2 flex-1",
-                          item.isLow && "[&>div]:bg-destructive"
-                        )}
-                      />
-                      <span className="text-sm text-muted-foreground w-12 text-right">
-                        {Math.round(item.percentageOfTarget)}%
-                      </span>
+                      <Progress value={Math.min(100, item.percentageOfTarget)} className={cn("h-2 flex-1", item.isLow && "[&>div]:bg-destructive")} />
+                      <span className="text-sm text-muted-foreground w-12 text-right">{Math.round(item.percentageOfTarget)}%</span>
                     </div>
                   </div>
 
-                  {/* Stock Numbers */}
                   <div className="text-right space-y-1">
                     <div className="flex items-baseline gap-1 justify-end">
-                      <span className={cn(
-                        "text-2xl font-bold",
-                        item.isLow ? "text-destructive" : "text-foreground"
-                      )}>
-                        {item.current_quantity}
-                      </span>
-                      <span className="text-sm text-muted-foreground">
-                        / {item.target_stock} {item.ingredient?.unit}
-                      </span>
+                      <span className={cn("text-2xl font-bold", item.isLow ? "text-destructive" : "text-foreground")}>{item.current_quantity}</span>
+                      {item.hasStock && editingField?.id === item.id && editingField?.field === 'target' ? (
+                        <div className="flex items-center gap-1">
+                          <span className="text-sm text-muted-foreground">/</span>
+                          <Input type="number" value={editValue} onChange={(e) => setEditValue(e.target.value)} className="w-16 h-6 text-xs p-1" min="0" />
+                          <Button size="icon" variant="ghost" className="h-6 w-6" onClick={handleSaveField}><Check className="w-3 h-3 text-primary" /></Button>
+                          <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => setEditingField(null)}><X className="w-3 h-3 text-destructive" /></Button>
+                        </div>
+                      ) : (
+                        <button onClick={() => item.hasStock && handleEditField(item.id, 'target', item.target_stock)} className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground">
+                          / {item.target_stock} {item.ingredient?.unit}
+                          {item.hasStock && <Edit2 className="w-3 h-3" />}
+                        </button>
+                      )}
                     </div>
                     
-                    {/* Editable Min Threshold */}
                     {item.hasStock && (
                       <div className="flex items-center gap-1 justify-end">
-                        {editingThreshold === item.id ? (
+                        {editingField?.id === item.id && editingField?.field === 'min' ? (
                           <div className="flex items-center gap-1">
-                            <Input
-                              type="number"
-                              value={thresholdValue}
-                              onChange={(e) => setThresholdValue(e.target.value)}
-                              className="w-16 h-6 text-xs p-1"
-                              min="0"
-                            />
-                            <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => handleSaveThreshold(item.id)}>
-                              <Check className="w-3 h-3 text-primary" />
-                            </Button>
-                            <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => setEditingThreshold(null)}>
-                              <X className="w-3 h-3 text-destructive" />
-                            </Button>
+                            <span className="text-xs text-muted-foreground">Min:</span>
+                            <Input type="number" value={editValue} onChange={(e) => setEditValue(e.target.value)} className="w-16 h-6 text-xs p-1" min="0" />
+                            <Button size="icon" variant="ghost" className="h-6 w-6" onClick={handleSaveField}><Check className="w-3 h-3 text-primary" /></Button>
+                            <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => setEditingField(null)}><X className="w-3 h-3 text-destructive" /></Button>
                           </div>
                         ) : (
-                          <button 
-                            onClick={() => handleEditThreshold(item.id, item.min_threshold)}
-                            className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
-                          >
+                          <button onClick={() => handleEditField(item.id, 'min', item.min_threshold)} className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground">
                             Min: {item.min_threshold} {item.ingredient?.unit}
                             <Edit2 className="w-3 h-3" />
                           </button>
@@ -309,10 +259,11 @@ function InventoryContent() {
                     {item.amountToBuy > 0 && (
                       <p className="text-xs font-medium text-amber-600">
                         Need: +{item.amountToBuy} {item.ingredient?.unit}
+                        {item.estimatedCost && <span className="ml-1">(~{item.estimatedCost.toFixed(0)} MT)</span>}
                       </p>
                     )}
                     <p className="text-xs text-muted-foreground">
-                      Unit Cost: {item.ingredient?.average_cost?.toFixed(2)} MT
+                      Last Cost: {item.lastUnitCost ? `${item.lastUnitCost.toFixed(2)} MT/${item.ingredient?.unit}` : 'N/A'}
                     </p>
                   </div>
                 </div>
