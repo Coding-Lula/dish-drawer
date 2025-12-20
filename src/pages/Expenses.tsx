@@ -9,9 +9,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useToast } from '@/hooks/use-toast';
 import { useExpenses, useExpenseCategories, useIngredients, useStoreStock } from '@/hooks/useSupabaseData';
 import { AddCategoryModal } from '@/components/modals/AddCategoryModal';
+import { DateRangePickerModal } from '@/components/modals/DateRangePickerModal';
 import { exportExpensesToCSV, exportExpensesToPDF } from '@/utils/exportUtils';
-import { Receipt, Plus, Package, FileDown } from 'lucide-react';
-import { cn } from '@/lib/utils';
+import { Receipt, Plus, Package } from 'lucide-react';
 
 function ExpensesContent() {
   const { toast } = useToast();
@@ -51,7 +51,6 @@ function ExpensesContent() {
 
     const result = await addExpense(expense);
 
-    // If stock expense with ingredient, update stock and WAC
     if (result && isStockCategory && ingredientId && ingredientQty) {
       await addStock(ingredientId, parseFloat(ingredientQty), parseFloat(amount));
     }
@@ -63,13 +62,22 @@ function ExpensesContent() {
     setShowForm(false);
   };
 
-  const handleExportCSV = () => {
-    exportExpensesToCSV(expenses, `expenses-${currentStore?.name}`);
+  const handleExportCSV = (startDate: Date, endDate: Date) => {
+    const filteredExpenses = expenses.filter(e => {
+      const date = new Date(e.date);
+      return date >= startDate && date <= endDate;
+    });
+    exportExpensesToCSV(filteredExpenses, `expenses-${currentStore?.name}-${startDate.toISOString().split('T')[0]}-${endDate.toISOString().split('T')[0]}`);
     toast({ title: 'Exported to CSV' });
   };
 
-  const handleExportPDF = () => {
-    exportExpensesToPDF(expenses, currentStore?.name || 'Store', new Date().toLocaleDateString());
+  const handleExportPDF = (startDate: Date, endDate: Date) => {
+    const filteredExpenses = expenses.filter(e => {
+      const date = new Date(e.date);
+      return date >= startDate && date <= endDate;
+    });
+    const dateRange = `${startDate.toLocaleDateString()} - ${endDate.toLocaleDateString()}`;
+    exportExpensesToPDF(filteredExpenses, currentStore?.name || 'Store', dateRange);
     toast({ title: 'Exported to PDF' });
   };
 
@@ -82,8 +90,7 @@ function ExpensesContent() {
         </div>
         <div className="flex gap-2">
           <AddCategoryModal onSubmit={addCategory} />
-          <Button variant="outline" onClick={handleExportCSV} className="gap-2"><FileDown className="w-4 h-4" />CSV</Button>
-          <Button variant="outline" onClick={handleExportPDF} className="gap-2"><FileDown className="w-4 h-4" />PDF</Button>
+          <DateRangePickerModal onExportCSV={handleExportCSV} onExportPDF={handleExportPDF} />
           <Button onClick={() => setShowForm(!showForm)} className="gap-2"><Plus className="w-4 h-4" />Add Expense</Button>
         </div>
       </div>
