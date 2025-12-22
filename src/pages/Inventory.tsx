@@ -14,30 +14,24 @@ import { useState } from 'react';
 
 function InventoryContent() {
   const { currentStore } = useCurrentStore();
-<<<<<<< HEAD
   const { 
     stocks, 
     addStock, 
     updateMinThreshold, 
-    updateTargetStock, // Make sure this is included here
+    updateTargetStock,
     loading: stocksLoading, 
     refetch: refetchStocks 
   } = useStoreStock(currentStore?.id || null);
   const { ingredients, addIngredient, loading: ingredientsLoading } = useIngredients();
-  
+  const { getLastUnitCost, loading: logsLoading } = useInventoryLogs(currentStore?.id || null);
+
   const [filter, setFilter] = useState<'all' | 'low' | 'ok'>('all');
+  const [editingField, setEditingField] = useState<{ id: string; field: 'min' | 'target' } | null>(null);
+  const [editValue, setEditValue] = useState('');
   const [editingThreshold, setEditingThreshold] = useState<string | null>(null);
   const [thresholdValue, setThresholdValue] = useState('');
   const [editingTarget, setEditingTarget] = useState<string | null>(null);
   const [targetValue, setTargetValue] = useState('');
-=======
-  const { stocks, addStock, updateMinThreshold, updateTargetStock, loading: stocksLoading, refetch: refetchStocks } = useStoreStock(currentStore?.id || null);
-  const { ingredients, addIngredient, loading: ingredientsLoading } = useIngredients();
-  const { getLastUnitCost, loading: logsLoading } = useInventoryLogs(currentStore?.id || null);
-  const [filter, setFilter] = useState<'all' | 'low' | 'ok'>('all');
-  const [editingField, setEditingField] = useState<{ id: string; field: 'min' | 'target' } | null>(null);
-  const [editValue, setEditValue] = useState('');
->>>>>>> 1246e5023781a84c4cd8607b97c6f1edb0a7fa08
 
   const loading = stocksLoading || ingredientsLoading || logsLoading;
 
@@ -122,6 +116,20 @@ function InventoryContent() {
     }
     setEditingField(null);
     setEditValue('');
+  };
+
+  const handleEditThreshold = (stockId: string, currentValue: number) => {
+    setEditingThreshold(stockId);
+    setThresholdValue(currentValue.toString());
+  };
+
+  const handleSaveThreshold = async (stockId: string) => {
+    const value = parseFloat(thresholdValue);
+    if (!isNaN(value) && value >= 0) {
+      await updateMinThreshold(stockId, value);
+    }
+    setEditingThreshold(null);
+    setThresholdValue('');
   };
 
   const handleEditTarget = (stockId: string, currentValue: number) => {
@@ -252,12 +260,8 @@ function InventoryContent() {
                     </div>
                   </div>
 
-<<<<<<< HEAD
                   {/* Stock Numbers */}
                   <div className="text-right space-y-2">
-=======
-                  <div className="text-right space-y-1">
->>>>>>> 1246e5023781a84c4cd8607b97c6f1edb0a7fa08
                     <div className="flex items-baseline gap-1 justify-end">
                       <span className={cn("text-2xl font-bold", item.isLow ? "text-destructive" : "text-foreground")}>{item.current_quantity}</span>
                       {item.hasStock && editingField?.id === item.id && editingField?.field === 'target' ? (
@@ -275,7 +279,6 @@ function InventoryContent() {
                       )}
                     </div>
                     
-<<<<<<< HEAD
                     {/* Target Stock Editing */}
                     {item.hasStock && (
                       <div className="flex items-center gap-1 justify-end">
@@ -336,20 +339,6 @@ function InventoryContent() {
                             className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
                           >
                             {item.min_threshold} {item.ingredient?.unit}
-=======
-                    {item.hasStock && (
-                      <div className="flex items-center gap-1 justify-end">
-                        {editingField?.id === item.id && editingField?.field === 'min' ? (
-                          <div className="flex items-center gap-1">
-                            <span className="text-xs text-muted-foreground">Min:</span>
-                            <Input type="number" value={editValue} onChange={(e) => setEditValue(e.target.value)} className="w-16 h-6 text-xs p-1" min="0" />
-                            <Button size="icon" variant="ghost" className="h-6 w-6" onClick={handleSaveField}><Check className="w-3 h-3 text-primary" /></Button>
-                            <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => setEditingField(null)}><X className="w-3 h-3 text-destructive" /></Button>
-                          </div>
-                        ) : (
-                          <button onClick={() => handleEditField(item.id, 'min', item.min_threshold)} className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground">
-                            Min: {item.min_threshold} {item.ingredient?.unit}
->>>>>>> 1246e5023781a84c4cd8607b97c6f1edb0a7fa08
                             <Edit2 className="w-3 h-3" />
                           </button>
                         )}
