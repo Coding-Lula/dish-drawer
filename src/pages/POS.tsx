@@ -8,7 +8,8 @@ import { useDishes, useRecipes, useTransactions, useStoreStock, useCredits, useR
 import type { Dish } from '@/hooks/useSupabaseData';
 import { ManageTablesModal } from '@/components/modals/ManageTablesModal';
 import { CreditCustomerModal } from '@/components/modals/CreditCustomerModal';
-import { Plus, Minus, Trash2, ShoppingBag, CreditCard, Printer, Table } from 'lucide-react';
+import { SplitBillModal } from '@/components/modals/SplitBillModal';
+import { Plus, Minus, Trash2, ShoppingBag, CreditCard, Printer, Table, Split } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
@@ -17,8 +18,11 @@ interface CartItem {
   quantity: number;
 }
 
-interface TableCart {
-  [tableId: string]: CartItem[];
+interface SplitBill {
+  id: string;
+  items: CartItem[];
+  paymentMethod: string | null;
+  isPaid: boolean;
 }
 
 const paymentMethods = [
@@ -40,15 +44,14 @@ function POSContent() {
   const { deductStock } = useStoreStock(currentStore?.id || null);
   const { addCredit } = useCredits(currentStore?.id || null);
 
-  // Change 1: Change cart state to store carts per table
-  const [tableCarts, setTableCarts] = useState<TableCart>({});
+  const [cart, setCart] = useState<CartItem[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [selectedPayment, setSelectedPayment] = useState('cash');
   const [selectedTable, setSelectedTable] = useState<string | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [showCreditModal, setShowCreditModal] = useState(false);
+  const [showSplitBillModal, setShowSplitBillModal] = useState(false);
 
-  // Initialize 15 tables on first load
   useEffect(() => {
     if (currentStore?.id && tables.length < 15) {
       initializeTables(15);
@@ -57,73 +60,32 @@ function POSContent() {
 
   const categories = [...new Set(dishes.map(d => d.category).filter(Boolean))];
   const filteredDishes = selectedCategory ? dishes.filter(d => d.category === selectedCategory) : dishes;
-  
-  // Change 2: Get current cart based on selected table
-  const currentCart = selectedTable ? tableCarts[selectedTable] || [] : [];
-  const cartTotal = currentCart.reduce((sum, item) => sum + (Number(item.dish.selling_price) * item.quantity), 0);
+  const cartTotal = cart.reduce((sum, item) => sum + (Number(item.dish.selling_price) * item.quantity), 0);
 
   const addToCart = (dish: Dish) => {
-    if (!selectedTable) {
-      toast({ title: 'Please select a table first', variant: 'destructive' });
-      return;
-    }
-    
-    setTableCarts(prev => {
-      const tableCart = prev[selectedTable] || [];
-      const existing = tableCart.find(i => i.dish.id === dish.id);
-      
-      const updatedCart = existing 
-        ? tableCart.map(i => i.dish.id === dish.id ? { ...i, quantity: i.quantity + 1 } : i)
-        : [...tableCart, { dish, quantity: 1 }];
-      
-      return {
-        ...prev,
-        [selectedTable]: updatedCart
-      };
+    setCart(prev => {
+      const existing = prev.find(i => i.dish.id === dish.id);
+      if (existing) {
+        return prev.map(i => i.dish.id === dish.id ? { ...i, quantity: i.quantity + 1 } : i);
+      }
+      return [...prev, { dish, quantity: 1 }];
     });
   };
 
   const updateQuantity = (dishId: string, quantity: number) => {
-    if (!selectedTable) return;
-    
-    setTableCarts(prev => {
-      const tableCart = prev[selectedTable] || [];
-      let updatedCart;
-      
-      if (quantity <= 0) {
-        updatedCart = tableCart.filter(i => i.dish.id !== dishId);
-      } else {
-        updatedCart = tableCart.map(i => i.dish.id === dishId ? { ...i, quantity } : i);
-      }
-      
-      return {
-        ...prev,
-        [selectedTable]: updatedCart
-      };
-    });
-  };
-
-  const clearCurrentCart = () => {
-    if (!selectedTable) return;
-    
-    setTableCarts(prev => ({
-      ...prev,
-      [selectedTable]: []
-    }));
+    if (quantity <= 0) {
+      setCart(prev => prev.filter(i => i.dish.id !== dishId));
+    } else {
+      setCart(prev => prev.map(i => i.dish.id === dishId ? { ...i, quantity } : i));
+    }
   };
 
   const handleCheckout = async () => {
-    if (!selectedTable) {
-      toast({ title: 'Select a table', variant: 'destructive' });
-      return;
-    }
-    
-    if (currentCart.length === 0) {
-      toast({ title: 'Cart is empty', variant: 'destructive' });
+    if (cart.length === 0 || !selectedTable) {
+      toast({ title: !selectedTable ? 'Select a table' : 'Cart is empty', variant: 'destructive' });
       return;
     }
 
-    // If credit payment, show customer name modal first
     if (selectedPayment === 'credit') {
       setShowCreditModal(true);
       return;
@@ -133,27 +95,22 @@ function POSContent() {
   };
 
   const processCheckout = async (customerName?: string) => {
-    if (!selectedTable) return;
-    
     setIsProcessing(true);
 
-    // Deduct stock based on recipes
-    for (const cartItem of currentCart) {
+    for (const cartItem of cart) {
       const dishRecipes = recipes.filter(r => r.dish_id === cartItem.dish.id);
       for (const recipe of dishRecipes) {
         await deductStock(recipe.ingredient_id, Number(recipe.quantity_required) * cartItem.quantity);
       }
     }
 
-    // Create transaction
     const transaction = await addTransaction(
       cartTotal,
       selectedPayment,
       selectedTable,
-      currentCart.map(item => ({ dishId: item.dish.id, quantity: item.quantity, unitPrice: Number(item.dish.selling_price) }))
+      cart.map(item => ({ dishId: item.dish.id, quantity: item.quantity, unitPrice: Number(item.dish.selling_price) }))
     );
 
-    // If credit payment, create credit record
     if (selectedPayment === 'credit' && customerName && transaction) {
       await addCredit({
         customer_name: customerName,
@@ -162,16 +119,13 @@ function POSContent() {
       });
     }
 
-    // Clear the cart after successful checkout
-    clearCurrentCart();
-    
     const method = paymentMethods.find(m => m.id === selectedPayment);
-    const tableName = tables.find(t => t.id === selectedTable)?.name || `Table`;
     toast({ 
       title: 'Sale Complete!', 
-      description: `${tableName}: ${cartTotal.toLocaleString()} MT via ${method?.name}${!method?.isRevenue ? ' (No Revenue)' : ''}${customerName ? ` - ${customerName}` : ''}` 
+      description: `${cartTotal.toLocaleString()} MT via ${method?.name}${!method?.isRevenue ? ' (No Revenue)' : ''}${customerName ? ` - ${customerName}` : ''}` 
     });
     
+    setCart([]);
     setIsProcessing(false);
     setShowCreditModal(false);
   };
@@ -180,16 +134,59 @@ function POSContent() {
     processCheckout(customerName);
   };
 
-  const handlePrintReceipt = () => {
-    if (!selectedTable) return;
-    
-    const tableName = tables.find(t => t.id === selectedTable)?.name || 'N/A';
+  const handleSplitBillProcess = async (bills: SplitBill[]) => {
+    for (const bill of bills) {
+      const billTotal = bill.items.reduce((sum, item) => sum + (Number(item.dish.selling_price) * item.quantity), 0);
+      
+      // Deduct stock for each bill's items
+      for (const cartItem of bill.items) {
+        const dishRecipes = recipes.filter(r => r.dish_id === cartItem.dish.id);
+        for (const recipe of dishRecipes) {
+          await deductStock(recipe.ingredient_id, Number(recipe.quantity_required) * cartItem.quantity);
+        }
+      }
+
+      // Create transaction for each bill
+      await addTransaction(
+        billTotal,
+        bill.paymentMethod || 'cash',
+        selectedTable,
+        bill.items.map(item => ({ dishId: item.dish.id, quantity: item.quantity, unitPrice: Number(item.dish.selling_price) }))
+      );
+    }
+
+    toast({ title: 'Split bills processed!', description: `${bills.length} bills completed` });
+    setCart([]);
+  };
+
+  const handlePrintBill = (bill: SplitBill, billNumber: number) => {
+    const billTotal = bill.items.reduce((sum, item) => sum + (Number(item.dish.selling_price) * item.quantity), 0);
     const receipt = [
       `${currentStore?.name}`,
-      `Table: ${tableName}`,
+      `Table: ${tables.find(t => t.id === selectedTable)?.name || 'N/A'} - Bill ${billNumber}`,
       `Date: ${new Date().toLocaleString()}`,
       '─'.repeat(30),
-      ...currentCart.map(item => `${item.dish.name} x${item.quantity} - ${(Number(item.dish.selling_price) * item.quantity).toLocaleString()} MT`),
+      ...bill.items.map(item => `${item.dish.name} x${item.quantity} - ${(Number(item.dish.selling_price) * item.quantity).toLocaleString()} MT`),
+      '─'.repeat(30),
+      `TOTAL: ${billTotal.toLocaleString()} MT`
+    ].join('\n');
+    
+    const blob = new Blob([receipt], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `receipt-bill${billNumber}-${Date.now()}.txt`;
+    a.click();
+    toast({ title: `Bill ${billNumber} receipt downloaded` });
+  };
+
+  const handlePrintReceipt = () => {
+    const receipt = [
+      `${currentStore?.name}`,
+      `Table: ${tables.find(t => t.id === selectedTable)?.name || 'N/A'}`,
+      `Date: ${new Date().toLocaleString()}`,
+      '─'.repeat(30),
+      ...cart.map(item => `${item.dish.name} x${item.quantity} - ${(Number(item.dish.selling_price) * item.quantity).toLocaleString()} MT`),
       '─'.repeat(30),
       `TOTAL: ${cartTotal.toLocaleString()} MT`
     ].join('\n');
@@ -198,14 +195,9 @@ function POSContent() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `receipt-${tableName.toLowerCase().replace(/\s/g, '-')}-${Date.now()}.txt`;
+    a.download = `receipt-${Date.now()}.txt`;
     a.click();
     toast({ title: 'Receipt downloaded' });
-  };
-
-  // Add effect to update cart display when table changes
-  const handleTableChange = (tableId: string) => {
-    setSelectedTable(tableId);
   };
 
   return (
@@ -217,27 +209,16 @@ function POSContent() {
             <p className="text-muted-foreground">Select items to add to cart</p>
           </div>
           <div className="flex items-center gap-3">
-            <ManageTablesModal 
-              tables={tables}
-              onAddTable={addTable}
-              onDeleteTable={deleteTable}
-            />
+            <ManageTablesModal tables={tables} onAddTable={addTable} onDeleteTable={deleteTable} />
             <div className="flex items-center gap-2">
               <Table className="w-4 h-4 text-muted-foreground" />
-              <Select value={selectedTable || ''} onValueChange={handleTableChange}>
+              <Select value={selectedTable || ''} onValueChange={setSelectedTable}>
                 <SelectTrigger className="w-40">
                   <SelectValue placeholder="Select Table" />
                 </SelectTrigger>
                 <SelectContent>
                   {tables.map(table => (
-                    <SelectItem key={table.id} value={table.id}>
-                      {table.name} 
-                      {(tableCarts[table.id]?.length || 0) > 0 && (
-                        <Badge variant="secondary" className="ml-2 text-xs">
-                          {tableCarts[table.id]?.reduce((sum, item) => sum + item.quantity, 0)} items
-                        </Badge>
-                      )}
-                    </SelectItem>
+                    <SelectItem key={table.id} value={table.id}>{table.name}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -273,32 +254,27 @@ function POSContent() {
       <Card className="w-96 flex flex-col shrink-0">
         <CardHeader className="pb-3 border-b">
           <CardTitle className="flex items-center justify-between">
-            <span className="flex items-center gap-2">
-              <ShoppingBag className="w-5 h-5" />
-              Cart {selectedTable && `- ${tables.find(t => t.id === selectedTable)?.name}`}
-            </span>
-            {currentCart.length > 0 && (
-              <Button variant="ghost" size="sm" onClick={clearCurrentCart} className="text-destructive">
-                Clear
-              </Button>
-            )}
+            <span className="flex items-center gap-2"><ShoppingBag className="w-5 h-5" />Cart</span>
+            <div className="flex gap-1">
+              {cart.length > 1 && (
+                <Button variant="ghost" size="sm" onClick={() => setShowSplitBillModal(true)} className="gap-1">
+                  <Split className="w-4 h-4" /> Split
+                </Button>
+              )}
+              {cart.length > 0 && <Button variant="ghost" size="sm" onClick={() => setCart([])} className="text-destructive">Clear</Button>}
+            </div>
           </CardTitle>
         </CardHeader>
         
         <CardContent className="flex-1 overflow-auto py-4">
-          {!selectedTable ? (
-            <div className="h-full flex flex-col items-center justify-center text-muted-foreground">
-              <Table className="w-12 h-12 mb-2 opacity-30" />
-              <p>Select a table to start</p>
-            </div>
-          ) : currentCart.length === 0 ? (
+          {cart.length === 0 ? (
             <div className="h-full flex flex-col items-center justify-center text-muted-foreground">
               <ShoppingBag className="w-12 h-12 mb-2 opacity-30" />
-              <p>Cart is empty for {tables.find(t => t.id === selectedTable)?.name}</p>
+              <p>Cart is empty</p>
             </div>
           ) : (
             <div className="space-y-3">
-              {currentCart.map(item => (
+              {cart.map(item => (
                 <div key={item.dish.id} className="flex items-center gap-3 p-3 rounded-lg bg-muted/30 border">
                   <div className="flex-1 min-w-0">
                     <p className="font-medium truncate">{item.dish.name}</p>
@@ -338,10 +314,10 @@ function POSContent() {
               <span className="text-3xl font-bold">{cartTotal.toLocaleString()} MT</span>
             </div>
             <div className="flex gap-2">
-              <Button variant="outline" onClick={handlePrintReceipt} disabled={currentCart.length === 0 || !selectedTable} className="gap-2">
+              <Button variant="outline" onClick={handlePrintReceipt} disabled={cart.length === 0} className="gap-2">
                 <Printer className="w-4 h-4" />
               </Button>
-              <Button className="flex-1 h-12 text-lg" onClick={handleCheckout} disabled={currentCart.length === 0 || isProcessing || !selectedTable}>
+              <Button className="flex-1 h-12 text-lg" onClick={handleCheckout} disabled={cart.length === 0 || isProcessing || !selectedTable}>
                 {isProcessing ? 'Processing...' : <><CreditCard className="w-5 h-5 mr-2" />Complete Sale</>}
               </Button>
             </div>
@@ -354,6 +330,17 @@ function POSContent() {
         onOpenChange={setShowCreditModal}
         amount={cartTotal}
         onConfirm={handleCreditConfirm}
+      />
+
+      <SplitBillModal
+        open={showSplitBillModal}
+        onOpenChange={setShowSplitBillModal}
+        cart={cart}
+        paymentMethods={paymentMethods}
+        onProcessBills={handleSplitBillProcess}
+        onPrintBill={handlePrintBill}
+        storeName={currentStore?.name || ''}
+        tableName={tables.find(t => t.id === selectedTable)?.name || 'Table'}
       />
     </div>
   );

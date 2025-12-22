@@ -354,40 +354,20 @@ export function useStoreStock(storeId: string | null) {
   };
 
   const updateTargetStock = async (stockId: string, targetStock: number) => {
-  try {
     const { error } = await supabase
       .from('store_stock')
-      .update({ 
-        target_stock: targetStock,
-        updated_at: new Date().toISOString()
-      })
+      .update({ target_stock: targetStock })
       .eq('id', stockId);
     
-    if (error) throw error;
+    if (error) {
+      toast({ title: 'Error updating target stock', description: error.message, variant: 'destructive' });
+      return false;
+    }
     
-    // Update local state immediately for better UX
-    setStocks(prev => prev.map(stock => 
-      stock.id === stockId 
-        ? { ...stock, target_stock: targetStock }
-        : stock
-    ));
-    
-    toast({ 
-      title: 'Success', 
-      description: `Target stock updated to ${targetStock}` 
-    });
-    
-    return { success: true };
-  } catch (error: any) {
-    console.error('Error updating target stock:', error);
-    toast({ 
-      title: 'Error', 
-      description: error.message || 'Failed to update target stock', 
-      variant: 'destructive' 
-    });
-    return { success: false, error: error.message };
-  }
-};
+    setStocks(prev => prev.map(s => s.id === stockId ? { ...s, target_stock: targetStock } : s));
+    toast({ title: 'Target stock updated' });
+    return true;
+  };
 
   const deductStock = async (ingredientId: string, amount: number) => {
     const stock = stocks.find(s => s.ingredient_id === ingredientId);
@@ -412,15 +392,41 @@ export function useStoreStock(storeId: string | null) {
     fetchStocks();
   }, [fetchStocks]);
 
-  return { 
-    stocks, 
-    loading, 
-    addStock, 
-    updateMinThreshold, 
-    updateTargetStock, 
-    deductStock, 
-    refetch: fetchStocks 
+  return { stocks, loading, addStock, updateMinThreshold, updateTargetStock, deductStock, refetch: fetchStocks };
+}
+
+// Inventory Logs hook for fetching last unit costs
+export function useInventoryLogs(storeId: string | null) {
+  const [logs, setLogs] = useState<InventoryLog[]>([]);
+  const [loading, setLoading] = useState(true);
+  const { toast } = useToast();
+
+  const fetchLogs = useCallback(async () => {
+    if (!storeId) return;
+    const { data, error } = await supabase
+      .from('inventory_logs')
+      .select('*')
+      .eq('store_id', storeId)
+      .eq('reason', 'purchase')
+      .order('date', { ascending: false });
+    if (error) {
+      toast({ title: 'Error fetching inventory logs', description: error.message, variant: 'destructive' });
+    } else {
+      setLogs(data || []);
+    }
+    setLoading(false);
+  }, [storeId, toast]);
+
+  const getLastUnitCost = (ingredientId: string) => {
+    const log = logs.find(l => l.ingredient_id === ingredientId);
+    return log?.unit_cost ?? null;
   };
+
+  useEffect(() => {
+    fetchLogs();
+  }, [fetchLogs]);
+
+  return { logs, loading, getLastUnitCost, refetch: fetchLogs };
 }
 
 export function useDishes() {
