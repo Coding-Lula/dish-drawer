@@ -56,7 +56,7 @@ export function RestockListModal({ storeName, restockItems }: RestockListModalPr
       <DialogTrigger asChild>
         <Button variant="outline" className="gap-2">
           <ClipboardList className="w-4 h-4" />
-          Export Restock List
+          Baixar Lista de Stock
         </Button>
       </DialogTrigger>
       <DialogContent className="max-w-3xl max-h-[80vh] overflow-hidden flex flex-col">
@@ -72,11 +72,11 @@ export function RestockListModal({ storeName, restockItems }: RestockListModalPr
             <TableHeader>
               <TableRow>
                 <TableHead>Item</TableHead>
-                <TableHead className="text-right">Current</TableHead>
-                <TableHead className="text-right">Target</TableHead>
-                <TableHead className="text-right">Required</TableHead>
-                <TableHead className="text-right">Unit Cost</TableHead>
-                <TableHead className="text-right">Est. Cost</TableHead>
+                <TableHead className="text-right">Atual</TableHead>
+                <TableHead className="text-right">Alvo</TableHead>
+                <TableHead className="text-right">Requer</TableHead>
+                <TableHead className="text-right">Custo Unitário</TableHead>
+                <TableHead className="text-right">Est. Custo</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>

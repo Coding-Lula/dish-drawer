@@ -10,8 +10,8 @@ interface AddInventoryModalProps {
   onSubmit: (ingredient: { name: string; unit: string; category: string; average_cost: number }) => Promise<any>;
 }
 
-const units = ['kg', 'grams', 'liters', 'units'];
-const categories = ['produce', 'meat', 'dairy', 'dry_goods', 'beverages', 'other'];
+const units = ['kg', 'grama', 'litros', 'units'];
+const categories = ['produtos', 'carne', 'laticínios', 'mercearia', 'bebidas', 'other'];
 
 export function AddInventoryModal({ onSubmit }: AddInventoryModalProps) {
   const [open, setOpen] = useState(false);
@@ -48,19 +48,19 @@ export function AddInventoryModal({ onSubmit }: AddInventoryModalProps) {
       <DialogTrigger asChild>
         <Button variant="outline" className="gap-2">
           <Plus className="w-4 h-4" />
-          Add Inventory Item
+          Addicinoar Item ao Inventário 
         </Button>
       </DialogTrigger>
       <DialogContent>
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Package className="w-5 h-5" />
-            Add New Inventory Item
+            Addicinonar Item Novo ao Inventário 
           </DialogTitle>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-2">
-            <Label>Item Name</Label>
+            <Label>Nome do Item</Label>
             <Input
               value={name}
               onChange={(e) => setName(e.target.value)}
@@ -70,7 +70,7 @@ export function AddInventoryModal({ onSubmit }: AddInventoryModalProps) {
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label>Unit</Label>
+              <Label>Unidade</Label>
               <Select value={unit} onValueChange={setUnit}>
                 <SelectTrigger>
                   <SelectValue />
@@ -83,7 +83,7 @@ export function AddInventoryModal({ onSubmit }: AddInventoryModalProps) {
               </Select>
             </div>
             <div className="space-y-2">
-              <Label>Category</Label>
+              <Label>Categoria</Label>
               <Select value={category} onValueChange={setCategory}>
                 <SelectTrigger>
                   <SelectValue />
@@ -99,10 +99,10 @@ export function AddInventoryModal({ onSubmit }: AddInventoryModalProps) {
             </div>
           </div>
           <div className="space-y-2">
-            <Label>Initial Cost per Unit (MT)</Label>
+            <Label>Custo Incial por Unidade (MT)</Label>
             <Input
               type="number"
-              step="0.01"
+              step="1"
               min="0"
               value={averageCost}
               onChange={(e) => setAverageCost(e.target.value)}

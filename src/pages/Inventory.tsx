@@ -168,8 +168,8 @@ function InventoryContent() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-foreground">Inventory</h1>
-          <p className="text-muted-foreground">{currentStore?.name} • Stock Levels</p>
+          <h1 className="text-3xl font-bold text-foreground">Inventário</h1>
+          <p className="text-muted-foreground">{currentStore?.name} • Nível de Stock</p>
         </div>
         <div className="flex gap-2">
           <AddInventoryModal onSubmit={handleAddIngredient} />
@@ -186,7 +186,7 @@ function InventoryContent() {
               <Package className="w-6 h-6 text-primary" />
             </div>
             <div>
-              <p className="text-sm text-muted-foreground">Total Items</p>
+              <p className="text-sm text-muted-foreground">Itens Totais</p>
               <p className="text-2xl font-bold text-foreground">{ingredients.length}</p>
             </div>
           </CardContent>
@@ -197,7 +197,7 @@ function InventoryContent() {
               <AlertTriangle className={cn("w-6 h-6", lowStockCount > 0 ? "text-destructive" : "text-primary")} />
             </div>
             <div>
-              <p className="text-sm text-muted-foreground">Low Stock Items</p>
+              <p className="text-sm text-muted-foreground">Itens com Stock Baixo</p>
               <p className={cn("text-2xl font-bold", lowStockCount > 0 ? "text-destructive" : "text-foreground")}>{lowStockCount}</p>
             </div>
           </CardContent>
@@ -208,7 +208,7 @@ function InventoryContent() {
               <TrendingDown className="w-6 h-6 text-amber-600" />
             </div>
             <div>
-              <p className="text-sm text-muted-foreground">Items to Restock</p>
+              <p className="text-sm text-muted-foreground">Itens para Restock</p>
               <p className="text-2xl font-bold text-foreground">{restockList.length}</p>
             </div>
           </CardContent>
@@ -218,13 +218,13 @@ function InventoryContent() {
       {/* Filter Tabs */}
       <div className="flex gap-2">
         <Button variant={filter === 'all' ? "default" : "outline"} size="sm" onClick={() => setFilter('all')}>
-          All Items ({inventoryItems.length})
+          Todos Itens ({inventoryItems.length})
         </Button>
         <Button 
           variant={filter === 'low' ? "default" : "outline"} size="sm" onClick={() => setFilter('low')}
           className={filter === 'low' ? "bg-destructive hover:bg-destructive/90" : ""}
         >
-          Low Stock ({lowStockCount})
+          Stock Baixo ({lowStockCount})
         </Button>
         <Button variant={filter === 'ok' ? "default" : "outline"} size="sm" onClick={() => setFilter('ok')}>
           OK ({inventoryItems.length - lowStockCount})
@@ -250,7 +250,7 @@ function InventoryContent() {
                       <h3 className="font-semibold text-foreground">{item.ingredient?.name}</h3>
                       <Badge variant="outline" className="text-xs">{item.ingredient?.category}</Badge>
                       {item.isLow && (
-                        <Badge variant="destructive" className="gap-1"><Flame className="w-3 h-3" />Low Stock</Badge>
+                        <Badge variant="destructive" className="gap-1"><Flame className="w-3 h-3" />Stock Baixo</Badge>
                       )}
                       {!item.hasStock && <Badge variant="secondary" className="text-xs">No stock entry</Badge>}
                     </div>

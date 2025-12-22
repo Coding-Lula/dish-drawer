@@ -30,8 +30,8 @@ const paymentMethods = [
   { id: 'mpesa', name: 'M-Pesa', icon: '📱', isRevenue: true, isCash: true },
   { id: 'mkesh', name: 'M-Kesh', icon: '💳', isRevenue: true, isCash: true },
   { id: 'paga_facil', name: 'Paga Fácil', icon: '🏦', isRevenue: true, isCash: true },
-  { id: 'credit', name: 'Credit', icon: '📝', isRevenue: false, isCash: false },
-  { id: 'self_consumption', name: 'Self', icon: '🍽️', isRevenue: false, isCash: false },
+  { id: 'credit', name: 'Credito', icon: '📝', isRevenue: false, isCash: false },
+  { id: 'self_consumption', name: 'Mesa 0', icon: '🍽️', isRevenue: false, isCash: false },
 ];
 
 function POSContent() {
@@ -82,7 +82,7 @@ function POSContent() {
 
   const handleCheckout = async () => {
     if (cart.length === 0 || !selectedTable) {
-      toast({ title: !selectedTable ? 'Select a table' : 'Cart is empty', variant: 'destructive' });
+      toast({ title: !selectedTable ? 'Selecione uma tabela' : 'Cart is empty', variant: 'destructive' });
       return;
     }
 
@@ -205,8 +205,8 @@ function POSContent() {
       <div className="flex-1 flex flex-col min-w-0">
         <div className="mb-4 flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-bold text-foreground">Point of Sale</h1>
-            <p className="text-muted-foreground">Select items to add to cart</p>
+            <h1 className="text-2xl font-bold text-foreground">Ponto de vendas</h1>
+            <p className="text-muted-foreground">Selecione os itens para adicionar ao carrinho</p>
           </div>
           <div className="flex items-center gap-3">
             <ManageTablesModal tables={tables} onAddTable={addTable} onDeleteTable={deleteTable} />
@@ -214,7 +214,7 @@ function POSContent() {
               <Table className="w-4 h-4 text-muted-foreground" />
               <Select value={selectedTable || ''} onValueChange={setSelectedTable}>
                 <SelectTrigger className="w-40">
-                  <SelectValue placeholder="Select Table" />
+                  <SelectValue placeholder="Selecionar Mesa" />
                 </SelectTrigger>
                 <SelectContent>
                   {tables.map(table => (

@@ -31,14 +31,14 @@ export function ManageTablesModal({ tables, onAddTable, onDeleteTable }: ManageT
       <DialogTrigger asChild>
         <Button variant="outline" className="gap-2">
           <Settings className="w-4 h-4" />
-          Manage Tables
+          Gerir Mesas
         </Button>
       </DialogTrigger>
       <DialogContent className="max-w-md">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Table className="w-5 h-5" />
-            Manage Tables
+            Gerir Mesas
           </DialogTitle>
         </DialogHeader>
         
@@ -49,7 +49,7 @@ export function ManageTablesModal({ tables, onAddTable, onDeleteTable }: ManageT
             </span>
             <Button onClick={handleAddTable} disabled={isLoading} size="sm" className="gap-2">
               <Plus className="w-4 h-4" />
-              Add Table
+              Addicinoar Mesa
             </Button>
           </div>
           

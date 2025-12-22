@@ -70,8 +70,8 @@ function RecipesContent() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-foreground">Technical Sheets</h1>
-          <p className="text-muted-foreground">Recipe & Ingredient Mapping</p>
+          <h1 className="text-3xl font-bold text-foreground">Ficha Técnica</h1>
+          <p className="text-muted-foreground">Mapeamento de Receitas e Ingredientes</p>
         </div>
         <AddDishModal categories={categories as string[]} onSubmit={addDish} />
       </div>

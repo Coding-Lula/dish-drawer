@@ -52,12 +52,12 @@ export function AddDishModal({ categories, onSubmit }: AddDishModalProps) {
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <UtensilsCrossed className="w-5 h-5" />
-            Add New Menu Item
+            Adicionar Novo Item de Menu
           </DialogTitle>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-2">
-            <Label>Dish Name</Label>
+            <Label>Nome do Prato</Label>
             <Input
               value={name}
               onChange={(e) => setName(e.target.value)}
@@ -67,7 +67,7 @@ export function AddDishModal({ categories, onSubmit }: AddDishModalProps) {
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label>Category</Label>
+              <Label>Categoria</Label>
               <Select value={category} onValueChange={setCategory}>
                 <SelectTrigger>
                   <SelectValue />
@@ -76,15 +76,16 @@ export function AddDishModal({ categories, onSubmit }: AddDishModalProps) {
                   {categories.map(c => (
                     <SelectItem key={c} value={c}>{c}</SelectItem>
                   ))}
-                  <SelectItem value="Main">Main</SelectItem>
-                  <SelectItem value="Starter">Starter</SelectItem>
-                  <SelectItem value="Dessert">Dessert</SelectItem>
-                  <SelectItem value="Beverage">Beverage</SelectItem>
+                  <SelectItem value="Pizzas">Pizzas</SelectItem>
+                  <SelectItem value="Dishes">Pratos</SelectItem>
+                  <SelectItem value="Starter">Entradas</SelectItem>
+                  <SelectItem value="Dessert">Sobremesa</SelectItem>
+                  <SelectItem value="Beverage">Bebidas</SelectItem>
                 </SelectContent>
               </Select>
             </div>
             <div className="space-y-2">
-              <Label>Selling Price (MT)</Label>
+              <Label>Preço de Venda (MT)</Label>
               <Input
                 type="number"
                 step="1"
@@ -97,7 +98,7 @@ export function AddDishModal({ categories, onSubmit }: AddDishModalProps) {
             </div>
           </div>
           <div className="space-y-2">
-            <Label>Cost of Production (MT)</Label>
+            <Label>Custo de Produção (MT)</Label>
             <Input
               type="number"
               step="1"
@@ -112,7 +113,7 @@ export function AddDishModal({ categories, onSubmit }: AddDishModalProps) {
           </div>
           <div className="flex justify-end gap-2">
             <Button type="button" variant="outline" onClick={() => setOpen(false)}>
-              Cancel
+              Cancelar
             </Button>
             <Button type="submit" disabled={isSubmitting || !name.trim() || !sellingPrice}>
               {isSubmitting ? 'Creating...' : 'Create Dish'}

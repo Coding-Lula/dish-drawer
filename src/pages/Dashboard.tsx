@@ -49,7 +49,7 @@ function DashboardContent() {
       {/* Header */}
       <div>
         <h1 className="text-3xl font-bold text-foreground">{currentStore.name}</h1>
-        <p className="text-muted-foreground">{currentStore.location} • Today's Overview</p>
+        <p className="text-muted-foreground">{currentStore.location} • Visão geral de hoje</p>
       </div>
 
       {/* Stats Grid */}
@@ -63,23 +63,23 @@ function DashboardContent() {
           trend={{ value: 12.5, isPositive: true }}
         />
         <StatCard
-          title="Net Revenue"
+          title="Receita Líquida"
           value={`${netRevenue.toLocaleString()} MT`}
           subtitle="Excludes credit & self-consumption"
           icon={DollarSign}
           variant="success"
         />
         <StatCard
-          title="Today's Expenses"
+          title="Despesas de Hoje"
           value={`${totalExpenses.toLocaleString()} MT`}
-          subtitle={`${stockExpenses.toLocaleString()} MT pre-spent on stock`}
+          subtitle={`${stockExpenses.toLocaleString()} MT pré-gasto em estoque`}
           icon={TrendingUp}
           variant={totalExpenses > 0 ? "warning" : "default"}
         />
         <StatCard
-          title="Stock Alerts"
+          title="Alertas de Stock "
           value={lowStockCount}
-          subtitle="Items below minimum threshold"
+          subtitle="Itens abaixo do quantidade mínimo"
           icon={Package}
           variant={lowStockCount > 0 ? "danger" : "success"}
         />

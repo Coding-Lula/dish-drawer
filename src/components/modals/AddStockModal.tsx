@@ -45,7 +45,7 @@ export function AddStockModal({ ingredients, onSubmit }: AddStockModalProps) {
       <DialogTrigger asChild>
         <Button className="gap-2">
           <Plus className="w-4 h-4" />
-          Add Stock
+          Repor Stock
         </Button>
       </DialogTrigger>
       <DialogContent>
