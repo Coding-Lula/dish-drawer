@@ -10,6 +10,7 @@ import Recipes from "./pages/Recipes";
 import Expenses from "./pages/Expenses";
 import EndOfDay from "./pages/EndOfDay";
 import RevenueAllocation from "./pages/RevenueAllocation";
+import Finance from "./pages/Finance";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -28,6 +29,7 @@ const App = () => (
           <Route path="/expenses" element={<Expenses />} />
           <Route path="/end-of-day" element={<EndOfDay />} />
           <Route path="/revenue-allocation" element={<RevenueAllocation />} />
+          <Route path="/finance" element={<Finance />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </BrowserRouter>

@@ -10,7 +10,8 @@ import {
   Store,
   ChevronLeft,
   ChevronRight,
-  PieChart
+  PieChart,
+  Wallet
 } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { 
@@ -29,6 +30,7 @@ const navItems = [
   { path: '/inventory', label: 'Inventory', icon: Package },
   { path: '/recipes', label: 'Technical Sheets', icon: UtensilsCrossed },
   { path: '/expenses', label: 'Expenses', icon: Receipt },
+  { path: '/finance', label: 'Finance', icon: Wallet },
   { path: '/end-of-day', label: 'End of Day', icon: Moon },
   { path: '/revenue-allocation', label: 'Revenue Allocation', icon: PieChart },
 ];

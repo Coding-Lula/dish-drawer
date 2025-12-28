@@ -193,20 +193,58 @@ export type Database = {
       expense_categories: {
         Row: {
           created_at: string
+          display_order: number | null
           id: string
           is_system: boolean | null
+          monthly_budget: number | null
+          name: string
+          parent_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          display_order?: number | null
+          id?: string
+          is_system?: boolean | null
+          monthly_budget?: number | null
+          name: string
+          parent_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          display_order?: number | null
+          id?: string
+          is_system?: boolean | null
+          monthly_budget?: number | null
+          name?: string
+          parent_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "expense_categories_parent_id_fkey"
+            columns: ["parent_id"]
+            isOneToOne: false
+            referencedRelation: "expense_parent_categories"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      expense_parent_categories: {
+        Row: {
+          created_at: string
+          display_order: number | null
+          id: string
           name: string
         }
         Insert: {
           created_at?: string
+          display_order?: number | null
           id?: string
-          is_system?: boolean | null
           name: string
         }
         Update: {
           created_at?: string
+          display_order?: number | null
           id?: string
-          is_system?: boolean | null
           name?: string
         }
         Relationships: []
@@ -277,6 +315,171 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      financial_transactions: {
+        Row: {
+          amount: number
+          created_at: string
+          date: string
+          description: string | null
+          expense_category_id: string | null
+          id: string
+          invoice_no: string | null
+          is_locked: boolean | null
+          is_recurring: boolean | null
+          locked_at: string | null
+          source_id: string | null
+          store_id: string
+          supplier: string | null
+          transfer_to_source_id: string | null
+          type: string
+        }
+        Insert: {
+          amount: number
+          created_at?: string
+          date?: string
+          description?: string | null
+          expense_category_id?: string | null
+          id?: string
+          invoice_no?: string | null
+          is_locked?: boolean | null
+          is_recurring?: boolean | null
+          locked_at?: string | null
+          source_id?: string | null
+          store_id: string
+          supplier?: string | null
+          transfer_to_source_id?: string | null
+          type: string
+        }
+        Update: {
+          amount?: number
+          created_at?: string
+          date?: string
+          description?: string | null
+          expense_category_id?: string | null
+          id?: string
+          invoice_no?: string | null
+          is_locked?: boolean | null
+          is_recurring?: boolean | null
+          locked_at?: string | null
+          source_id?: string | null
+          store_id?: string
+          supplier?: string | null
+          transfer_to_source_id?: string | null
+          type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "financial_transactions_expense_category_id_fkey"
+            columns: ["expense_category_id"]
+            isOneToOne: false
+            referencedRelation: "expense_categories"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "financial_transactions_source_id_fkey"
+            columns: ["source_id"]
+            isOneToOne: false
+            referencedRelation: "income_sources"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "financial_transactions_store_id_fkey"
+            columns: ["store_id"]
+            isOneToOne: false
+            referencedRelation: "stores"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "financial_transactions_transfer_to_source_id_fkey"
+            columns: ["transfer_to_source_id"]
+            isOneToOne: false
+            referencedRelation: "income_sources"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      income_allocations: {
+        Row: {
+          amount: number
+          created_at: string
+          date: string
+          id: string
+          source_id: string
+          store_id: string
+          transaction_id: string | null
+        }
+        Insert: {
+          amount?: number
+          created_at?: string
+          date?: string
+          id?: string
+          source_id: string
+          store_id: string
+          transaction_id?: string | null
+        }
+        Update: {
+          amount?: number
+          created_at?: string
+          date?: string
+          id?: string
+          source_id?: string
+          store_id?: string
+          transaction_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "income_allocations_source_id_fkey"
+            columns: ["source_id"]
+            isOneToOne: false
+            referencedRelation: "income_sources"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "income_allocations_store_id_fkey"
+            columns: ["store_id"]
+            isOneToOne: false
+            referencedRelation: "stores"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "income_allocations_transaction_id_fkey"
+            columns: ["transaction_id"]
+            isOneToOne: false
+            referencedRelation: "transactions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      income_sources: {
+        Row: {
+          color: string | null
+          created_at: string
+          display_order: number | null
+          icon: string | null
+          id: string
+          is_default: boolean | null
+          name: string
+        }
+        Insert: {
+          color?: string | null
+          created_at?: string
+          display_order?: number | null
+          icon?: string | null
+          id?: string
+          is_default?: boolean | null
+          name: string
+        }
+        Update: {
+          color?: string | null
+          created_at?: string
+          display_order?: number | null
+          icon?: string | null
+          id?: string
+          is_default?: boolean | null
+          name?: string
+        }
+        Relationships: []
       }
       ingredients: {
         Row: {
@@ -362,6 +565,92 @@ export type Database = {
             columns: ["supplier_id"]
             isOneToOne: false
             referencedRelation: "suppliers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      month_locks: {
+        Row: {
+          created_at: string
+          id: string
+          locked_at: string
+          locked_by: string | null
+          month: number
+          notes: string | null
+          store_id: string
+          year: number
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          locked_at?: string
+          locked_by?: string | null
+          month: number
+          notes?: string | null
+          store_id: string
+          year: number
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          locked_at?: string
+          locked_by?: string | null
+          month?: number
+          notes?: string | null
+          store_id?: string
+          year?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "month_locks_store_id_fkey"
+            columns: ["store_id"]
+            isOneToOne: false
+            referencedRelation: "stores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      monthly_budgets: {
+        Row: {
+          budget_amount: number
+          created_at: string
+          expense_category_id: string
+          id: string
+          month: number
+          store_id: string
+          year: number
+        }
+        Insert: {
+          budget_amount?: number
+          created_at?: string
+          expense_category_id: string
+          id?: string
+          month: number
+          store_id: string
+          year: number
+        }
+        Update: {
+          budget_amount?: number
+          created_at?: string
+          expense_category_id?: string
+          id?: string
+          month?: number
+          store_id?: string
+          year?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "monthly_budgets_expense_category_id_fkey"
+            columns: ["expense_category_id"]
+            isOneToOne: false
+            referencedRelation: "expense_categories"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "monthly_budgets_store_id_fkey"
+            columns: ["store_id"]
+            isOneToOne: false
+            referencedRelation: "stores"
             referencedColumns: ["id"]
           },
         ]
