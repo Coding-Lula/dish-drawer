@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react'; // Add useEffect import
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -47,6 +47,17 @@ export function SplitBillModal({
   ]);
   const [selectedBill, setSelectedBill] = useState<string>('bill-1');
   const [isProcessing, setIsProcessing] = useState(false);
+
+  // Reset bills when modal opens with new cart
+  useEffect(() => {
+    if (open && cart.length > 0) {
+      // Reset bills with current cart when modal opens
+      setBills([
+        { id: 'bill-1', items: [...cart], paymentMethod: null, isPaid: false }
+      ]);
+      setSelectedBill('bill-1');
+    }
+  }, [open, cart]);
 
   const currentBill = bills.find(b => b.id === selectedBill);
   const allItemsAssigned = cart.every(cartItem => 
@@ -216,7 +227,7 @@ export function SplitBillModal({
                             <span className="font-semibold">{(Number(item.dish.selling_price) * item.quantity).toLocaleString()} MT</span>
                             {bills.length > 1 && !currentBill.isPaid && (
                               <select 
-                                className="text-xs border rounded p-1"
+                                className="text-sm border rounded px-3 py-2 bg-white" // Made larger
                                 value=""
                                 onChange={(e) => {
                                   if (e.target.value) {

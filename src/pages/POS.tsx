@@ -50,12 +50,31 @@ function POSContent() {
   return <POSPage currentStore={currentStore} />;
 }
 
-function CartContent({ cart, updateQuantity, setCart, setShowSplitBillModal, selectedPayment, setSelectedPayment, cartTotal, handlePrintReceipt, handleCheckout, isProcessing, selectedTable }: any) {
+function CartContent({ 
+  cart, 
+  updateQuantity, 
+  setCart, 
+  setShowSplitBillModal, 
+  selectedPayment, 
+  setSelectedPayment, 
+  cartTotal, 
+  handlePrintReceipt, 
+  handleCheckout, 
+  isProcessing, 
+  selectedTable,
+  tables,
+  toast
+}: any) {
+  const currentTableName = tables.find((t: RestaurantTable) => t.id === selectedTable)?.name || 'No Table';
+
   return (
     <>
       <CardHeader className="pb-3 border-b">
         <CardTitle className="flex items-center justify-between">
-          <span className="flex items-center gap-2"><ShoppingBag className="w-5 h-5" />Cart</span>
+          <div className="flex flex-col">
+            <span className="flex items-center gap-2"><ShoppingBag className="w-5 h-5" />Cart</span>
+            <span className="text-xs text-muted-foreground">Table: {currentTableName}</span>
+          </div>
           <div className="flex gap-1">
             {cart.length > 1 && (
               <Button variant="ghost" size="sm" onClick={() => setShowSplitBillModal(true)} className="gap-1">
@@ -72,6 +91,7 @@ function CartContent({ cart, updateQuantity, setCart, setShowSplitBillModal, sel
           <div className="h-full flex flex-col items-center justify-center text-muted-foreground">
             <ShoppingBag className="w-12 h-12 mb-2 opacity-30" />
             <p>Cart is empty</p>
+            <p className="text-xs mt-1">Select table and add items</p>
           </div>
         ) : (
           <div className="space-y-3">
@@ -137,7 +157,7 @@ function POSPage({ currentStore }: { currentStore: any }) {
   const { deductStock } = useStoreStock(currentStore?.id || null);
   const { addCredit } = useCredits(currentStore?.id || null);
 
-  const [cart, setCart] = useState<CartItem[]>([]);
+  const [tableCarts, setTableCarts] = useState<Record<string, CartItem[]>>({});
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [selectedPayment, setSelectedPayment] = useState('cash');
   const [selectedTable, setSelectedTable] = useState<string | null>(null);
@@ -147,47 +167,85 @@ function POSPage({ currentStore }: { currentStore: any }) {
   const [showTableMap, setShowTableMap] = useState(false);
   const [showCart, setShowCart] = useState(false);
 
+  // Initialize tables if needed
   useEffect(() => {
     if (currentStore?.id && tables.length < 15) {
       initializeTables(15);
     }
   }, [currentStore?.id, tables.length, initializeTables]);
 
-  useEffect(() => {
-    if (!selectedTable) {
-      setShowTableMap(true);
-    }
-  }, [selectedTable]);
-
+  const currentCart = selectedTable ? tableCarts[selectedTable] || [] : [];
   const categories = [...new Set(dishes.map(d => d.category).filter(Boolean))];
   const filteredDishes = selectedCategory ? dishes.filter(d => d.category === selectedCategory) : dishes;
-  const cartTotal = cart.reduce((sum, item) => sum + (Number(item.dish.selling_price) * item.quantity), 0);
+  const cartTotal = currentCart.reduce((sum, item) => sum + (Number(item.dish.selling_price) * item.quantity), 0);
 
   const addToCart = (dish: Dish) => {
     if (!selectedTable) {
-        setShowTableMap(true);
-        return;
+      toast({ 
+        title: 'Select Table First', 
+        description: 'Please select a table before adding items to cart',
+        variant: 'destructive'
+      });
+      setShowTableMap(true);
+      return;
     }
-    setCart(prev => {
-      const existing = prev.find(i => i.dish.id === dish.id);
+    
+    setTableCarts(prev => {
+      const tableCart = prev[selectedTable] || [];
+      const existing = tableCart.find(i => i.dish.id === dish.id);
+      
       if (existing) {
-        return prev.map(i => i.dish.id === dish.id ? { ...i, quantity: i.quantity + 1 } : i);
+        return {
+          ...prev,
+          [selectedTable]: tableCart.map(i => 
+            i.dish.id === dish.id ? { ...i, quantity: i.quantity + 1 } : i
+          )
+        };
       }
-      return [...prev, { dish, quantity: 1 }];
+      
+      return {
+        ...prev,
+        [selectedTable]: [...tableCart, { dish, quantity: 1 }]
+      };
     });
   };
 
   const updateQuantity = (dishId: string, quantity: number) => {
-    if (quantity <= 0) {
-      setCart(prev => prev.filter(i => i.dish.id !== dishId));
-    } else {
-      setCart(prev => prev.map(i => i.dish.id === dishId ? { ...i, quantity } : i));
-    }
+    if (!selectedTable) return;
+    
+    setTableCarts(prev => {
+      const tableCart = prev[selectedTable] || [];
+      
+      if (quantity <= 0) {
+        const newTableCart = tableCart.filter(i => i.dish.id !== dishId);
+        const newTableCarts = { ...prev, [selectedTable]: newTableCart };
+        
+        // If cart becomes empty, we could optionally clear the table selection
+        if (newTableCart.length === 0) {
+          // Option: Clear table selection when cart is empty
+          // setSelectedTable(null);
+        }
+        
+        return newTableCarts;
+      }
+      
+      return {
+        ...prev,
+        [selectedTable]: tableCart.map(i => 
+          i.dish.id === dishId ? { ...i, quantity } : i
+        )
+      };
+    });
+  };
+
+  const clearCart = () => {
+    if (!selectedTable) return;
+    setTableCarts(prev => ({ ...prev, [selectedTable]: [] }));
   };
 
   const handleCheckout = async () => {
-    if (cart.length === 0 || !selectedTable) {
-      toast({ title: !selectedTable ? 'Selecione uma tabela' : 'Cart is empty', variant: 'destructive' });
+    if (currentCart.length === 0 || !selectedTable) {
+      toast({ title: !selectedTable ? 'Select a table' : 'Cart is empty', variant: 'destructive' });
       return;
     }
 
@@ -200,9 +258,11 @@ function POSPage({ currentStore }: { currentStore: any }) {
   };
 
   const processCheckout = async (customerName?: string) => {
+    if (!selectedTable) return;
+    
     setIsProcessing(true);
 
-    for (const cartItem of cart) {
+    for (const cartItem of currentCart) {
       const dishRecipes = recipes.filter(r => r.dish_id === cartItem.dish.id);
       for (const recipe of dishRecipes) {
         await deductStock(recipe.ingredient_id, Number(recipe.quantity_required) * cartItem.quantity);
@@ -213,7 +273,7 @@ function POSPage({ currentStore }: { currentStore: any }) {
       cartTotal,
       selectedPayment,
       selectedTable,
-      cart.map(item => ({ dishId: item.dish.id, quantity: item.quantity, unitPrice: Number(item.dish.selling_price) }))
+      currentCart.map(item => ({ dishId: item.dish.id, quantity: item.quantity, unitPrice: Number(item.dish.selling_price) }))
     );
 
     if (selectedPayment === 'credit' && customerName && transaction) {
@@ -230,9 +290,13 @@ function POSPage({ currentStore }: { currentStore: any }) {
       description: `${cartTotal.toLocaleString()} MT via ${method?.name}${!method?.isRevenue ? ' (No Revenue)' : ''}${customerName ? ` - ${customerName}` : ''}` 
     });
     
-    setCart([]);
+    // Clear only the current table's cart
+    setTableCarts(prev => ({ ...prev, [selectedTable]: [] }));
     setIsProcessing(false);
     setShowCreditModal(false);
+    
+    // Optionally clear table selection after checkout
+    // setSelectedTable(null);
   };
 
   const handleCreditConfirm = (customerName: string) => {
@@ -240,6 +304,8 @@ function POSPage({ currentStore }: { currentStore: any }) {
   };
 
   const handleProcessSingleBill = async (bill: SplitBill) => {
+    if (!selectedTable) return;
+    
     const billTotal = bill.items.reduce((sum, item) => sum + (Number(item.dish.selling_price) * item.quantity), 0);
 
     for (const cartItem of bill.items) {
@@ -256,18 +322,22 @@ function POSPage({ currentStore }: { currentStore: any }) {
       bill.items.map(item => ({ dishId: item.dish.id, quantity: item.quantity, unitPrice: Number(item.dish.selling_price) }))
     );
 
-    setCart(prevCart => {
-        const newCart = [...prevCart];
-        for (const item of bill.items) {
-            const index = newCart.findIndex(cartItem => cartItem.dish.id === item.dish.id);
-            if (index !== -1) {
-                newCart[index].quantity -= item.quantity;
-                if (newCart[index].quantity <= 0) {
-                    newCart.splice(index, 1);
-                }
-            }
+    // Update the table-specific cart
+    setTableCarts(prev => {
+      const tableCart = prev[selectedTable] || [];
+      const newTableCart = [...tableCart];
+      
+      for (const item of bill.items) {
+        const index = newTableCart.findIndex(cartItem => cartItem.dish.id === item.dish.id);
+        if (index !== -1) {
+          newTableCart[index].quantity -= item.quantity;
+          if (newTableCart[index].quantity <= 0) {
+            newTableCart.splice(index, 1);
+          }
         }
-        return newCart;
+      }
+      
+      return { ...prev, [selectedTable]: newTableCart };
     });
 
     toast({ title: 'Bill paid!', description: `Paid ${billTotal.toLocaleString()} MT` });
@@ -295,12 +365,14 @@ function POSPage({ currentStore }: { currentStore: any }) {
   };
 
   const handlePrintReceipt = () => {
+    if (currentCart.length === 0) return;
+    
     const receipt = [
       `${currentStore?.name}`,
       `Table: ${tables.find(t => t.id === selectedTable)?.name || 'N/A'}`,
       `Date: ${new Date().toLocaleString()}`,
       '─'.repeat(30),
-      ...cart.map(item => `${item.dish.name} x${item.quantity} - ${(Number(item.dish.selling_price) * item.quantity).toLocaleString()} MT`),
+      ...currentCart.map(item => `${item.dish.name} x${item.quantity} - ${(Number(item.dish.selling_price) * item.quantity).toLocaleString()} MT`),
       '─'.repeat(30),
       `TOTAL: ${cartTotal.toLocaleString()} MT`
     ].join('\n');
@@ -331,9 +403,21 @@ function POSPage({ currentStore }: { currentStore: any }) {
                   <SelectValue placeholder="Selecionar Mesa" />
                 </SelectTrigger>
                 <SelectContent>
-                  {tables.map(table => (
-                    <SelectItem key={table.id} value={table.id}>{table.name}</SelectItem>
-                  ))}
+                  {tables.map(table => {
+                    const isOccupied = tableCarts[table.id]?.length > 0;
+                    return (
+                      <SelectItem key={table.id} value={table.id}>
+                        <div className="flex items-center justify-between">
+                          <span>{table.name}</span>
+                          {isOccupied && (
+                            <Badge variant="secondary" className="ml-2 text-xs">
+                              {tableCarts[table.id]?.reduce((sum, item) => sum + item.quantity, 0)} items
+                            </Badge>
+                          )}
+                        </div>
+                      </SelectItem>
+                    );
+                  })}
                 </SelectContent>
               </Select>
             </div>
@@ -368,9 +452,9 @@ function POSPage({ currentStore }: { currentStore: any }) {
       <div className="hidden lg:flex lg:w-96">
         <Card className="w-full flex flex-col shrink-0">
           <CartContent
-            cart={cart}
+            cart={currentCart}
             updateQuantity={updateQuantity}
-            setCart={setCart}
+            setCart={clearCart}
             setShowSplitBillModal={setShowSplitBillModal}
             selectedPayment={selectedPayment}
             setSelectedPayment={setSelectedPayment}
@@ -379,6 +463,8 @@ function POSPage({ currentStore }: { currentStore: any }) {
             handleCheckout={handleCheckout}
             isProcessing={isProcessing}
             selectedTable={selectedTable}
+            tables={tables}
+             toast={toast} 
           />
         </Card>
       </div>
@@ -386,7 +472,7 @@ function POSPage({ currentStore }: { currentStore: any }) {
       <div className="lg:hidden fixed bottom-4 right-4 z-50">
         <Button size="lg" className="rounded-full w-36 h-16 shadow-lg" onClick={() => setShowCart(true)}>
           <ShoppingBag className="w-6 h-6 mr-2" />
-          View Cart ({cart.reduce((acc, item) => acc + item.quantity, 0)})
+          View Cart ({currentCart.reduce((acc, item) => acc + item.quantity, 0)})
         </Button>
       </div>
 
@@ -402,13 +488,14 @@ function POSPage({ currentStore }: { currentStore: any }) {
         onOpenChange={setShowTableMap}
         tables={tables}
         onSelectTable={setSelectedTable}
+        tableOrders={tableCarts}
       />
 
       <CartModal open={showCart} onOpenChange={setShowCart}>
         <CartContent
-          cart={cart}
+          cart={currentCart}
           updateQuantity={updateQuantity}
-          setCart={setCart}
+          setCart={clearCart}
           setShowSplitBillModal={setShowSplitBillModal}
           selectedPayment={selectedPayment}
           setSelectedPayment={setSelectedPayment}
@@ -417,13 +504,14 @@ function POSPage({ currentStore }: { currentStore: any }) {
           handleCheckout={handleCheckout}
           isProcessing={isProcessing}
           selectedTable={selectedTable}
+          tables={tables}
         />
       </CartModal>
 
       <SplitBillModal
         open={showSplitBillModal}
         onOpenChange={setShowSplitBillModal}
-        cart={cart}
+        cart={currentCart}
         paymentMethods={paymentMethods}
         onProcessSingleBill={handleProcessSingleBill}
         onPrintBill={handlePrintBill}
