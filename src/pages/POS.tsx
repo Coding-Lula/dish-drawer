@@ -9,9 +9,11 @@ import type { Dish } from '@/hooks/useSupabaseData';
 import { ManageTablesModal } from '@/components/modals/ManageTablesModal';
 import { CreditCustomerModal } from '@/components/modals/CreditCustomerModal';
 import { SplitBillModal } from '@/components/modals/SplitBillModal';
+import { TableMapModal } from '@/components/modals/TableMapModal';
 import { Plus, Minus, Trash2, ShoppingBag, CreditCard, Printer, Table, Split } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { CartModal } from '@/components/modals/CartModal';
 
 interface CartItem {
   dish: Dish;
@@ -35,8 +37,99 @@ const paymentMethods = [
 ];
 
 function POSContent() {
-  const { toast } = useToast();
   const { currentStore } = useCurrentStore();
+
+  if (!currentStore) {
+    return (
+      <div className="flex items-center justify-center h-full">
+        <p>Loading store...</p>
+      </div>
+    );
+  }
+
+  return <POSPage currentStore={currentStore} />;
+}
+
+function CartContent({ cart, updateQuantity, setCart, setShowSplitBillModal, selectedPayment, setSelectedPayment, cartTotal, handlePrintReceipt, handleCheckout, isProcessing, selectedTable }: any) {
+  return (
+    <>
+      <CardHeader className="pb-3 border-b">
+        <CardTitle className="flex items-center justify-between">
+          <span className="flex items-center gap-2"><ShoppingBag className="w-5 h-5" />Cart</span>
+          <div className="flex gap-1">
+            {cart.length > 1 && (
+              <Button variant="ghost" size="sm" onClick={() => setShowSplitBillModal(true)} className="gap-1">
+                <Split className="w-4 h-4" /> Split
+              </Button>
+            )}
+            {cart.length > 0 && <Button variant="ghost" size="sm" onClick={() => setCart([])} className="text-destructive">Clear</Button>}
+          </div>
+        </CardTitle>
+      </CardHeader>
+
+      <CardContent className="flex-1 overflow-auto py-4">
+        {cart.length === 0 ? (
+          <div className="h-full flex flex-col items-center justify-center text-muted-foreground">
+            <ShoppingBag className="w-12 h-12 mb-2 opacity-30" />
+            <p>Cart is empty</p>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {cart.map((item: CartItem) => (
+              <div key={item.dish.id} className="flex items-center gap-3 p-3 rounded-lg bg-muted/30 border">
+                <div className="flex-1 min-w-0">
+                  <p className="font-medium truncate">{item.dish.name}</p>
+                  <p className="text-sm text-muted-foreground">{Number(item.dish.selling_price).toLocaleString()} MT × {item.quantity}</p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Button variant="outline" size="icon" className="h-7 w-7" onClick={() => updateQuantity(item.dish.id, item.quantity - 1)}><Minus className="w-3 h-3" /></Button>
+                  <span className="w-6 text-center">{item.quantity}</span>
+                  <Button variant="outline" size="icon" className="h-7 w-7" onClick={() => updateQuantity(item.dish.id, item.quantity + 1)}><Plus className="w-3 h-3" /></Button>
+                  <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => updateQuantity(item.dish.id, 0)}><Trash2 className="w-3 h-3" /></Button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </CardContent>
+
+      <div className="border-t p-4 space-y-4">
+        <div>
+          <p className="text-sm font-medium text-muted-foreground mb-2">Payment Method</p>
+          <div className="grid grid-cols-3 gap-2">
+            {paymentMethods.map(method => (
+              <Button key={method.id} variant={selectedPayment === method.id ? "default" : "outline"} size="sm" className={cn("flex flex-col h-auto py-2", !method.isRevenue && selectedPayment === method.id && "bg-amber-600 hover:bg-amber-700")} onClick={() => setSelectedPayment(method.id)}>
+                <span className="text-base">{method.icon}</span>
+                <span className="text-xs">{method.name}</span>
+              </Button>
+            ))}
+          </div>
+          {!paymentMethods.find(m => m.id === selectedPayment)?.isRevenue && (
+            <p className="text-xs text-amber-600 mt-2 text-center">⚠️ This payment type does not contribute to revenue</p>
+          )}
+        </div>
+
+        <div className="space-y-3">
+          <div className="flex justify-between items-baseline">
+            <span className="text-muted-foreground">Total</span>
+            <span className="text-3xl font-bold">{cartTotal.toLocaleString()} MT</span>
+          </div>
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={handlePrintReceipt} disabled={cart.length === 0} className="gap-2">
+              <Printer className="w-4 h-4" />
+            </Button>
+            <Button className="flex-1 h-12 text-lg" onClick={handleCheckout} disabled={cart.length === 0 || isProcessing || !selectedTable}>
+              {isProcessing ? 'Processing...' : <><CreditCard className="w-5 h-5 mr-2" />Complete Sale</>}
+            </Button>
+          </div>
+        </div>
+      </div>
+    </>
+  )
+};
+
+function POSPage({ currentStore }: { currentStore: any }) {
+  const { toast } = useToast();
   const { dishes } = useDishes();
   const { recipes } = useRecipes();
   const { tables, addTable, deleteTable, initializeTables } = useRestaurantTablesManagement(currentStore?.id || null);
@@ -51,6 +144,8 @@ function POSContent() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [showCreditModal, setShowCreditModal] = useState(false);
   const [showSplitBillModal, setShowSplitBillModal] = useState(false);
+  const [showTableMap, setShowTableMap] = useState(false);
+  const [showCart, setShowCart] = useState(false);
 
   useEffect(() => {
     if (currentStore?.id && tables.length < 15) {
@@ -58,11 +153,21 @@ function POSContent() {
     }
   }, [currentStore?.id, tables.length, initializeTables]);
 
+  useEffect(() => {
+    if (!selectedTable) {
+      setShowTableMap(true);
+    }
+  }, [selectedTable]);
+
   const categories = [...new Set(dishes.map(d => d.category).filter(Boolean))];
   const filteredDishes = selectedCategory ? dishes.filter(d => d.category === selectedCategory) : dishes;
   const cartTotal = cart.reduce((sum, item) => sum + (Number(item.dish.selling_price) * item.quantity), 0);
 
   const addToCart = (dish: Dish) => {
+    if (!selectedTable) {
+        setShowTableMap(true);
+        return;
+    }
     setCart(prev => {
       const existing = prev.find(i => i.dish.id === dish.id);
       if (existing) {
@@ -134,29 +239,38 @@ function POSContent() {
     processCheckout(customerName);
   };
 
-  const handleSplitBillProcess = async (bills: SplitBill[]) => {
-    for (const bill of bills) {
-      const billTotal = bill.items.reduce((sum, item) => sum + (Number(item.dish.selling_price) * item.quantity), 0);
-      
-      // Deduct stock for each bill's items
-      for (const cartItem of bill.items) {
-        const dishRecipes = recipes.filter(r => r.dish_id === cartItem.dish.id);
-        for (const recipe of dishRecipes) {
-          await deductStock(recipe.ingredient_id, Number(recipe.quantity_required) * cartItem.quantity);
-        }
-      }
+  const handleProcessSingleBill = async (bill: SplitBill) => {
+    const billTotal = bill.items.reduce((sum, item) => sum + (Number(item.dish.selling_price) * item.quantity), 0);
 
-      // Create transaction for each bill
-      await addTransaction(
-        billTotal,
-        bill.paymentMethod || 'cash',
-        selectedTable,
-        bill.items.map(item => ({ dishId: item.dish.id, quantity: item.quantity, unitPrice: Number(item.dish.selling_price) }))
-      );
+    for (const cartItem of bill.items) {
+      const dishRecipes = recipes.filter(r => r.dish_id === cartItem.dish.id);
+      for (const recipe of dishRecipes) {
+        await deductStock(recipe.ingredient_id, Number(recipe.quantity_required) * cartItem.quantity);
+      }
     }
 
-    toast({ title: 'Split bills processed!', description: `${bills.length} bills completed` });
-    setCart([]);
+    await addTransaction(
+      billTotal,
+      bill.paymentMethod || 'cash',
+      selectedTable,
+      bill.items.map(item => ({ dishId: item.dish.id, quantity: item.quantity, unitPrice: Number(item.dish.selling_price) }))
+    );
+
+    setCart(prevCart => {
+        const newCart = [...prevCart];
+        for (const item of bill.items) {
+            const index = newCart.findIndex(cartItem => cartItem.dish.id === item.dish.id);
+            if (index !== -1) {
+                newCart[index].quantity -= item.quantity;
+                if (newCart[index].quantity <= 0) {
+                    newCart.splice(index, 1);
+                }
+            }
+        }
+        return newCart;
+    });
+
+    toast({ title: 'Bill paid!', description: `Paid ${billTotal.toLocaleString()} MT` });
   };
 
   const handlePrintBill = (bill: SplitBill, billNumber: number) => {
@@ -201,19 +315,19 @@ function POSContent() {
   };
 
   return (
-    <div className="h-[calc(100vh-3rem)] flex gap-6">
+    <div className="h-[calc(100vh-3rem)] flex flex-col lg:flex-row gap-6">
       <div className="flex-1 flex flex-col min-w-0">
-        <div className="mb-4 flex items-center justify-between">
+        <div className="mb-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <div>
             <h1 className="text-2xl font-bold text-foreground">Ponto de vendas</h1>
             <p className="text-muted-foreground">Selecione os itens para adicionar ao carrinho</p>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 w-full sm:w-auto">
             <ManageTablesModal tables={tables} onAddTable={addTable} onDeleteTable={deleteTable} />
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-1">
               <Table className="w-4 h-4 text-muted-foreground" />
               <Select value={selectedTable || ''} onValueChange={setSelectedTable}>
-                <SelectTrigger className="w-40">
+                <SelectTrigger className="w-full">
                   <SelectValue placeholder="Selecionar Mesa" />
                 </SelectTrigger>
                 <SelectContent>
@@ -234,7 +348,7 @@ function POSContent() {
         </div>
 
         <div className="flex-1 overflow-auto">
-          <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-3 xl:grid-cols-4 gap-3">
             {filteredDishes.map(dish => (
               <Card key={dish.id} className="cursor-pointer transition-all hover:shadow-lg hover:scale-[1.02]" onClick={() => addToCart(dish)}>
                 <CardContent className="p-4 text-center">
@@ -251,79 +365,30 @@ function POSContent() {
         </div>
       </div>
 
-      <Card className="w-96 flex flex-col shrink-0">
-        <CardHeader className="pb-3 border-b">
-          <CardTitle className="flex items-center justify-between">
-            <span className="flex items-center gap-2"><ShoppingBag className="w-5 h-5" />Cart</span>
-            <div className="flex gap-1">
-              {cart.length > 1 && (
-                <Button variant="ghost" size="sm" onClick={() => setShowSplitBillModal(true)} className="gap-1">
-                  <Split className="w-4 h-4" /> Split
-                </Button>
-              )}
-              {cart.length > 0 && <Button variant="ghost" size="sm" onClick={() => setCart([])} className="text-destructive">Clear</Button>}
-            </div>
-          </CardTitle>
-        </CardHeader>
-        
-        <CardContent className="flex-1 overflow-auto py-4">
-          {cart.length === 0 ? (
-            <div className="h-full flex flex-col items-center justify-center text-muted-foreground">
-              <ShoppingBag className="w-12 h-12 mb-2 opacity-30" />
-              <p>Cart is empty</p>
-            </div>
-          ) : (
-            <div className="space-y-3">
-              {cart.map(item => (
-                <div key={item.dish.id} className="flex items-center gap-3 p-3 rounded-lg bg-muted/30 border">
-                  <div className="flex-1 min-w-0">
-                    <p className="font-medium truncate">{item.dish.name}</p>
-                    <p className="text-sm text-muted-foreground">{Number(item.dish.selling_price).toLocaleString()} MT × {item.quantity}</p>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Button variant="outline" size="icon" className="h-7 w-7" onClick={() => updateQuantity(item.dish.id, item.quantity - 1)}><Minus className="w-3 h-3" /></Button>
-                    <span className="w-6 text-center">{item.quantity}</span>
-                    <Button variant="outline" size="icon" className="h-7 w-7" onClick={() => updateQuantity(item.dish.id, item.quantity + 1)}><Plus className="w-3 h-3" /></Button>
-                    <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => updateQuantity(item.dish.id, 0)}><Trash2 className="w-3 h-3" /></Button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </CardContent>
+      <div className="hidden lg:flex lg:w-96">
+        <Card className="w-full flex flex-col shrink-0">
+          <CartContent
+            cart={cart}
+            updateQuantity={updateQuantity}
+            setCart={setCart}
+            setShowSplitBillModal={setShowSplitBillModal}
+            selectedPayment={selectedPayment}
+            setSelectedPayment={setSelectedPayment}
+            cartTotal={cartTotal}
+            handlePrintReceipt={handlePrintReceipt}
+            handleCheckout={handleCheckout}
+            isProcessing={isProcessing}
+            selectedTable={selectedTable}
+          />
+        </Card>
+      </div>
 
-        <div className="border-t p-4 space-y-4">
-          <div>
-            <p className="text-sm font-medium text-muted-foreground mb-2">Payment Method</p>
-            <div className="grid grid-cols-3 gap-2">
-              {paymentMethods.map(method => (
-                <Button key={method.id} variant={selectedPayment === method.id ? "default" : "outline"} size="sm" className={cn("flex flex-col h-auto py-2", !method.isRevenue && selectedPayment === method.id && "bg-amber-600 hover:bg-amber-700")} onClick={() => setSelectedPayment(method.id)}>
-                  <span className="text-base">{method.icon}</span>
-                  <span className="text-xs">{method.name}</span>
-                </Button>
-              ))}
-            </div>
-            {!paymentMethods.find(m => m.id === selectedPayment)?.isRevenue && (
-              <p className="text-xs text-amber-600 mt-2 text-center">⚠️ This payment type does not contribute to revenue</p>
-            )}
-          </div>
-
-          <div className="space-y-3">
-            <div className="flex justify-between items-baseline">
-              <span className="text-muted-foreground">Total</span>
-              <span className="text-3xl font-bold">{cartTotal.toLocaleString()} MT</span>
-            </div>
-            <div className="flex gap-2">
-              <Button variant="outline" onClick={handlePrintReceipt} disabled={cart.length === 0} className="gap-2">
-                <Printer className="w-4 h-4" />
-              </Button>
-              <Button className="flex-1 h-12 text-lg" onClick={handleCheckout} disabled={cart.length === 0 || isProcessing || !selectedTable}>
-                {isProcessing ? 'Processing...' : <><CreditCard className="w-5 h-5 mr-2" />Complete Sale</>}
-              </Button>
-            </div>
-          </div>
-        </div>
-      </Card>
+      <div className="lg:hidden fixed bottom-4 right-4 z-50">
+        <Button size="lg" className="rounded-full w-36 h-16 shadow-lg" onClick={() => setShowCart(true)}>
+          <ShoppingBag className="w-6 h-6 mr-2" />
+          View Cart ({cart.reduce((acc, item) => acc + item.quantity, 0)})
+        </Button>
+      </div>
 
       <CreditCustomerModal
         open={showCreditModal}
@@ -332,12 +397,35 @@ function POSContent() {
         onConfirm={handleCreditConfirm}
       />
 
+      <TableMapModal
+        open={showTableMap}
+        onOpenChange={setShowTableMap}
+        tables={tables}
+        onSelectTable={setSelectedTable}
+      />
+
+      <CartModal open={showCart} onOpenChange={setShowCart}>
+        <CartContent
+          cart={cart}
+          updateQuantity={updateQuantity}
+          setCart={setCart}
+          setShowSplitBillModal={setShowSplitBillModal}
+          selectedPayment={selectedPayment}
+          setSelectedPayment={setSelectedPayment}
+          cartTotal={cartTotal}
+          handlePrintReceipt={handlePrintReceipt}
+          handleCheckout={handleCheckout}
+          isProcessing={isProcessing}
+          selectedTable={selectedTable}
+        />
+      </CartModal>
+
       <SplitBillModal
         open={showSplitBillModal}
         onOpenChange={setShowSplitBillModal}
         cart={cart}
         paymentMethods={paymentMethods}
-        onProcessBills={handleSplitBillProcess}
+        onProcessSingleBill={handleProcessSingleBill}
         onPrintBill={handlePrintBill}
         storeName={currentStore?.name || ''}
         tableName={tables.find(t => t.id === selectedTable)?.name || 'Table'}

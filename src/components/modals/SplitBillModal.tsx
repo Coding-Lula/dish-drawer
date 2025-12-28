@@ -26,7 +26,7 @@ interface SplitBillModalProps {
   onOpenChange: (open: boolean) => void;
   cart: CartItem[];
   paymentMethods: { id: string; name: string; icon: string }[];
-  onProcessBills: (bills: SplitBill[]) => Promise<void>;
+  onProcessSingleBill: (bill: SplitBill) => Promise<void>;
   onPrintBill: (bill: SplitBill, billNumber: number) => void;
   storeName: string;
   tableName: string;
@@ -37,7 +37,7 @@ export function SplitBillModal({
   onOpenChange,
   cart,
   paymentMethods,
-  onProcessBills,
+  onProcessSingleBill,
   onPrintBill,
   storeName,
   tableName
@@ -111,8 +111,23 @@ export function SplitBillModal({
     setBills(prev => prev.map(b => b.id === billId ? { ...b, paymentMethod: method } : b));
   };
 
-  const payBill = (billId: string) => {
-    setBills(prev => prev.map(b => b.id === billId ? { ...b, isPaid: true } : b));
+  const payBill = async (billId: string) => {
+    const bill = bills.find(b => b.id === billId);
+    if (!bill || !bill.paymentMethod) return;
+
+    setIsProcessing(true);
+    await onProcessSingleBill(bill);
+
+    const newBills = bills.filter(b => b.id !== billId);
+
+    if (newBills.length === 0) {
+        onOpenChange(false);
+    } else {
+        setBills(newBills);
+        setSelectedBill(newBills[0].id);
+    }
+
+    setIsProcessing(false);
   };
 
   const handlePrintBill = (bill: SplitBill, index: number) => {
@@ -121,13 +136,6 @@ export function SplitBillModal({
 
   const handlePrintAll = () => {
     bills.forEach((bill, idx) => onPrintBill(bill, idx + 1));
-  };
-
-  const handleComplete = async () => {
-    setIsProcessing(true);
-    await onProcessBills(bills);
-    setIsProcessing(false);
-    onOpenChange(false);
   };
 
   const getBillTotal = (bill: SplitBill) => 
@@ -278,12 +286,6 @@ export function SplitBillModal({
           </Button>
           <div className="flex gap-2">
             <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
-            <Button 
-              onClick={handleComplete} 
-              disabled={!allBillsPaid || isProcessing}
-            >
-              {isProcessing ? 'Processing...' : allBillsPaid ? 'Complete All' : 'Pay All Bills First'}
-            </Button>
           </div>
         </div>
       </DialogContent>
