@@ -65,7 +65,7 @@ function CartContent({
   tables,
   toast
 }: any) {
-  const currentTableName = tables.find((t: RestaurantTable) => t.id === selectedTable)?.name || 'No Table';
+  const currentTableName = tables.find((t: any) => t.id === selectedTable)?.name || 'No Table';
 
   return (
     <>
