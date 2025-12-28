@@ -1,6 +1,6 @@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import type { RestaurantTable } from '@/hooks/useSupabaseData';
+import type { RestaurantTable, Dish } from '@/hooks/useSupabaseData';
 
 interface CartItem {
   dish: Dish;

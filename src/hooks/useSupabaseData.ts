@@ -695,11 +695,59 @@ export function useSplitConfigs() {
     setLoading(false);
   }, [toast]);
 
+  const createConfig = async (config: { name: string; tax_percent?: number; bank_percent?: number; restock_percent?: number; ops_percent?: number; is_default?: boolean }) => {
+    const { data, error } = await supabase
+      .from('split_configs')
+      .insert([config])
+      .select()
+      .single();
+    
+    if (error) {
+      toast({ title: 'Error creating config', description: error.message, variant: 'destructive' });
+      return null;
+    }
+    
+    setConfigs(prev => [...prev, data]);
+    toast({ title: 'Configuration created' });
+    return data;
+  };
+
+  const updateConfig = async (id: string, updates: Partial<SplitConfig>) => {
+    const { error } = await supabase
+      .from('split_configs')
+      .update(updates)
+      .eq('id', id);
+    
+    if (error) {
+      toast({ title: 'Error updating config', description: error.message, variant: 'destructive' });
+      return false;
+    }
+    
+    setConfigs(prev => prev.map(c => c.id === id ? { ...c, ...updates } : c));
+    return true;
+  };
+
+  const deleteConfig = async (id: string) => {
+    const { error } = await supabase
+      .from('split_configs')
+      .delete()
+      .eq('id', id);
+    
+    if (error) {
+      toast({ title: 'Error deleting config', description: error.message, variant: 'destructive' });
+      return false;
+    }
+    
+    setConfigs(prev => prev.filter(c => c.id !== id));
+    toast({ title: 'Configuration deleted' });
+    return true;
+  };
+
   useEffect(() => {
     fetchConfigs();
   }, [fetchConfigs]);
 
-  return { configs, loading, refetch: fetchConfigs };
+  return { configs, loading, createConfig, updateConfig, deleteConfig, refetch: fetchConfigs };
 }
 
 export function useDailySummaries(storeId: string | null) {
