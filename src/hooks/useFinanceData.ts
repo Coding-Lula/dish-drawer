@@ -11,6 +11,11 @@ export interface IncomeSource {
   is_default: boolean;
   display_order: number;
   created_at: string;
+  payment_methods?: string[];
+  is_default_for_cash?: boolean;
+  is_default_for_mobile?: boolean;
+  is_default_for_bank?: boolean;
+  source_type?: string;
 }
 
 export interface IncomeAllocation {
