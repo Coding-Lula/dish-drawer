@@ -46,6 +46,8 @@ import {
   SmartphoneIcon,
   Landmark,
   CreditCardIcon,
+  Settings,
+  RefreshCw,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { format, startOfMonth, endOfMonth } from 'date-fns';
@@ -1210,6 +1212,3 @@ export default function Finance() {
     </MainLayout>
   );
 }
-
-// Add missing import
-import { Settings, RefreshCw } from 'lucide-react';
