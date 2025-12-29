@@ -184,21 +184,43 @@ function RevenueAllocationContent() {
               <Badge variant="outline" className="ml-auto">{totalOutstandingCredits.toLocaleString()} MT</Badge>
             </CardTitle>
           </CardHeader>
-          <CardContent className="space-y-2">
-            {unsettledCredits.map(credit => (
-              <div key={credit.id} className="flex items-center justify-between p-3 rounded-lg bg-amber-500/10 border border-amber-500/20">
-                <div>
-                  <p className="font-medium">{credit.customer_name}</p>
-                  <p className="text-xs text-muted-foreground">{new Date(credit.date).toLocaleDateString()}</p>
+          <CardContent className="space-y-3">
+            {unsettledCredits.map(credit => {
+              const creditDate = new Date(credit.date);
+              const dueDate = new Date(creditDate);
+              dueDate.setDate(dueDate.getDate() + 30); // Net 30 terms by default
+              const today = new Date();
+              const daysOverdue = Math.max(0, Math.floor((today.getTime() - dueDate.getTime()) / (1000 * 60 * 60 * 24)));
+              const isOverdue = daysOverdue > 0;
+              
+              return (
+                <div key={credit.id} className={cn(
+                  "p-4 rounded-lg border",
+                  isOverdue ? "bg-destructive/10 border-destructive/30" : "bg-amber-500/10 border-amber-500/20"
+                )}>
+                  <div className="flex items-start justify-between">
+                    <div className="space-y-1">
+                      <p className="font-semibold text-lg">{Number(credit.sale_amount).toLocaleString()} MT</p>
+                      <p className="font-medium text-foreground">{credit.customer_name}</p>
+                      <div className="flex items-center gap-4 text-sm text-muted-foreground">
+                        <span>Credit Date: {new Date(credit.date).toLocaleDateString()}</span>
+                        <span>Due: {dueDate.toLocaleDateString()}</span>
+                        <span>Terms: Net 30</span>
+                      </div>
+                      {isOverdue && (
+                        <Badge variant="destructive" className="mt-1">
+                          <AlertTriangle className="w-3 h-3 mr-1" />
+                          {daysOverdue} days overdue
+                        </Badge>
+                      )}
+                    </div>
+                    <Button size="sm" variant="outline" onClick={() => settleCredit(credit.id)} className="gap-1">
+                      <Check className="w-3 h-3" />Settle
+                    </Button>
+                  </div>
                 </div>
-                <div className="flex items-center gap-3">
-                  <span className="font-bold text-amber-700">{Number(credit.sale_amount).toLocaleString()} MT</span>
-                  <Button size="sm" variant="outline" onClick={() => settleCredit(credit.id)} className="gap-1">
-                    <Check className="w-3 h-3" />Settle
-                  </Button>
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </CardContent>
         </Card>
       )}

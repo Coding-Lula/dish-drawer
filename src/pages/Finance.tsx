@@ -91,7 +91,7 @@ function FinanceContent() {
   const { transactions: posTransactions } = useTransactions(currentStore?.id || null);
   const { sources, addSource, deleteSource } = useIncomeSources();
   const { allocations, addBatchAllocations, getSourceTotals } = useIncomeAllocations(currentStore?.id || null);
-  const { parentCategories, addParentCategory } = useExpenseParentCategories();
+  const { parentCategories, addParentCategory, deleteParentCategory } = useExpenseParentCategories();
   const { categories, addCategory, updateCategory, deleteCategory } = useExpenseCategoriesWithParent();
   const { 
     transactions, 
@@ -318,6 +318,16 @@ function FinanceContent() {
     });
     setNewCategoryForm({ name: '', parent_id: '', monthly_budget: '' });
     setShowAddCategoryModal(false);
+  };
+
+  const handleDeleteParentCategory = async (parentId: string) => {
+    // Delete all child categories first
+    const childCats = categories.filter(c => c.parent_id === parentId);
+    for (const child of childCats) {
+      await deleteCategory(child.id);
+    }
+    // Then delete the parent
+    await deleteParentCategory(parentId);
   };
 
   const getMonthName = (month: number) => {
@@ -749,10 +759,11 @@ function FinanceContent() {
                   <TableRow>
                     <TableHead>Date</TableHead>
                     <TableHead>Type</TableHead>
-                    <TableHead>Supplier</TableHead>
+                    <TableHead>Supplier/Notes</TableHead>
                     <TableHead>Amount</TableHead>
+                    <TableHead>From</TableHead>
+                    <TableHead>To</TableHead>
                     <TableHead>Category</TableHead>
-                    <TableHead>Source</TableHead>
                     <TableHead>Invoice</TableHead>
                     <TableHead></TableHead>
                   </TableRow>
@@ -760,44 +771,58 @@ function FinanceContent() {
                 <TableBody>
                   {transactions
                     .filter(t => t.date >= monthStart && t.date <= monthEnd)
-                    .map(transaction => (
-                      <TableRow key={transaction.id}>
-                        <TableCell>{transaction.date}</TableCell>
-                        <TableCell>
-                          <Badge variant={
-                            transaction.type === 'expense' ? 'destructive' : 
-                            transaction.type === 'income' ? 'default' : 'secondary'
-                          }>
-                            {transaction.type}
-                          </Badge>
-                        </TableCell>
-                        <TableCell>{transaction.supplier || '-'}</TableCell>
-                        <TableCell className={transaction.type === 'expense' ? 'text-destructive' : 'text-primary'}>
-                          {transaction.type === 'expense' ? '-' : '+'}{Number(transaction.amount).toLocaleString()} MT
-                        </TableCell>
-                        <TableCell>
-                          {categories.find(c => c.id === transaction.expense_category_id)?.name || '-'}
-                        </TableCell>
-                        <TableCell>
-                          {sources.find(s => s.id === transaction.source_id)?.name || '-'}
-                        </TableCell>
-                        <TableCell>{transaction.invoice_no || '-'}</TableCell>
-                        <TableCell>
-                          {!transaction.is_locked && (
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => deleteTransaction(transaction.id)}
-                            >
-                              <Trash2 className="w-4 h-4 text-destructive" />
-                            </Button>
-                          )}
-                        </TableCell>
-                      </TableRow>
-                    ))}
+                    .map(transaction => {
+                      const fromSource = sources.find(s => s.id === transaction.source_id)?.name || '-';
+                      const toSource = transaction.transfer_to_source_id 
+                        ? sources.find(s => s.id === transaction.transfer_to_source_id)?.name || '-'
+                        : '-';
+                      
+                      return (
+                        <TableRow key={transaction.id}>
+                          <TableCell>{transaction.date}</TableCell>
+                          <TableCell>
+                            <Badge variant={
+                              transaction.type === 'expense' ? 'destructive' : 
+                              transaction.type === 'income' ? 'default' : 'secondary'
+                            }>
+                              {transaction.type}
+                            </Badge>
+                          </TableCell>
+                          <TableCell>
+                            {transaction.type === 'transfer' 
+                              ? (transaction.description || 'Transfer')
+                              : (transaction.supplier || '-')}
+                          </TableCell>
+                          <TableCell className={transaction.type === 'expense' ? 'text-destructive' : transaction.type === 'income' ? 'text-primary' : 'text-foreground'}>
+                            {transaction.type === 'expense' ? '-' : transaction.type === 'income' ? '+' : ''}{Number(transaction.amount).toLocaleString()} MT
+                          </TableCell>
+                          <TableCell>{fromSource}</TableCell>
+                          <TableCell>
+                            {transaction.type === 'transfer' ? toSource : '-'}
+                          </TableCell>
+                          <TableCell>
+                            {transaction.type !== 'transfer' 
+                              ? (categories.find(c => c.id === transaction.expense_category_id)?.name || '-')
+                              : '-'}
+                          </TableCell>
+                          <TableCell>{transaction.invoice_no || '-'}</TableCell>
+                          <TableCell>
+                            {!transaction.is_locked && (
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => deleteTransaction(transaction.id)}
+                              >
+                                <Trash2 className="w-4 h-4 text-destructive" />
+                              </Button>
+                            )}
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
                   {transactions.filter(t => t.date >= monthStart && t.date <= monthEnd).length === 0 && (
                     <TableRow>
-                      <TableCell colSpan={8} className="text-center text-muted-foreground py-8">
+                      <TableCell colSpan={9} className="text-center text-muted-foreground py-8">
                         No transactions for this month
                       </TableCell>
                     </TableRow>
@@ -870,7 +895,6 @@ function FinanceContent() {
                 <TableHeader>
                   <TableRow>
                     <TableHead>Category Name</TableHead>
-                    <TableHead>Type</TableHead>
                     <TableHead>Budget</TableHead>
                     <TableHead>Spent</TableHead>
                     <TableHead>Progress</TableHead>
@@ -882,17 +906,25 @@ function FinanceContent() {
                     <>
                       <TableRow key={parent.id} className="bg-muted/50">
                         <TableCell className="font-semibold">{parent.name}</TableCell>
-                        <TableCell><Badge>Parent</Badge></TableCell>
                         <TableCell>-</TableCell>
                         <TableCell>-</TableCell>
                         <TableCell>-</TableCell>
                         <TableCell>
-                          <Button variant="ghost" size="sm" onClick={() => {
-                            setNewCategoryForm({ name: '', parent_id: parent.id, monthly_budget: '' });
-                            setShowAddCategoryModal(true);
-                          }}>
-                            <Plus className="w-3 h-3 mr-1" /> Add Child
-                          </Button>
+                          <div className="flex items-center gap-2">
+                            <Button variant="ghost" size="sm" onClick={() => {
+                              setNewCategoryForm({ name: '', parent_id: parent.id, monthly_budget: '' });
+                              setShowAddCategoryModal(true);
+                            }}>
+                              <Plus className="w-3 h-3 mr-1" /> Add Child
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => handleDeleteParentCategory(parent.id)}
+                            >
+                              <Trash2 className="w-4 h-4 text-destructive" />
+                            </Button>
+                          </div>
                         </TableCell>
                       </TableRow>
                       {categories.filter(c => c.parent_id === parent.id).map(cat => {
@@ -903,7 +935,6 @@ function FinanceContent() {
                         return (
                           <TableRow key={cat.id}>
                             <TableCell className="pl-8">{cat.name}</TableCell>
-                            <TableCell><Badge variant="outline">Child</Badge></TableCell>
                             <TableCell>
                               <Input
                                 type="number"
@@ -920,15 +951,13 @@ function FinanceContent() {
                               </div>
                             </TableCell>
                             <TableCell>
-                              {!cat.is_system && (
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  onClick={() => deleteCategory(cat.id)}
-                                >
-                                  <Trash2 className="w-4 h-4 text-destructive" />
-                                </Button>
-                              )}
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => deleteCategory(cat.id)}
+                              >
+                                <Trash2 className="w-4 h-4 text-destructive" />
+                              </Button>
                             </TableCell>
                           </TableRow>
                         );

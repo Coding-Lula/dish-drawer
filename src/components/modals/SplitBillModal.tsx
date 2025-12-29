@@ -1,11 +1,11 @@
-import { useState, useEffect } from 'react'; // Add useEffect import
+import { useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Checkbox } from '@/components/ui/checkbox';
+import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Split, Printer, CreditCard, Check, Plus } from 'lucide-react';
+import { Split, Printer, CreditCard, Check, Plus, Minus } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { Dish } from '@/hooks/useSupabaseData';
 
@@ -47,22 +47,20 @@ export function SplitBillModal({
   ]);
   const [selectedBill, setSelectedBill] = useState<string>('bill-1');
   const [isProcessing, setIsProcessing] = useState(false);
+  const [splitQuantities, setSplitQuantities] = useState<Record<string, Record<string, number>>>({});
 
   // Reset bills when modal opens with new cart
   useEffect(() => {
     if (open && cart.length > 0) {
-      // Reset bills with current cart when modal opens
       setBills([
         { id: 'bill-1', items: [...cart], paymentMethod: null, isPaid: false }
       ]);
       setSelectedBill('bill-1');
+      setSplitQuantities({});
     }
   }, [open, cart]);
 
   const currentBill = bills.find(b => b.id === selectedBill);
-  const allItemsAssigned = cart.every(cartItem => 
-    bills.some(bill => bill.items.some(i => i.dish.id === cartItem.dish.id))
-  );
   const allBillsPaid = bills.every(b => b.isPaid);
 
   const addNewBill = () => {
@@ -76,25 +74,10 @@ export function SplitBillModal({
     setSelectedBill(newBill.id);
   };
 
-  const moveItemToBill = (item: CartItem, fromBillId: string, toBillId: string) => {
-    setBills(prev => prev.map(bill => {
-      if (bill.id === fromBillId) {
-        return { ...bill, items: bill.items.filter(i => i.dish.id !== item.dish.id) };
-      }
-      if (bill.id === toBillId) {
-        const existing = bill.items.find(i => i.dish.id === item.dish.id);
-        if (existing) {
-          return { ...bill, items: bill.items.map(i => 
-            i.dish.id === item.dish.id ? { ...i, quantity: i.quantity + item.quantity } : i
-          )};
-        }
-        return { ...bill, items: [...bill.items, item] };
-      }
-      return bill;
-    }));
-  };
-
+  // Split specific quantity of an item to another bill
   const splitItemQuantity = (item: CartItem, fromBillId: string, toBillId: string, quantity: number) => {
+    if (quantity <= 0 || quantity > item.quantity) return;
+    
     setBills(prev => prev.map(bill => {
       if (bill.id === fromBillId) {
         const remaining = item.quantity - quantity;
@@ -116,6 +99,15 @@ export function SplitBillModal({
       }
       return bill;
     }));
+    
+    // Reset split quantity input for this item
+    setSplitQuantities(prev => {
+      const newState = { ...prev };
+      if (newState[fromBillId]) {
+        delete newState[fromBillId][item.dish.id];
+      }
+      return newState;
+    });
   };
 
   const setPaymentMethod = (billId: string, method: string) => {
@@ -132,10 +124,10 @@ export function SplitBillModal({
     const newBills = bills.filter(b => b.id !== billId);
 
     if (newBills.length === 0) {
-        onOpenChange(false);
+      onOpenChange(false);
     } else {
-        setBills(newBills);
-        setSelectedBill(newBills[0].id);
+      setBills(newBills);
+      setSelectedBill(newBills[0].id);
     }
 
     setIsProcessing(false);
@@ -152,9 +144,26 @@ export function SplitBillModal({
   const getBillTotal = (bill: SplitBill) => 
     bill.items.reduce((sum, item) => sum + (Number(item.dish.selling_price) * item.quantity), 0);
 
+  // Get split quantity input value
+  const getSplitQty = (billId: string, dishId: string, maxQty: number) => {
+    return splitQuantities[billId]?.[dishId] ?? 1;
+  };
+
+  // Set split quantity input value
+  const setSplitQty = (billId: string, dishId: string, qty: number, maxQty: number) => {
+    const clampedQty = Math.min(Math.max(1, qty), maxQty);
+    setSplitQuantities(prev => ({
+      ...prev,
+      [billId]: {
+        ...(prev[billId] || {}),
+        [dishId]: clampedQty
+      }
+    }));
+  };
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
+      <DialogContent className="max-w-5xl max-h-[90vh] overflow-hidden flex flex-col">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Split className="w-5 h-5" />
@@ -209,7 +218,7 @@ export function SplitBillModal({
                       </Badge>
                     </CardTitle>
                   </CardHeader>
-                  <CardContent className="flex-1 overflow-auto space-y-2">
+                  <CardContent className="flex-1 overflow-auto space-y-3">
                     {currentBill.items.length === 0 ? (
                       <div className="text-center py-8 text-muted-foreground">
                         <Split className="w-8 h-8 mx-auto mb-2 opacity-30" />
@@ -217,37 +226,75 @@ export function SplitBillModal({
                         <p className="text-xs">Move items from another bill</p>
                       </div>
                     ) : (
-                      currentBill.items.map(item => (
-                        <div key={item.dish.id} className="flex items-center justify-between p-2 rounded-lg bg-muted/30 border">
-                          <div>
-                            <p className="font-medium">{item.dish.name}</p>
-                            <p className="text-xs text-muted-foreground">{Number(item.dish.selling_price).toLocaleString()} MT × {item.quantity}</p>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <span className="font-semibold">{(Number(item.dish.selling_price) * item.quantity).toLocaleString()} MT</span>
-                            {bills.length > 1 && !currentBill.isPaid && (
-                              <select 
-                                className="text-sm border rounded px-3 py-2 bg-white" // Made larger
-                                value=""
-                                onChange={(e) => {
-                                  if (e.target.value) {
-                                    if (item.quantity > 1) {
-                                      splitItemQuantity(item, currentBill.id, e.target.value, 1);
-                                    } else {
-                                      moveItemToBill(item, currentBill.id, e.target.value);
-                                    }
-                                  }
-                                }}
-                              >
-                                <option value="">Move 1 to...</option>
-                                {bills.filter(b => b.id !== currentBill.id).map((b, idx) => (
-                                  <option key={b.id} value={b.id}>Bill {bills.indexOf(b) + 1}</option>
-                                ))}
-                              </select>
+                      currentBill.items.map(item => {
+                        const otherBills = bills.filter(b => b.id !== currentBill.id);
+                        const splitQty = getSplitQty(currentBill.id, item.dish.id, item.quantity);
+                        
+                        return (
+                          <div key={item.dish.id} className="p-3 rounded-lg bg-muted/30 border">
+                            <div className="flex items-center justify-between mb-2">
+                              <div>
+                                <p className="font-medium">{item.dish.name}</p>
+                                <p className="text-xs text-muted-foreground">
+                                  {Number(item.dish.selling_price).toLocaleString()} MT × {item.quantity} = {(Number(item.dish.selling_price) * item.quantity).toLocaleString()} MT
+                                </p>
+                              </div>
+                              <Badge variant="outline" className="text-sm">
+                                Qty: {item.quantity}
+                              </Badge>
+                            </div>
+                            
+                            {/* Quantity Split Controls */}
+                            {bills.length > 1 && !currentBill.isPaid && item.quantity > 0 && (
+                              <div className="flex items-center gap-2 mt-2 pt-2 border-t border-border/50">
+                                <span className="text-xs text-muted-foreground">Split</span>
+                                <div className="flex items-center gap-1">
+                                  <Button 
+                                    size="icon" 
+                                    variant="outline" 
+                                    className="h-7 w-7"
+                                    onClick={() => setSplitQty(currentBill.id, item.dish.id, splitQty - 1, item.quantity)}
+                                    disabled={splitQty <= 1}
+                                  >
+                                    <Minus className="w-3 h-3" />
+                                  </Button>
+                                  <Input
+                                    type="number"
+                                    min={1}
+                                    max={item.quantity}
+                                    value={splitQty}
+                                    onChange={(e) => setSplitQty(currentBill.id, item.dish.id, Number(e.target.value), item.quantity)}
+                                    className="w-14 h-7 text-center text-sm"
+                                  />
+                                  <Button 
+                                    size="icon" 
+                                    variant="outline" 
+                                    className="h-7 w-7"
+                                    onClick={() => setSplitQty(currentBill.id, item.dish.id, splitQty + 1, item.quantity)}
+                                    disabled={splitQty >= item.quantity}
+                                  >
+                                    <Plus className="w-3 h-3" />
+                                  </Button>
+                                </div>
+                                <span className="text-xs text-muted-foreground">to</span>
+                                <div className="flex gap-1 flex-wrap">
+                                  {otherBills.map((b, idx) => (
+                                    <Button
+                                      key={b.id}
+                                      size="sm"
+                                      variant="outline"
+                                      className="h-7 text-xs"
+                                      onClick={() => splitItemQuantity(item, currentBill.id, b.id, splitQty)}
+                                    >
+                                      Bill {bills.indexOf(b) + 1}
+                                    </Button>
+                                  ))}
+                                </div>
+                              </div>
                             )}
                           </div>
-                        </div>
-                      ))
+                        );
+                      })
                     )}
                   </CardContent>
                 </Card>
@@ -277,7 +324,7 @@ export function SplitBillModal({
                         </Button>
                         <Button 
                           size="sm" 
-                          disabled={!currentBill.paymentMethod}
+                          disabled={!currentBill.paymentMethod || isProcessing}
                           onClick={() => payBill(currentBill.id)}
                         >
                           <CreditCard className="w-4 h-4 mr-1" /> Pay This Bill
