@@ -2,9 +2,14 @@ import { MainLayout, useCurrentStore } from '@/components/layout/MainLayout';
 import { StatCard } from '@/components/dashboard/StatCard';
 import { LowStockAlerts } from '@/components/dashboard/LowStockAlerts';
 import { RevenueBreakdown } from '@/components/dashboard/RevenueBreakdown';
-import { useTransactions, useExpenses, useStoreStock } from '@/hooks/useSupabaseData';
-import { DollarSign, ShoppingCart, TrendingUp, Package, Clock } from 'lucide-react';
+import { useTransactions, useExpenses, useStoreStock, useStores } from '@/hooks/useSupabaseData';
+import { useIncomeAllocations, useIncomeSources } from '@/hooks/useFinanceData';
+import { DollarSign, ShoppingCart, TrendingUp, Package, Clock, Wallet } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { format, startOfMonth, endOfMonth } from 'date-fns';
+import { supabase } from '@/integrations/supabase/client';
+import { useEffect, useState, useMemo } from 'react';
 
 const PAYMENT_METHODS_CONFIG = [
   { id: 'cash', name: 'Cash', icon: '💵', isRevenue: true },
@@ -19,6 +24,27 @@ function DashboardContent() {
   const { transactions } = useTransactions(currentStore?.id || null);
   const { expenses } = useExpenses(currentStore?.id || null);
   const { stocks } = useStoreStock(currentStore?.id || null);
+  const { stores } = useStores();
+  const { sources } = useIncomeSources();
+  const { allocations, getSourceTotals } = useIncomeAllocations(currentStore?.id || null);
+  
+  // All stores transactions for combined totals
+  const [allTransactions, setAllTransactions] = useState<any[]>([]);
+  
+  useEffect(() => {
+    const fetchAllTransactions = async () => {
+      const { data } = await supabase
+        .from('transactions')
+        .select('*')
+        .order('date', { ascending: false });
+      if (data) setAllTransactions(data);
+    };
+    fetchAllTransactions();
+  }, []);
+  
+  const today = format(new Date(), 'yyyy-MM-dd');
+  const monthStart = format(startOfMonth(new Date()), 'yyyy-MM-dd');
+  const monthEnd = format(endOfMonth(new Date()), 'yyyy-MM-dd');
   
   if (!currentStore) {
     return (
@@ -28,6 +54,7 @@ function DashboardContent() {
     );
   }
 
+  // Current store stats
   const totalSales = transactions.reduce((sum, t) => sum + Number(t.total_amount), 0);
   
   const revenueTransactions = transactions.filter(t => {
@@ -44,6 +71,29 @@ function DashboardContent() {
   
   const lowStockCount = stocks.filter(s => s.current_quantity < s.min_threshold).length;
 
+  // Combined totals from ALL stores
+  const todaysIncomeAllStores = allTransactions
+    .filter(t => t.date?.startsWith(today))
+    .reduce((sum, t) => sum + Number(t.total_amount), 0);
+  
+  const mtdIncomeAllStores = allTransactions
+    .filter(t => {
+      const txDate = t.date?.split('T')[0];
+      return txDate >= monthStart && txDate <= monthEnd;
+    })
+    .reduce((sum, t) => sum + Number(t.total_amount), 0);
+  
+  // Income by store for today
+  const incomeByStore = stores.map(store => {
+    const storeIncome = allTransactions
+      .filter(t => t.store_id === store.id && t.date?.startsWith(today))
+      .reduce((sum, t) => sum + Number(t.total_amount), 0);
+    return { store, income: storeIncome };
+  }).filter(s => s.income > 0);
+
+  // Income by source for the current store
+  const sourceTotals = getSourceTotals(monthStart, monthEnd);
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -55,35 +105,92 @@ function DashboardContent() {
       {/* Stats Grid */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <StatCard
-          title="Total Sales"
-          value={`${totalSales.toLocaleString()} MT`}
-          subtitle={`${transactions.length} transactions`}
-          icon={ShoppingCart}
-          variant="default"
-          trend={{ value: 12.5, isPositive: true }}
-        />
-        <StatCard
-          title="Receita Líquida"
-          value={`${netRevenue.toLocaleString()} MT`}
-          subtitle="Excludes credit & self-consumption"
+          title="Today's Income (All Stores)"
+          value={`${todaysIncomeAllStores.toLocaleString()} MT`}
+          subtitle={`${stores.length} store(s) combined`}
           icon={DollarSign}
           variant="success"
+        />
+        <StatCard
+          title="MTD Income (All Stores)"
+          value={`${mtdIncomeAllStores.toLocaleString()} MT`}
+          subtitle="Month to date total"
+          icon={TrendingUp}
+          variant="default"
         />
         <StatCard
           title="Despesas de Hoje"
           value={`${totalExpenses.toLocaleString()} MT`}
           subtitle={`${stockExpenses.toLocaleString()} MT pré-gasto em estoque`}
-          icon={TrendingUp}
+          icon={ShoppingCart}
           variant={totalExpenses > 0 ? "warning" : "default"}
         />
         <StatCard
-          title="Alertas de Stock "
+          title="Alertas de Stock"
           value={lowStockCount}
           subtitle="Itens abaixo do quantidade mínimo"
           icon={Package}
           variant={lowStockCount > 0 ? "danger" : "success"}
         />
       </div>
+
+      {/* Income by Store */}
+      {incomeByStore.length > 0 && (
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="flex items-center gap-2 text-lg">
+              <DollarSign className="w-5 h-5 text-primary" />
+              Today's Income by Store
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
+              {incomeByStore.map(({ store, income }) => (
+                <div 
+                  key={store.id}
+                  className="flex items-center justify-between p-3 rounded-lg bg-muted/30 border border-border/50"
+                >
+                  <div>
+                    <p className="font-medium text-foreground">{store.name}</p>
+                    <p className="text-xs text-muted-foreground">{store.location}</p>
+                  </div>
+                  <p className="font-bold text-primary">{income.toLocaleString()} MT</p>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Source Breakdown (Current Store) */}
+      {sources.length > 0 && Object.keys(sourceTotals).length > 0 && (
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="flex items-center gap-2 text-lg">
+              <Wallet className="w-5 h-5 text-primary" />
+              Income by Source ({currentStore.name} - This Month)
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
+              {sources.map(source => {
+                const income = sourceTotals[source.id] || 0;
+                return (
+                  <div 
+                    key={source.id}
+                    className="flex items-center justify-between p-3 rounded-lg bg-muted/30 border border-border/50"
+                  >
+                    <div className="flex items-center gap-2">
+                      <Badge variant="secondary">{source.name}</Badge>
+                    </div>
+                    <p className="font-bold text-primary">{income.toLocaleString()} MT</p>
+                  </div>
+                );
+              })}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Main Content Grid */}
       <div className="grid gap-6 lg:grid-cols-3">
