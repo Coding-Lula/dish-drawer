@@ -26,6 +26,10 @@ export interface IncomeAllocation {
   date: string;
   transaction_id: string | null;
   created_at: string;
+  reference_id?: string;
+  reference_type?: string;
+  payment_method?: string;
+  is_auto_allocated?: boolean;
 }
 
 export interface ExpenseParentCategory {
@@ -103,7 +107,7 @@ export function useIncomeSources() {
     setLoading(false);
   }, [toast]);
 
-  const addSource = async (source: { name: string; icon?: string; color?: string }) => {
+  const addSource = async (source: { name: string; icon?: string; color?: string, payment_methods?: string[] }) => {
     const maxOrder = sources.reduce((max, s) => Math.max(max, s.display_order), 0);
     const { data, error } = await supabase
       .from('income_sources')
