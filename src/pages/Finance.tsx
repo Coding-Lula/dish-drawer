@@ -335,6 +335,12 @@ function FinanceContent() {
     return methods;
   }, [revenueByPaymentMethod, sources]);
 
+  const totalExpenses = useMemo(() => {
+    return transactions
+      .filter(t => t.type === 'expense' && t.date >= monthStart && t.date <= monthEnd)
+      .reduce((sum, t) => sum + Number(t.amount), 0);
+  }, [transactions, monthStart, monthEnd]);
+
   // Global Balance (using store revenue, not allocated income)
   const globalBalance = storeRevenue - totalExpenses;
 
@@ -346,12 +352,6 @@ function FinanceContent() {
   const expensesByCategory = useMemo(() => {
     return getExpensesByCategory(monthStart, monthEnd);
   }, [getExpensesByCategory, monthStart, monthEnd]);
-
-  const totalExpenses = useMemo(() => {
-    return transactions
-      .filter(t => t.type === 'expense' && t.date >= monthStart && t.date <= monthEnd)
-      .reduce((sum, t) => sum + Number(t.amount), 0);
-  }, [transactions, monthStart, monthEnd]);
 
   // Source balances
   const sourceBalances = useMemo(() => {
@@ -503,6 +503,14 @@ function FinanceContent() {
     const months = ['January', 'February', 'March', 'April', 'May', 'June', 
                     'July', 'August', 'September', 'October', 'November', 'December'];
     return months[month - 1];
+  };
+
+  const handleAddExpense = () => {
+    // TODO: Implement handleAddExpense
+  };
+
+  const handleTransfer = () => {
+    // TODO: Implement handleTransfer
   };
 
   if (!currentStore) {
