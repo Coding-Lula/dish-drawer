@@ -1,4 +1,4 @@
-import { NavLink, useLocation } from 'react-router-dom';
+import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { cn } from '@/lib/utils';
 import { 
   LayoutDashboard, 
@@ -11,7 +11,8 @@ import {
   ChevronLeft,
   ChevronRight,
   PieChart,
-  Wallet
+  Wallet,
+  LogOut
 } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { 
@@ -21,18 +22,20 @@ import {
   SelectTrigger,
   SelectValue
 } from '@/components/ui/select';
+import { Button } from '@/components/ui/button';
 import { NewStoreModal } from '@/components/modals/NewStoreModal';
 import { useStores, type Store as StoreType } from '@/hooks/useSupabaseData';
+import { useAuth } from '@/hooks/useAuth';
 
-const navItems = [
-  { path: '/', label: 'Dashboard', icon: LayoutDashboard },
-  { path: '/pos', label: 'Point of Sale', icon: ShoppingCart },
-  { path: '/inventory', label: 'Inventory', icon: Package },
-  { path: '/recipes', label: 'Technical Sheets', icon: UtensilsCrossed },
-  { path: '/expenses', label: 'Expenses', icon: Receipt },
-  { path: '/finance', label: 'Finance', icon: Wallet },
-  { path: '/end-of-day', label: 'End of Day', icon: Moon },
-  { path: '/revenue-allocation', label: 'Revenue Allocation', icon: PieChart },
+const allNavItems = [
+  { path: '/', label: 'Dashboard', icon: LayoutDashboard, roles: ['manager', 'cashier'] },
+  { path: '/pos', label: 'Point of Sale', icon: ShoppingCart, roles: ['manager', 'cashier'] },
+  { path: '/inventory', label: 'Inventory', icon: Package, roles: ['manager', 'cashier'] },
+  { path: '/recipes', label: 'Technical Sheets', icon: UtensilsCrossed, roles: ['manager'] },
+  { path: '/expenses', label: 'Expenses', icon: Receipt, roles: ['manager'] },
+  { path: '/finance', label: 'Finance', icon: Wallet, roles: ['manager'] },
+  { path: '/end-of-day', label: 'End of Day', icon: Moon, roles: ['manager'] },
+  { path: '/revenue-allocation', label: 'Revenue Allocation', icon: PieChart, roles: ['manager'] },
 ];
 
 interface SidebarProps {
@@ -43,13 +46,31 @@ interface SidebarProps {
 export function Sidebar({ currentStore, onStoreChange }: SidebarProps) {
   const [collapsed, setCollapsed] = useState(false);
   const location = useLocation();
+  const navigate = useNavigate();
   const { stores, loading, addStore } = useStores();
+  const { user, role, signOut } = useAuth();
+
+  // Filter nav items based on user role
+  const navItems = allNavItems.filter(item => 
+    role && item.roles.includes(role)
+  );
 
   useEffect(() => {
     if (!currentStore && stores.length > 0) {
       onStoreChange(stores[0]);
     }
   }, [stores, currentStore, onStoreChange]);
+
+  const handleSignOut = async () => {
+    await signOut();
+    navigate('/auth');
+  };
+
+  // Get user initials
+  const getInitials = () => {
+    if (!user?.email) return 'U';
+    return user.email.substring(0, 2).toUpperCase();
+  };
 
   return (
     <aside className={cn(
@@ -64,7 +85,7 @@ export function Sidebar({ currentStore, onStoreChange }: SidebarProps) {
               <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center">
                 <Store className="w-5 h-5 text-primary-foreground" />
               </div>
-              <span className="font-semibold text-foreground">POS Control</span>
+              <span className="font-semibold text-foreground">Nexus POS</span>
             </div>
           )}
           <button 
@@ -103,7 +124,7 @@ export function Sidebar({ currentStore, onStoreChange }: SidebarProps) {
                     ))}
                   </SelectContent>
                 </Select>
-                <NewStoreModal onSubmit={addStore} />
+                {role === 'manager' && <NewStoreModal onSubmit={addStore} />}
               </>
             )}
           </div>
@@ -131,18 +152,41 @@ export function Sidebar({ currentStore, onStoreChange }: SidebarProps) {
           })}
         </nav>
 
-        {/* Footer */}
+        {/* Footer with User Info */}
         {!collapsed && (
           <div className="p-4 border-t border-border">
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-3 mb-3">
               <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center">
-                <span className="text-sm font-medium text-primary">MS</span>
+                <span className="text-sm font-medium text-primary">{getInitials()}</span>
               </div>
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-foreground truncate">Maria Santos</p>
-                <p className="text-xs text-muted-foreground">Admin</p>
+                <p className="text-sm font-medium text-foreground truncate">{user?.email}</p>
+                <p className="text-xs text-muted-foreground capitalize">{role}</p>
               </div>
             </div>
+            <Button 
+              variant="outline" 
+              size="sm" 
+              className="w-full" 
+              onClick={handleSignOut}
+            >
+              <LogOut className="w-4 h-4 mr-2" />
+              Sign Out
+            </Button>
+          </div>
+        )}
+
+        {/* Collapsed logout button */}
+        {collapsed && (
+          <div className="p-2 border-t border-border">
+            <Button 
+              variant="ghost" 
+              size="icon" 
+              className="w-full" 
+              onClick={handleSignOut}
+            >
+              <LogOut className="w-4 h-4" />
+            </Button>
           </div>
         )}
       </div>
