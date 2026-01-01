@@ -3,6 +3,7 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { ProtectedRoute } from "@/components/ProtectedRoute";
 import Dashboard from "./pages/Dashboard";
 import POS from "./pages/POS";
 import Inventory from "./pages/Inventory";
@@ -11,6 +12,7 @@ import Expenses from "./pages/Expenses";
 import EndOfDay from "./pages/EndOfDay";
 import RevenueAllocation from "./pages/RevenueAllocation";
 import Finance from "./pages/Finance";
+import Auth from "./pages/Auth";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -22,14 +24,47 @@ const App = () => (
       <Sonner />
       <BrowserRouter>
         <Routes>
-          <Route path="/" element={<Dashboard />} />
-          <Route path="/pos" element={<POS />} />
-          <Route path="/inventory" element={<Inventory />} />
-          <Route path="/recipes" element={<Recipes />} />
-          <Route path="/expenses" element={<Expenses />} />
-          <Route path="/end-of-day" element={<EndOfDay />} />
-          <Route path="/revenue-allocation" element={<RevenueAllocation />} />
-          <Route path="/finance" element={<Finance />} />
+          <Route path="/auth" element={<Auth />} />
+          <Route path="/" element={
+            <ProtectedRoute allowedRoles={['manager', 'cashier']}>
+              <Dashboard />
+            </ProtectedRoute>
+          } />
+          <Route path="/pos" element={
+            <ProtectedRoute allowedRoles={['manager', 'cashier']}>
+              <POS />
+            </ProtectedRoute>
+          } />
+          <Route path="/inventory" element={
+            <ProtectedRoute allowedRoles={['manager', 'cashier']}>
+              <Inventory />
+            </ProtectedRoute>
+          } />
+          <Route path="/recipes" element={
+            <ProtectedRoute allowedRoles={['manager']}>
+              <Recipes />
+            </ProtectedRoute>
+          } />
+          <Route path="/expenses" element={
+            <ProtectedRoute allowedRoles={['manager']}>
+              <Expenses />
+            </ProtectedRoute>
+          } />
+          <Route path="/end-of-day" element={
+            <ProtectedRoute allowedRoles={['manager']}>
+              <EndOfDay />
+            </ProtectedRoute>
+          } />
+          <Route path="/revenue-allocation" element={
+            <ProtectedRoute allowedRoles={['manager']}>
+              <RevenueAllocation />
+            </ProtectedRoute>
+          } />
+          <Route path="/finance" element={
+            <ProtectedRoute allowedRoles={['manager']}>
+              <Finance />
+            </ProtectedRoute>
+          } />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </BrowserRouter>
