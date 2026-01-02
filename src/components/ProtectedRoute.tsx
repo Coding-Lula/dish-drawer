@@ -23,8 +23,8 @@ export function ProtectedRoute({ children, allowedRoles }: ProtectedRouteProps) 
     return <Navigate to="/auth" replace />;
   }
 
-  // If no role yet, wait for it to load
-  if (!role && allowedRoles) {
+  // If allowedRoles specified, wait for role to load
+  if (allowedRoles && !role) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
@@ -34,7 +34,8 @@ export function ProtectedRoute({ children, allowedRoles }: ProtectedRouteProps) 
 
   // Check role access
   if (allowedRoles && role && !allowedRoles.includes(role)) {
-    return <Navigate to="/" replace />;
+    // Redirect cashiers to POS instead of dashboard
+    return <Navigate to="/pos" replace />;
   }
 
   return <>{children}</>;
