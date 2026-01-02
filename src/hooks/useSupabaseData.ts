@@ -224,11 +224,22 @@ export function useIngredients() {
     return true;
   };
 
+  const deleteIngredient = async (id: string) => {
+    const { error } = await supabase.from('ingredients').delete().eq('id', id);
+    if (error) {
+      toast({ title: 'Error deleting ingredient', description: error.message, variant: 'destructive' });
+      return false;
+    }
+    setIngredients(prev => prev.filter(i => i.id !== id));
+    toast({ title: 'Ingredient deleted successfully' });
+    return true;
+  };
+
   useEffect(() => {
     fetchIngredients();
   }, [fetchIngredients]);
 
-  return { ingredients, loading, addIngredient, updateIngredient, refetch: fetchIngredients };
+  return { ingredients, loading, addIngredient, updateIngredient, deleteIngredient, refetch: fetchIngredients };
 }
 
 export function useStoreStock(storeId: string | null) {

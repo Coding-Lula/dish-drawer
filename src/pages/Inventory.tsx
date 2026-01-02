@@ -8,8 +8,19 @@ import { AddStockModal } from '@/components/modals/AddStockModal';
 import { AddInventoryModal } from '@/components/modals/AddInventoryModal';
 import { RestockListModal } from '@/components/modals/RestockListModal';
 import { useStoreStock, useIngredients, useInventoryLogs } from '@/hooks/useSupabaseData';
-import { Package, AlertTriangle, TrendingDown, Flame, Edit2, Check, X } from 'lucide-react';
+import { Package, AlertTriangle, TrendingDown, Flame, Edit2, Check, X, Trash2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import { useState } from 'react';
 
 function InventoryContent() {
@@ -22,7 +33,7 @@ function InventoryContent() {
     loading: stocksLoading, 
     refetch: refetchStocks 
   } = useStoreStock(currentStore?.id || null);
-  const { ingredients, addIngredient, loading: ingredientsLoading } = useIngredients();
+  const { ingredients, addIngredient, deleteIngredient, loading: ingredientsLoading } = useIngredients();
   const { getLastUnitCost, loading: logsLoading } = useInventoryLogs(currentStore?.id || null);
 
   const [filter, setFilter] = useState<'all' | 'low' | 'ok'>('all');
@@ -116,6 +127,11 @@ function InventoryContent() {
     }
     setEditingField(null);
     setEditValue('');
+  };
+
+  const handleDeleteIngredient = async (ingredientId: string) => {
+    await deleteIngredient(ingredientId);
+    refetchStocks();
   };
 
   const handleEditThreshold = (stockId: string, currentValue: number) => {
@@ -355,6 +371,29 @@ function InventoryContent() {
                       Last Cost: {item.lastUnitCost ? `${item.lastUnitCost.toFixed(2)} MT/${item.ingredient?.unit}` : 'N/A'}
                     </p>
                   </div>
+
+                  {/* Delete Button */}
+                  <AlertDialog>
+                    <AlertDialogTrigger asChild>
+                      <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-destructive">
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent>
+                      <AlertDialogHeader>
+                        <AlertDialogTitle>Eliminar Item</AlertDialogTitle>
+                        <AlertDialogDescription>
+                          Tem certeza que deseja eliminar "{item.ingredient?.name}"? Esta ação não pode ser desfeita e irá remover todo o histórico de stock associado.
+                        </AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter>
+                        <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                        <AlertDialogAction onClick={() => handleDeleteIngredient(item.ingredient_id)} className="bg-destructive hover:bg-destructive/90">
+                          Eliminar
+                        </AlertDialogAction>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
                 </div>
               </CardContent>
             </Card>
