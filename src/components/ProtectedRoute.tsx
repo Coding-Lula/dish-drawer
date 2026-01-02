@@ -23,13 +23,10 @@ export function ProtectedRoute({ children, allowedRoles }: ProtectedRouteProps) 
     return <Navigate to="/auth" replace />;
   }
 
-  // If allowedRoles specified, wait for role to load
+  // If allowedRoles specified and no role exists after loading, redirect to auth
   if (allowedRoles && !role) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-background">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
-      </div>
-    );
+    // User is logged in but has no role - redirect to auth
+    return <Navigate to="/auth" replace />;
   }
 
   // Check role access
