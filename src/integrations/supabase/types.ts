@@ -481,12 +481,52 @@ export type Database = {
         }
         Relationships: []
       }
+      ingredient_recipes: {
+        Row: {
+          created_at: string
+          id: string
+          processed_ingredient_id: string
+          quantity_required: number
+          raw_ingredient_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          processed_ingredient_id: string
+          quantity_required: number
+          raw_ingredient_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          processed_ingredient_id?: string
+          quantity_required?: number
+          raw_ingredient_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ingredient_recipes_processed_ingredient_id_fkey"
+            columns: ["processed_ingredient_id"]
+            isOneToOne: false
+            referencedRelation: "ingredients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ingredient_recipes_raw_ingredient_id_fkey"
+            columns: ["raw_ingredient_id"]
+            isOneToOne: false
+            referencedRelation: "ingredients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       ingredients: {
         Row: {
           average_cost: number
           category: string | null
           created_at: string
           id: string
+          is_processed: boolean | null
           name: string
           unit: string
         }
@@ -495,6 +535,7 @@ export type Database = {
           category?: string | null
           created_at?: string
           id?: string
+          is_processed?: boolean | null
           name: string
           unit?: string
         }
@@ -503,6 +544,7 @@ export type Database = {
           category?: string | null
           created_at?: string
           id?: string
+          is_processed?: boolean | null
           name?: string
           unit?: string
         }
@@ -565,6 +607,61 @@ export type Database = {
             columns: ["supplier_id"]
             isOneToOne: false
             referencedRelation: "suppliers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      inventory_transfers: {
+        Row: {
+          created_at: string
+          from_store_id: string
+          id: string
+          ingredient_id: string
+          notes: string | null
+          quantity: number
+          to_store_id: string
+          transferred_at: string
+        }
+        Insert: {
+          created_at?: string
+          from_store_id: string
+          id?: string
+          ingredient_id: string
+          notes?: string | null
+          quantity: number
+          to_store_id: string
+          transferred_at?: string
+        }
+        Update: {
+          created_at?: string
+          from_store_id?: string
+          id?: string
+          ingredient_id?: string
+          notes?: string | null
+          quantity?: number
+          to_store_id?: string
+          transferred_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "inventory_transfers_from_store_id_fkey"
+            columns: ["from_store_id"]
+            isOneToOne: false
+            referencedRelation: "stores"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "inventory_transfers_ingredient_id_fkey"
+            columns: ["ingredient_id"]
+            isOneToOne: false
+            referencedRelation: "ingredients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "inventory_transfers_to_store_id_fkey"
+            columns: ["to_store_id"]
+            isOneToOne: false
+            referencedRelation: "stores"
             referencedColumns: ["id"]
           },
         ]
@@ -648,6 +745,96 @@ export type Database = {
           },
           {
             foreignKeyName: "monthly_budgets_store_id_fkey"
+            columns: ["store_id"]
+            isOneToOne: false
+            referencedRelation: "stores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      production_log_items: {
+        Row: {
+          created_at: string
+          id: string
+          production_log_id: string
+          quantity_used: number
+          raw_ingredient_id: string
+          unit_cost: number
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          production_log_id: string
+          quantity_used: number
+          raw_ingredient_id: string
+          unit_cost: number
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          production_log_id?: string
+          quantity_used?: number
+          raw_ingredient_id?: string
+          unit_cost?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "production_log_items_production_log_id_fkey"
+            columns: ["production_log_id"]
+            isOneToOne: false
+            referencedRelation: "production_logs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "production_log_items_raw_ingredient_id_fkey"
+            columns: ["raw_ingredient_id"]
+            isOneToOne: false
+            referencedRelation: "ingredients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      production_logs: {
+        Row: {
+          created_at: string
+          id: string
+          processed_ingredient_id: string
+          produced_at: string
+          quantity_produced: number
+          store_id: string
+          total_cost: number
+          unit_cost: number
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          processed_ingredient_id: string
+          produced_at?: string
+          quantity_produced: number
+          store_id: string
+          total_cost: number
+          unit_cost: number
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          processed_ingredient_id?: string
+          produced_at?: string
+          quantity_produced?: number
+          store_id?: string
+          total_cost?: number
+          unit_cost?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "production_logs_processed_ingredient_id_fkey"
+            columns: ["processed_ingredient_id"]
+            isOneToOne: false
+            referencedRelation: "ingredients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "production_logs_store_id_fkey"
             columns: ["store_id"]
             isOneToOne: false
             referencedRelation: "stores"

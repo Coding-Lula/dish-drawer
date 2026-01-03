@@ -12,7 +12,8 @@ import {
   ChevronRight,
   PieChart,
   Wallet,
-  LogOut
+  LogOut,
+  Trash2
 } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { 
@@ -26,6 +27,17 @@ import { Button } from '@/components/ui/button';
 import { NewStoreModal } from '@/components/modals/NewStoreModal';
 import { useStores, type Store as StoreType } from '@/hooks/useSupabaseData';
 import { useAuth } from '@/hooks/useAuth';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 
 const allNavItems = [
   { path: '/', label: 'Dashboard', icon: LayoutDashboard, roles: ['manager', 'cashier'] },
@@ -47,8 +59,9 @@ export function Sidebar({ currentStore, onStoreChange }: SidebarProps) {
   const [collapsed, setCollapsed] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
-  const { stores, loading, addStore } = useStores();
+  const { stores, loading, addStore, deleteStore } = useStores();
   const { user, role, signOut } = useAuth();
+  const [storeToDelete, setStoreToDelete] = useState<StoreType | null>(null);
 
   // Filter nav items based on user role
   const navItems = allNavItems.filter(item => 
@@ -64,6 +77,19 @@ export function Sidebar({ currentStore, onStoreChange }: SidebarProps) {
   const handleSignOut = async () => {
     await signOut();
     navigate('/auth');
+  };
+
+  const handleDeleteStore = async () => {
+    if (!storeToDelete) return;
+    const success = await deleteStore(storeToDelete.id);
+    if (success) {
+      setStoreToDelete(null);
+      // Switch to another store if available
+      if (currentStore?.id === storeToDelete.id && stores.length > 1) {
+        const otherStore = stores.find(s => s.id !== storeToDelete.id);
+        if (otherStore) onStoreChange(otherStore);
+      }
+    }
   };
 
   // Get user initials
@@ -124,7 +150,40 @@ export function Sidebar({ currentStore, onStoreChange }: SidebarProps) {
                     ))}
                   </SelectContent>
                 </Select>
-                {role === 'manager' && <NewStoreModal onSubmit={addStore} />}
+                {role === 'manager' && (
+                  <div className="flex gap-2 mt-2">
+                    <NewStoreModal onSubmit={addStore} />
+                    {stores.length > 1 && currentStore && (
+                      <AlertDialog open={!!storeToDelete} onOpenChange={(open) => !open && setStoreToDelete(null)}>
+                        <AlertDialogTrigger asChild>
+                          <Button 
+                            variant="outline" 
+                            size="sm"
+                            className="text-destructive hover:text-destructive"
+                            onClick={() => setStoreToDelete(currentStore)}
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent>
+                          <AlertDialogHeader>
+                            <AlertDialogTitle>Eliminar Loja</AlertDialogTitle>
+                            <AlertDialogDescription>
+                              Tem certeza que deseja eliminar "{storeToDelete?.name}"? 
+                              Esta ação irá remover todos os dados associados (transações, stock, etc.) e não pode ser desfeita.
+                            </AlertDialogDescription>
+                          </AlertDialogHeader>
+                          <AlertDialogFooter>
+                            <AlertDialogCancel onClick={() => setStoreToDelete(null)}>Cancelar</AlertDialogCancel>
+                            <AlertDialogAction onClick={handleDeleteStore} className="bg-destructive hover:bg-destructive/90">
+                              Eliminar Loja
+                            </AlertDialogAction>
+                          </AlertDialogFooter>
+                        </AlertDialogContent>
+                      </AlertDialog>
+                    )}
+                  </div>
+                )}
               </>
             )}
           </div>

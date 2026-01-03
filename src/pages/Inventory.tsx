@@ -4,11 +4,24 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { Input } from '@/components/ui/input';
+import { Switch } from '@/components/ui/switch';
+import { Label } from '@/components/ui/label';
 import { AddStockModal } from '@/components/modals/AddStockModal';
 import { AddInventoryModal } from '@/components/modals/AddInventoryModal';
 import { RestockListModal } from '@/components/modals/RestockListModal';
-import { useStoreStock, useIngredients, useInventoryLogs } from '@/hooks/useSupabaseData';
-import { Package, AlertTriangle, TrendingDown, Flame, Edit2, Check, X, Trash2 } from 'lucide-react';
+import { TransferInventoryModal } from '@/components/modals/TransferInventoryModal';
+import { ProcessBatchModal } from '@/components/modals/ProcessBatchModal';
+import { IngredientRecipeModal } from '@/components/modals/IngredientRecipeModal';
+import { 
+  useStoreStock, 
+  useIngredients, 
+  useInventoryLogs, 
+  useStores,
+  useInventoryTransfers,
+  useIngredientRecipes,
+  useProductionLogs
+} from '@/hooks/useSupabaseData';
+import { Package, AlertTriangle, TrendingDown, Flame, Edit2, Check, X, Trash2, Factory } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import {
   AlertDialog,
@@ -22,9 +35,13 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { useState } from 'react';
+import { supabase } from '@/integrations/supabase/client';
+import { useToast } from '@/hooks/use-toast';
 
 function InventoryContent() {
+  const { toast } = useToast();
   const { currentStore } = useCurrentStore();
+  const { stores } = useStores();
   const { 
     stocks, 
     addStock, 
@@ -33,10 +50,13 @@ function InventoryContent() {
     loading: stocksLoading, 
     refetch: refetchStocks 
   } = useStoreStock(currentStore?.id || null);
-  const { ingredients, addIngredient, deleteIngredient, loading: ingredientsLoading } = useIngredients();
+  const { ingredients, addIngredient, deleteIngredient, updateIngredient, loading: ingredientsLoading, refetch: refetchIngredients } = useIngredients();
   const { getLastUnitCost, loading: logsLoading } = useInventoryLogs(currentStore?.id || null);
+  const { createTransfer } = useInventoryTransfers();
+  const { ingredientRecipes, saveIngredientRecipe, refetch: refetchRecipes } = useIngredientRecipes();
+  const { processBatch, refetch: refetchProduction } = useProductionLogs(currentStore?.id || null);
 
-  const [filter, setFilter] = useState<'all' | 'low' | 'ok'>('all');
+  const [filter, setFilter] = useState<'all' | 'low' | 'ok' | 'processed'>('all');
   const [editingField, setEditingField] = useState<{ id: string; field: 'min' | 'target' } | null>(null);
   const [editValue, setEditValue] = useState('');
   const [editingThreshold, setEditingThreshold] = useState<string | null>(null);
@@ -80,11 +100,13 @@ function InventoryContent() {
 
   const filteredItems = inventoryItems.filter(item => {
     if (filter === 'low') return item.isLow;
-    if (filter === 'ok') return !item.isLow;
+    if (filter === 'ok') return !item.isLow && !item.ingredient?.is_processed;
+    if (filter === 'processed') return item.ingredient?.is_processed;
     return true;
   });
 
   const lowStockCount = inventoryItems.filter(s => s.isLow).length;
+  const processedCount = inventoryItems.filter(s => s.ingredient?.is_processed).length;
   const restockList = inventoryItems.filter(s => s.amountToBuy > 0);
   const restockItems = restockList.map(item => ({
     ingredient_id: item.ingredient_id,
@@ -96,6 +118,39 @@ function InventoryContent() {
     lastUnitCost: item.lastUnitCost,
     estimatedCost: item.estimatedCost
   }));
+
+  const handleTransfer = async (fromStoreId: string, toStoreId: string, ingredientId: string, quantity: number, notes?: string) => {
+    const result = await createTransfer(fromStoreId, toStoreId, ingredientId, quantity, notes);
+    if (result) {
+      refetchStocks();
+    }
+    return result;
+  };
+
+  const handleProcessBatch = async (processedIngredientId: string, quantity: number) => {
+    const result = await processBatch(processedIngredientId, quantity, ingredientRecipes, ingredients, stocks);
+    if (result) {
+      refetchStocks();
+      refetchIngredients();
+      refetchProduction();
+    }
+    return result;
+  };
+
+  const handleToggleProcessed = async (ingredientId: string, isProcessed: boolean) => {
+    const success = await updateIngredient(ingredientId, { is_processed: isProcessed });
+    if (success) {
+      refetchIngredients();
+    }
+  };
+
+  const handleSaveIngredientRecipe = async (processedIngredientId: string, rawMaterials: { raw_ingredient_id: string; quantity_required: number }[]) => {
+    const success = await saveIngredientRecipe(processedIngredientId, rawMaterials);
+    if (success) {
+      refetchRecipes();
+    }
+    return success;
+  };
 
   const handleAddStock = async (ingredientId: string, quantity: number, totalCost: number) => {
     const result = await addStock(ingredientId, quantity, totalCost);
@@ -187,15 +242,30 @@ function InventoryContent() {
           <h1 className="text-3xl font-bold text-foreground">Inventário</h1>
           <p className="text-muted-foreground">{currentStore?.name} • Nível de Stock</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap">
           <AddInventoryModal onSubmit={handleAddIngredient} />
           <AddStockModal ingredients={ingredients} onSubmit={handleAddStock} />
           <RestockListModal storeName={currentStore?.name || ''} restockItems={restockItems} />
+          {stores.length > 1 && (
+            <TransferInventoryModal
+              stores={stores}
+              ingredients={ingredients}
+              currentStoreId={currentStore?.id || ''}
+              stocks={stocks}
+              onTransfer={handleTransfer}
+            />
+          )}
+          <ProcessBatchModal
+            ingredients={ingredients}
+            ingredientRecipes={ingredientRecipes}
+            stocks={stocks}
+            onProcess={handleProcessBatch}
+          />
         </div>
       </div>
 
       {/* Summary Cards */}
-      <div className="grid gap-4 md:grid-cols-3">
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <Card>
           <CardContent className="p-4 flex items-center gap-4">
             <div className="p-3 rounded-lg bg-primary/20">
@@ -229,10 +299,21 @@ function InventoryContent() {
             </div>
           </CardContent>
         </Card>
+        <Card>
+          <CardContent className="p-4 flex items-center gap-4">
+            <div className="p-3 rounded-lg bg-primary/20">
+              <Factory className="w-6 h-6 text-primary" />
+            </div>
+            <div>
+              <p className="text-sm text-muted-foreground">Processados</p>
+              <p className="text-2xl font-bold text-foreground">{processedCount}</p>
+            </div>
+          </CardContent>
+        </Card>
       </div>
 
       {/* Filter Tabs */}
-      <div className="flex gap-2">
+      <div className="flex gap-2 flex-wrap">
         <Button variant={filter === 'all' ? "default" : "outline"} size="sm" onClick={() => setFilter('all')}>
           Todos Itens ({inventoryItems.length})
         </Button>
@@ -243,7 +324,10 @@ function InventoryContent() {
           Stock Baixo ({lowStockCount})
         </Button>
         <Button variant={filter === 'ok' ? "default" : "outline"} size="sm" onClick={() => setFilter('ok')}>
-          OK ({inventoryItems.length - lowStockCount})
+          OK ({inventoryItems.length - lowStockCount - processedCount})
+        </Button>
+        <Button variant={filter === 'processed' ? "default" : "outline"} size="sm" onClick={() => setFilter('processed')}>
+          <Factory className="w-3 h-3 mr-1" /> Processados ({processedCount})
         </Button>
       </div>
 
@@ -262,15 +346,41 @@ function InventoryContent() {
               <CardContent className="p-4">
                 <div className="flex items-center gap-4">
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-1">
+                    <div className="flex items-center gap-2 mb-1 flex-wrap">
                       <h3 className="font-semibold text-foreground">{item.ingredient?.name}</h3>
                       <Badge variant="outline" className="text-xs">{item.ingredient?.category}</Badge>
+                      {item.ingredient?.is_processed && (
+                        <Badge className="gap-1 bg-primary/20 text-primary border-primary/30">
+                          <Factory className="w-3 h-3" />Processado
+                        </Badge>
+                      )}
                       {item.isLow && (
                         <Badge variant="destructive" className="gap-1"><Flame className="w-3 h-3" />Stock Baixo</Badge>
                       )}
                       {!item.hasStock && <Badge variant="secondary" className="text-xs">No stock entry</Badge>}
                     </div>
-                    <div className="flex items-center gap-3 mt-2">
+                    {/* Toggle for Processed Ingredient and Sub-Recipe */}
+                    <div className="flex items-center gap-4 mt-1 mb-2">
+                      <div className="flex items-center gap-2">
+                        <Switch
+                          id={`processed-${item.id}`}
+                          checked={item.ingredient?.is_processed || false}
+                          onCheckedChange={(checked) => handleToggleProcessed(item.ingredient_id, checked)}
+                        />
+                        <Label htmlFor={`processed-${item.id}`} className="text-xs text-muted-foreground cursor-pointer">
+                          Ingrediente Processado
+                        </Label>
+                      </div>
+                      {item.ingredient?.is_processed && item.ingredient && (
+                        <IngredientRecipeModal
+                          ingredient={item.ingredient}
+                          allIngredients={ingredients}
+                          existingRecipes={ingredientRecipes}
+                          onSave={(rawMaterials) => handleSaveIngredientRecipe(item.ingredient_id, rawMaterials)}
+                        />
+                      )}
+                    </div>
+                    <div className="flex items-center gap-3">
                       <Progress value={Math.min(100, item.percentageOfTarget)} className={cn("h-2 flex-1", item.isLow && "[&>div]:bg-destructive")} />
                       <span className="text-sm text-muted-foreground w-12 text-right">{Math.round(item.percentageOfTarget)}%</span>
                     </div>
