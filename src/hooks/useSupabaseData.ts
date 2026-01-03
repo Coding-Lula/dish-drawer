@@ -17,6 +17,37 @@ export interface Ingredient {
   unit: string;
   average_cost: number;
   category: string | null;
+  is_processed: boolean;
+  created_at: string;
+}
+
+export interface IngredientRecipe {
+  id: string;
+  processed_ingredient_id: string;
+  raw_ingredient_id: string;
+  quantity_required: number;
+  created_at: string;
+}
+
+export interface InventoryTransfer {
+  id: string;
+  from_store_id: string;
+  to_store_id: string;
+  ingredient_id: string;
+  quantity: number;
+  notes: string | null;
+  transferred_at: string;
+  created_at: string;
+}
+
+export interface ProductionLog {
+  id: string;
+  store_id: string;
+  processed_ingredient_id: string;
+  quantity_produced: number;
+  unit_cost: number;
+  total_cost: number;
+  produced_at: string;
   created_at: string;
 }
 
@@ -181,11 +212,22 @@ export function useStores() {
     return data;
   };
 
+  const deleteStore = async (storeId: string) => {
+    const { error } = await supabase.from('stores').delete().eq('id', storeId);
+    if (error) {
+      toast({ title: 'Error deleting store', description: error.message, variant: 'destructive' });
+      return false;
+    }
+    setStores(prev => prev.filter(s => s.id !== storeId));
+    toast({ title: 'Store deleted successfully' });
+    return true;
+  };
+
   useEffect(() => {
     fetchStores();
   }, [fetchStores]);
 
-  return { stores, loading, addStore, refetch: fetchStores };
+  return { stores, loading, addStore, deleteStore, refetch: fetchStores };
 }
 
 export function useIngredients() {
@@ -1080,4 +1122,363 @@ export function useRestaurantTablesManagement(storeId: string | null) {
   }, [fetchTables]);
 
   return { tables, loading, addTable, deleteTable, initializeTables, refetch: fetchTables };
+}
+
+// Inventory Transfers hook
+export function useInventoryTransfers() {
+  const [transfers, setTransfers] = useState<InventoryTransfer[]>([]);
+  const [loading, setLoading] = useState(true);
+  const { toast } = useToast();
+
+  const fetchTransfers = useCallback(async () => {
+    const { data, error } = await supabase
+      .from('inventory_transfers')
+      .select('*')
+      .order('transferred_at', { ascending: false });
+    if (error) {
+      toast({ title: 'Error fetching transfers', description: error.message, variant: 'destructive' });
+    } else {
+      setTransfers(data || []);
+    }
+    setLoading(false);
+  }, [toast]);
+
+  const createTransfer = async (
+    fromStoreId: string,
+    toStoreId: string,
+    ingredientId: string,
+    quantity: number,
+    notes?: string
+  ) => {
+    // First, check if source store has enough stock
+    const { data: sourceStock, error: sourceError } = await supabase
+      .from('store_stock')
+      .select('*')
+      .eq('store_id', fromStoreId)
+      .eq('ingredient_id', ingredientId)
+      .maybeSingle();
+
+    if (sourceError) {
+      toast({ title: 'Error checking source stock', description: sourceError.message, variant: 'destructive' });
+      return null;
+    }
+
+    if (!sourceStock || sourceStock.current_quantity < quantity) {
+      toast({ 
+        title: 'Insufficient stock', 
+        description: `Source store only has ${sourceStock?.current_quantity || 0} units available.`, 
+        variant: 'destructive' 
+      });
+      return null;
+    }
+
+    // Deduct from source store
+    const { error: deductError } = await supabase
+      .from('store_stock')
+      .update({ current_quantity: sourceStock.current_quantity - quantity })
+      .eq('id', sourceStock.id);
+
+    if (deductError) {
+      toast({ title: 'Error deducting stock', description: deductError.message, variant: 'destructive' });
+      return null;
+    }
+
+    // Add to destination store
+    const { data: destStock, error: destError } = await supabase
+      .from('store_stock')
+      .select('*')
+      .eq('store_id', toStoreId)
+      .eq('ingredient_id', ingredientId)
+      .maybeSingle();
+
+    if (destError) {
+      toast({ title: 'Error checking destination stock', description: destError.message, variant: 'destructive' });
+      return null;
+    }
+
+    if (destStock) {
+      // Update existing stock
+      await supabase
+        .from('store_stock')
+        .update({ current_quantity: destStock.current_quantity + quantity })
+        .eq('id', destStock.id);
+    } else {
+      // Create new stock entry
+      await supabase
+        .from('store_stock')
+        .insert({
+          store_id: toStoreId,
+          ingredient_id: ingredientId,
+          current_quantity: quantity,
+          min_threshold: 10,
+          target_stock: 100
+        });
+    }
+
+    // Log inventory changes
+    await supabase.from('inventory_logs').insert([
+      {
+        ingredient_id: ingredientId,
+        store_id: fromStoreId,
+        change_amount: -quantity,
+        reason: 'transfer_out'
+      },
+      {
+        ingredient_id: ingredientId,
+        store_id: toStoreId,
+        change_amount: quantity,
+        reason: 'transfer_in'
+      }
+    ]);
+
+    // Create transfer record
+    const { data: transfer, error: transferError } = await supabase
+      .from('inventory_transfers')
+      .insert({
+        from_store_id: fromStoreId,
+        to_store_id: toStoreId,
+        ingredient_id: ingredientId,
+        quantity,
+        notes
+      })
+      .select()
+      .single();
+
+    if (transferError) {
+      toast({ title: 'Error recording transfer', description: transferError.message, variant: 'destructive' });
+      return null;
+    }
+
+    setTransfers(prev => [transfer, ...prev]);
+    toast({ title: 'Transfer completed successfully' });
+    return transfer;
+  };
+
+  useEffect(() => {
+    fetchTransfers();
+  }, [fetchTransfers]);
+
+  return { transfers, loading, createTransfer, refetch: fetchTransfers };
+}
+
+// Ingredient Recipes (Sub-recipes) hook
+export function useIngredientRecipes() {
+  const [ingredientRecipes, setIngredientRecipes] = useState<IngredientRecipe[]>([]);
+  const [loading, setLoading] = useState(true);
+  const { toast } = useToast();
+
+  const fetchIngredientRecipes = useCallback(async () => {
+    const { data, error } = await supabase
+      .from('ingredient_recipes')
+      .select('*');
+    if (error) {
+      toast({ title: 'Error fetching ingredient recipes', description: error.message, variant: 'destructive' });
+    } else {
+      setIngredientRecipes(data || []);
+    }
+    setLoading(false);
+  }, [toast]);
+
+  const saveIngredientRecipe = async (
+    processedIngredientId: string, 
+    rawMaterials: { raw_ingredient_id: string; quantity_required: number }[]
+  ) => {
+    // Delete existing recipes
+    await supabase
+      .from('ingredient_recipes')
+      .delete()
+      .eq('processed_ingredient_id', processedIngredientId);
+
+    if (rawMaterials.length > 0) {
+      const { error } = await supabase.from('ingredient_recipes').insert(
+        rawMaterials.map(item => ({
+          processed_ingredient_id: processedIngredientId,
+          raw_ingredient_id: item.raw_ingredient_id,
+          quantity_required: item.quantity_required
+        }))
+      );
+
+      if (error) {
+        toast({ title: 'Error saving ingredient recipe', description: error.message, variant: 'destructive' });
+        return false;
+      }
+    }
+
+    await fetchIngredientRecipes();
+    toast({ title: 'Sub-recipe saved successfully' });
+    return true;
+  };
+
+  useEffect(() => {
+    fetchIngredientRecipes();
+  }, [fetchIngredientRecipes]);
+
+  return { ingredientRecipes, loading, saveIngredientRecipe, refetch: fetchIngredientRecipes };
+}
+
+// Production Logs hook
+export function useProductionLogs(storeId: string | null) {
+  const [productionLogs, setProductionLogs] = useState<ProductionLog[]>([]);
+  const [loading, setLoading] = useState(true);
+  const { toast } = useToast();
+
+  const fetchProductionLogs = useCallback(async () => {
+    if (!storeId) return;
+    const { data, error } = await supabase
+      .from('production_logs')
+      .select('*')
+      .eq('store_id', storeId)
+      .order('produced_at', { ascending: false });
+    if (error) {
+      toast({ title: 'Error fetching production logs', description: error.message, variant: 'destructive' });
+    } else {
+      setProductionLogs(data || []);
+    }
+    setLoading(false);
+  }, [storeId, toast]);
+
+  const processBatch = async (
+    processedIngredientId: string,
+    quantityToProduce: number,
+    ingredientRecipes: IngredientRecipe[],
+    ingredients: Ingredient[],
+    stocks: StoreStock[]
+  ) => {
+    if (!storeId) return null;
+
+    // Get the sub-recipe for this processed ingredient
+    const subRecipe = ingredientRecipes.filter(r => r.processed_ingredient_id === processedIngredientId);
+    
+    if (subRecipe.length === 0) {
+      toast({ 
+        title: 'No recipe found', 
+        description: 'This ingredient has no sub-recipe defined.', 
+        variant: 'destructive' 
+      });
+      return null;
+    }
+
+    // Calculate required raw materials and check availability
+    let totalCost = 0;
+    const rawMaterialsNeeded: { ingredientId: string; quantity: number; cost: number; stockId: string }[] = [];
+
+    for (const recipe of subRecipe) {
+      const requiredQty = recipe.quantity_required * quantityToProduce;
+      const stock = stocks.find(s => s.ingredient_id === recipe.raw_ingredient_id);
+      const ingredient = ingredients.find(i => i.id === recipe.raw_ingredient_id);
+
+      if (!stock || stock.current_quantity < requiredQty) {
+        toast({ 
+          title: 'Insufficient raw materials', 
+          description: `Not enough ${ingredient?.name || 'ingredient'} in stock. Need ${requiredQty}, have ${stock?.current_quantity || 0}.`, 
+          variant: 'destructive' 
+        });
+        return null;
+      }
+
+      const cost = requiredQty * (ingredient?.average_cost || 0);
+      totalCost += cost;
+      rawMaterialsNeeded.push({ 
+        ingredientId: recipe.raw_ingredient_id, 
+        quantity: requiredQty, 
+        cost,
+        stockId: stock.id
+      });
+    }
+
+    // Deduct raw materials from stock
+    for (const material of rawMaterialsNeeded) {
+      const stock = stocks.find(s => s.id === material.stockId);
+      if (stock) {
+        await supabase
+          .from('store_stock')
+          .update({ current_quantity: stock.current_quantity - material.quantity })
+          .eq('id', material.stockId);
+      }
+    }
+
+    // Add processed ingredient to stock
+    const processedStock = stocks.find(s => s.ingredient_id === processedIngredientId);
+    if (processedStock) {
+      await supabase
+        .from('store_stock')
+        .update({ current_quantity: processedStock.current_quantity + quantityToProduce })
+        .eq('id', processedStock.id);
+    } else {
+      await supabase
+        .from('store_stock')
+        .insert({
+          store_id: storeId,
+          ingredient_id: processedIngredientId,
+          current_quantity: quantityToProduce,
+          min_threshold: 10,
+          target_stock: 100
+        });
+    }
+
+    // Update average cost of processed ingredient (WAC)
+    const processedIngredient = ingredients.find(i => i.id === processedIngredientId);
+    const oldQty = processedStock?.current_quantity || 0;
+    const oldCost = processedIngredient?.average_cost || 0;
+    const unitCost = quantityToProduce > 0 ? totalCost / quantityToProduce : 0;
+    const newQty = oldQty + quantityToProduce;
+    const newWAC = newQty > 0 ? ((oldQty * oldCost) + (quantityToProduce * unitCost)) / newQty : unitCost;
+    
+    await supabase.from('ingredients').update({ average_cost: newWAC }).eq('id', processedIngredientId);
+
+    // Create production log
+    const { data: log, error } = await supabase
+      .from('production_logs')
+      .insert({
+        store_id: storeId,
+        processed_ingredient_id: processedIngredientId,
+        quantity_produced: quantityToProduce,
+        unit_cost: unitCost,
+        total_cost: totalCost
+      })
+      .select()
+      .single();
+
+    if (error) {
+      toast({ title: 'Error logging production', description: error.message, variant: 'destructive' });
+      return null;
+    }
+
+    // Log production items
+    await supabase.from('production_log_items').insert(
+      rawMaterialsNeeded.map(m => ({
+        production_log_id: log.id,
+        raw_ingredient_id: m.ingredientId,
+        quantity_used: m.quantity,
+        unit_cost: (ingredients.find(i => i.id === m.ingredientId)?.average_cost || 0)
+      }))
+    );
+
+    // Log inventory changes
+    const inventoryLogs = [
+      ...rawMaterialsNeeded.map(m => ({
+        ingredient_id: m.ingredientId,
+        store_id: storeId,
+        change_amount: -m.quantity,
+        reason: 'production_consumed'
+      })),
+      {
+        ingredient_id: processedIngredientId,
+        store_id: storeId,
+        change_amount: quantityToProduce,
+        reason: 'production_output'
+      }
+    ];
+    await supabase.from('inventory_logs').insert(inventoryLogs);
+
+    setProductionLogs(prev => [log, ...prev]);
+    toast({ title: 'Batch processed successfully', description: `Produced ${quantityToProduce} units at ${unitCost.toFixed(2)} MT/unit` });
+    return log;
+  };
+
+  useEffect(() => {
+    fetchProductionLogs();
+  }, [fetchProductionLogs]);
+
+  return { productionLogs, loading, processBatch, refetch: fetchProductionLogs };
 }
