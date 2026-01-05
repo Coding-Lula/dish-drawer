@@ -27,10 +27,26 @@ export function MainLayout({ children }: MainLayoutProps) {
   const { stores } = useStores();
 
   useEffect(() => {
-    if (!currentStore && stores.length > 0) {
-      setCurrentStore(stores[0]);
+    if (stores.length > 0) {
+      const storedStoreId = localStorage.getItem('currentStoreId');
+      if (storedStoreId) {
+        const storedStore = stores.find(s => s.id === storedStoreId);
+        if (storedStore) {
+          setCurrentStore(storedStore);
+          return;
+        }
+      }
+      if (!currentStore) {
+        setCurrentStore(stores[0]);
+      }
     }
   }, [stores, currentStore]);
+
+  useEffect(() => {
+    if (currentStore) {
+      localStorage.setItem('currentStoreId', currentStore.id);
+    }
+  }, [currentStore]);
 
   return (
     <CurrentStoreContext.Provider value={{ currentStore, setCurrentStore }}>

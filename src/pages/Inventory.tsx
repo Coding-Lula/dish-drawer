@@ -6,22 +6,21 @@ import { Progress } from '@/components/ui/progress';
 import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
-import { AddStockModal } from '@/components/modals/AddStockModal';
+import { MultiAddStockModal } from '@/components/modals/MultiAddStockModal';
 import { AddInventoryModal } from '@/components/modals/AddInventoryModal';
-import { RestockListModal } from '@/components/modals/RestockListModal';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { TransferInventoryModal } from '@/components/modals/TransferInventoryModal';
 import { ProcessBatchModal } from '@/components/modals/ProcessBatchModal';
-import { IngredientRecipeModal } from '@/components/modals/IngredientRecipeModal';
 import { 
   useStoreStock, 
   useIngredients, 
   useInventoryLogs, 
   useStores,
   useInventoryTransfers,
-  useIngredientRecipes,
+  useSubRecipes,
   useProductionLogs
 } from '@/hooks/useSupabaseData';
-import { Package, AlertTriangle, TrendingDown, Flame, Edit2, Check, X, Trash2, Factory } from 'lucide-react';
+import { Package, AlertTriangle, TrendingDown, Flame, Edit2, Check, X, Trash2, Factory, ChevronDown } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import {
   AlertDialog,
@@ -35,16 +34,13 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { useState } from 'react';
-import { supabase } from '@/integrations/supabase/client';
-import { useToast } from '@/hooks/use-toast';
 
 function InventoryContent() {
-  const { toast } = useToast();
   const { currentStore } = useCurrentStore();
   const { stores } = useStores();
   const { 
     stocks, 
-    addStock, 
+    addMultipleStock,
     updateMinThreshold, 
     updateTargetStock,
     loading: stocksLoading, 
@@ -53,7 +49,7 @@ function InventoryContent() {
   const { ingredients, addIngredient, deleteIngredient, updateIngredient, loading: ingredientsLoading, refetch: refetchIngredients } = useIngredients();
   const { getLastUnitCost, loading: logsLoading } = useInventoryLogs(currentStore?.id || null);
   const { createTransfer } = useInventoryTransfers();
-  const { ingredientRecipes, saveIngredientRecipe, refetch: refetchRecipes } = useIngredientRecipes();
+  const { subRecipes, refetch: refetchSubRecipes } = useSubRecipes();
   const { processBatch, refetch: refetchProduction } = useProductionLogs(currentStore?.id || null);
 
   const [filter, setFilter] = useState<'all' | 'low' | 'ok' | 'processed'>('all');
@@ -66,7 +62,6 @@ function InventoryContent() {
 
   const loading = stocksLoading || ingredientsLoading || logsLoading;
 
-  // Merge ingredients with their stock data
   const inventoryItems = ingredients.map(ingredient => {
     const stock = stocks.find(s => s.ingredient_id === ingredient.id);
     const currentQuantity = stock?.current_quantity ?? 0;
@@ -107,17 +102,39 @@ function InventoryContent() {
 
   const lowStockCount = inventoryItems.filter(s => s.isLow).length;
   const processedCount = inventoryItems.filter(s => s.ingredient?.is_processed).length;
-  const restockList = inventoryItems.filter(s => s.amountToBuy > 0);
-  const restockItems = restockList.map(item => ({
-    ingredient_id: item.ingredient_id,
-    ingredientName: item.ingredient?.name || '',
-    unit: item.ingredient?.unit || '',
-    currentQuantity: item.current_quantity,
-    targetStock: item.target_stock,
-    amountToBuy: item.amountToBuy,
-    lastUnitCost: item.lastUnitCost,
-    estimatedCost: item.estimatedCost
-  }));
+
+  const handleDownloadList = (type: 'entire' | 'low') => {
+    const listToDownload = type === 'entire'
+      ? inventoryItems.filter(item => item.amountToBuy > 0)
+      : inventoryItems.filter(item => item.isLow);
+
+    const totalEstimatedCost = listToDownload.reduce((sum, item) => sum + (item.estimatedCost || 0), 0);
+
+    const lines = [
+      `RESTOCK LIST (${type.toUpperCase()}) - ${currentStore?.name}`,
+      `Date: ${new Date().toLocaleDateString()}`,
+      ``,
+      `${'Item'.padEnd(25)} | ${'Required'.padEnd(12)} | ${'Unit Cost'.padEnd(12)} | Est. Cost`,
+      '─'.repeat(70),
+      ...listToDownload.map(item => {
+        const name = item.ingredient.name.substring(0, 24).padEnd(25);
+        const required = `${item.amountToBuy} ${item.ingredient.unit}`.padEnd(12);
+        const unitCost = item.lastUnitCost ? `${item.lastUnitCost.toFixed(2)} MT`.padEnd(12) : 'N/A'.padEnd(12);
+        const estCost = item.estimatedCost ? `${item.estimatedCost.toFixed(2)} MT` : 'N/A';
+        return `${name} | ${required} | ${unitCost} | ${estCost}`;
+      }),
+      '─'.repeat(70),
+      `${'TOTAL ESTIMATED COST:'.padEnd(54)} ${totalEstimatedCost.toLocaleString()} MT`
+    ];
+
+    const blob = new Blob([lines.join('\n')], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `restock-list-${type}-${currentStore?.name?.toLowerCase().replace(/\s/g, '-')}-${Date.now()}.txt`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
 
   const handleTransfer = async (fromStoreId: string, toStoreId: string, ingredientId: string, quantity: number, notes?: string) => {
     const result = await createTransfer(fromStoreId, toStoreId, ingredientId, quantity, notes);
@@ -127,8 +144,8 @@ function InventoryContent() {
     return result;
   };
 
-  const handleProcessBatch = async (processedIngredientId: string, quantity: number) => {
-    const result = await processBatch(processedIngredientId, quantity, ingredientRecipes, ingredients, stocks);
+  const handleProcessBatch = async (subRecipeId: string, quantity: number) => {
+    const result = await processBatch(subRecipeId, quantity, ingredients, stocks);
     if (result) {
       refetchStocks();
       refetchIngredients();
@@ -144,16 +161,12 @@ function InventoryContent() {
     }
   };
 
-  const handleSaveIngredientRecipe = async (processedIngredientId: string, rawMaterials: { raw_ingredient_id: string; quantity_required: number }[]) => {
-    const success = await saveIngredientRecipe(processedIngredientId, rawMaterials);
-    if (success) {
-      refetchRecipes();
+  const handleAddMultipleStock = async (items: { ingredientId: string; quantity: number; totalCost: number }[]) => {
+    const result = await addMultipleStock(items);
+    if (result) {
+      refetchStocks();
+      refetchIngredients();
     }
-    return success;
-  };
-
-  const handleAddStock = async (ingredientId: string, quantity: number, totalCost: number) => {
-    const result = await addStock(ingredientId, quantity, totalCost);
     return result;
   };
 
@@ -244,8 +257,19 @@ function InventoryContent() {
         </div>
         <div className="flex gap-2 flex-wrap">
           <AddInventoryModal onSubmit={handleAddIngredient} />
-          <AddStockModal ingredients={ingredients} onSubmit={handleAddStock} />
-          <RestockListModal storeName={currentStore?.name || ''} restockItems={restockItems} />
+          <MultiAddStockModal ingredients={ingredients} onSubmit={handleAddMultipleStock} />
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" className="gap-2">
+                Baixar Lista de Stock
+                <ChevronDown className="w-4 h-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent>
+              <DropdownMenuItem onClick={() => handleDownloadList('entire')}>Download Entire List</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => handleDownloadList('low')}>Download Low List</DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
           {stores.length > 1 && (
             <TransferInventoryModal
               stores={stores}
@@ -257,7 +281,7 @@ function InventoryContent() {
           )}
           <ProcessBatchModal
             ingredients={ingredients}
-            ingredientRecipes={ingredientRecipes}
+            subRecipes={subRecipes}
             stocks={stocks}
             onProcess={handleProcessBatch}
           />
@@ -295,7 +319,7 @@ function InventoryContent() {
             </div>
             <div>
               <p className="text-sm text-muted-foreground">Itens para Restock</p>
-              <p className="text-2xl font-bold text-foreground">{restockList.length}</p>
+              <p className="text-2xl font-bold text-foreground">{inventoryItems.filter(s => s.amountToBuy > 0).length}</p>
             </div>
           </CardContent>
         </Card>
@@ -359,7 +383,7 @@ function InventoryContent() {
                       )}
                       {!item.hasStock && <Badge variant="secondary" className="text-xs">No stock entry</Badge>}
                     </div>
-                    {/* Toggle for Processed Ingredient and Sub-Recipe */}
+                    {/* Toggle for Processed Ingredient */}
                     <div className="flex items-center gap-4 mt-1 mb-2">
                       <div className="flex items-center gap-2">
                         <Switch
@@ -371,14 +395,6 @@ function InventoryContent() {
                           Ingrediente Processado
                         </Label>
                       </div>
-                      {item.ingredient?.is_processed && item.ingredient && (
-                        <IngredientRecipeModal
-                          ingredient={item.ingredient}
-                          allIngredients={ingredients}
-                          existingRecipes={ingredientRecipes}
-                          onSave={(rawMaterials) => handleSaveIngredientRecipe(item.ingredient_id, rawMaterials)}
-                        />
-                      )}
                     </div>
                     <div className="flex items-center gap-3">
                       <Progress value={Math.min(100, item.percentageOfTarget)} className={cn("h-2 flex-1", item.isLow && "[&>div]:bg-destructive")} />
