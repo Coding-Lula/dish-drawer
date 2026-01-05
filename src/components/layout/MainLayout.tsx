@@ -27,7 +27,7 @@ export function MainLayout({ children }: MainLayoutProps) {
   const { stores } = useStores();
 
   useEffect(() => {
-    if (stores.length > 0) {
+    if (stores.length > 0 && !currentStore) {
       const storedStoreId = localStorage.getItem('currentStoreId');
       if (storedStoreId) {
         const storedStore = stores.find(s => s.id === storedStoreId);
@@ -36,12 +36,10 @@ export function MainLayout({ children }: MainLayoutProps) {
           return;
         }
       }
-      // Remove currentStore from this condition - just check if we haven't set it yet
-      if (stores[0]) {
-        setCurrentStore(stores[0]);
-      }
+      // Default to first store only if no stored preference
+      setCurrentStore(stores[0]);
     }
-  }, [stores]); // Remove currentStore from dependencies
+  }, [stores, currentStore]);
 
   useEffect(() => {
     if (currentStore) {
