@@ -1365,7 +1365,15 @@ export function useInventoryTransfers() {
   return { transfers, loading, createTransfer: createBulkTransfer, refetch: fetchTransfers };
 }
 
-// Sub-Recipes hook
+// Sub-Recipes hook - uses ingredient_recipes table
+export interface IngredientRecipe {
+  id: string;
+  processed_ingredient_id: string;
+  raw_ingredient_id: string;
+  quantity_required: number;
+  created_at: string;
+}
+
 export function useSubRecipes() {
   const [subRecipes, setSubRecipes] = useState<SubRecipe[]>([]);
   const [loading, setLoading] = useState(true);
@@ -1373,21 +1381,41 @@ export function useSubRecipes() {
 
   const fetchSubRecipes = useCallback(async () => {
     setLoading(true);
+    // Get all ingredient recipes and group by processed_ingredient_id
     const { data, error } = await supabase
-      .from('sub_recipes')
-      .select(`
-        *,
-        sub_recipe_items (
-          *
-        )
-      `)
-      .order('name');
+      .from('ingredient_recipes')
+      .select('*')
+      .order('created_at');
 
     if (error) {
       toast({ title: 'Error fetching sub-recipes', description: error.message, variant: 'destructive' });
-    } else {
-      setSubRecipes(data || []);
+      setLoading(false);
+      return;
     }
+
+    // Group recipes by processed_ingredient_id
+    const groupedRecipes = (data || []).reduce((acc, item) => {
+      const key = item.processed_ingredient_id;
+      if (!acc[key]) {
+        acc[key] = {
+          id: key, // Use processed_ingredient_id as the "sub-recipe" id
+          name: '', // Will be filled from ingredient name
+          processed_ingredient_id: key,
+          created_at: item.created_at,
+          sub_recipe_items: []
+        };
+      }
+      acc[key].sub_recipe_items.push({
+        id: item.id,
+        sub_recipe_id: key,
+        raw_ingredient_id: item.raw_ingredient_id,
+        quantity_required: item.quantity_required,
+        created_at: item.created_at
+      });
+      return acc;
+    }, {} as Record<string, SubRecipe>);
+
+    setSubRecipes(Object.values(groupedRecipes));
     setLoading(false);
   }, [toast]);
 
@@ -1395,42 +1423,18 @@ export function useSubRecipes() {
     recipe: { id?: string; name: string; processed_ingredient_id: string; },
     items: { raw_ingredient_id: string; quantity_required: number }[]
   ) => {
-    let recipeId = recipe.id;
+    const processedIngredientId = recipe.processed_ingredient_id;
 
-    if (recipeId) {
-      const { data, error } = await supabase
-        .from('sub_recipes')
-        .update({ name: recipe.name, processed_ingredient_id: recipe.processed_ingredient_id })
-        .eq('id', recipeId)
-        .select('id')
-        .single();
-
-      if (error) {
-        toast({ title: 'Error updating sub-recipe', description: error.message, variant: 'destructive' });
-        return null;
-      }
-    } else {
-      const { data, error } = await supabase
-        .from('sub_recipes')
-        .insert({ name: recipe.name, processed_ingredient_id: recipe.processed_ingredient_id })
-        .select('id')
-        .single();
-
-      if (error) {
-        toast({ title: 'Error creating sub-recipe', description: error.message, variant: 'destructive' });
-        return null;
-      }
-      recipeId = data.id;
-    }
-
-    if (!recipeId) return null;
-
-    await supabase.from('sub_recipe_items').delete().eq('sub_recipe_id', recipeId);
+    // Delete existing recipes for this processed ingredient
+    await supabase
+      .from('ingredient_recipes')
+      .delete()
+      .eq('processed_ingredient_id', processedIngredientId);
 
     if (items.length > 0) {
-      const { error: itemsError } = await supabase.from('sub_recipe_items').insert(
+      const { error: itemsError } = await supabase.from('ingredient_recipes').insert(
         items.map(item => ({
-          sub_recipe_id: recipeId,
+          processed_ingredient_id: processedIngredientId,
           raw_ingredient_id: item.raw_ingredient_id,
           quantity_required: item.quantity_required,
         }))
@@ -1444,16 +1448,19 @@ export function useSubRecipes() {
 
     toast({ title: 'Sub-recipe saved successfully' });
     fetchSubRecipes();
-    return recipeId;
+    return processedIngredientId;
   };
 
-  const deleteSubRecipe = async (recipeId: string) => {
-    const { error } = await supabase.from('sub_recipes').delete().eq('id', recipeId);
+  const deleteSubRecipe = async (processedIngredientId: string) => {
+    const { error } = await supabase
+      .from('ingredient_recipes')
+      .delete()
+      .eq('processed_ingredient_id', processedIngredientId);
     if (error) {
       toast({ title: 'Error deleting sub-recipe', description: error.message, variant: 'destructive' });
       return false;
     }
-    setSubRecipes(prev => prev.filter(r => r.id !== recipeId));
+    setSubRecipes(prev => prev.filter(r => r.processed_ingredient_id !== processedIngredientId));
     toast({ title: 'Sub-recipe deleted successfully' });
     return true;
   };
@@ -1494,14 +1501,13 @@ export function useProductionLogs(storeId: string | null) {
   ) => {
     if (!storeId) return null;
 
-    // Get the sub-recipe for this processed ingredient
-    const { data: subRecipe, error: recipeError } = await supabase
-      .from('sub_recipes')
-      .select('*, sub_recipe_items(*)')
-      .eq('id', subRecipeId)
-      .single();
+    // Get the sub-recipe items for this processed ingredient from ingredient_recipes
+    const { data: recipeItems, error: recipeError } = await supabase
+      .from('ingredient_recipes')
+      .select('*')
+      .eq('processed_ingredient_id', subRecipeId);
 
-    if (recipeError || !subRecipe) {
+    if (recipeError) {
       toast({
         title: 'Recipe not found',
         description: 'The selected sub-recipe could not be found.',
@@ -1510,7 +1516,7 @@ export function useProductionLogs(storeId: string | null) {
       return null;
     }
     
-    if (subRecipe.sub_recipe_items.length === 0) {
+    if (!recipeItems || recipeItems.length === 0) {
       toast({ 
         title: 'No recipe found', 
         description: 'This ingredient has no sub-recipe defined.', 
@@ -1523,7 +1529,7 @@ export function useProductionLogs(storeId: string | null) {
     let totalCost = 0;
     const rawMaterialsNeeded: { ingredientId: string; quantity: number; cost: number; stockId: string }[] = [];
 
-    for (const item of subRecipe.sub_recipe_items) {
+    for (const item of recipeItems) {
       const requiredQty = item.quantity_required * quantityToProduce;
       const stock = stocks.find(s => s.ingredient_id === item.raw_ingredient_id);
       const ingredient = ingredients.find(i => i.id === item.raw_ingredient_id);
@@ -1558,8 +1564,8 @@ export function useProductionLogs(storeId: string | null) {
       }
     }
 
-    // Add processed ingredient to stock
-    const processedIngredientId = subRecipe.processed_ingredient_id;
+    // Add processed ingredient to stock - subRecipeId IS the processed_ingredient_id
+    const processedIngredientId = subRecipeId;
     const processedStock = stocks.find(s => s.ingredient_id === processedIngredientId);
     if (processedStock) {
       await supabase

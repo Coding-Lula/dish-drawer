@@ -136,8 +136,8 @@ function InventoryContent() {
     URL.revokeObjectURL(url);
   };
 
-  const handleTransfer = async (fromStoreId: string, toStoreId: string, ingredientId: string, quantity: number, notes?: string) => {
-    const result = await createTransfer(fromStoreId, toStoreId, ingredientId, quantity, notes);
+  const handleTransfer = async (fromStoreId: string, toStoreId: string, items: { ingredientId: string; quantity: number }[], notes?: string) => {
+    const result = await createTransfer(fromStoreId, toStoreId, items, notes);
     if (result) {
       refetchStocks();
     }
