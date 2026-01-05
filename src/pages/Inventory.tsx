@@ -34,8 +34,10 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { useState } from 'react';
+import { useToast } from '@/hooks/use-toast';
 
 function InventoryContent() {
+  const { toast } = useToast();
   const { currentStore } = useCurrentStore();
   const { stores } = useStores();
   const { 
@@ -163,7 +165,7 @@ function InventoryContent() {
 
   const handleAddMultipleStock = async (items: { ingredientId: string; quantity: number; totalCost: number }[]) => {
     if (!currentStore?.id) {
-      // You might want to show a toast message to the user here
+      toast({ title: 'Selecione uma loja primeiro', variant: 'destructive' });
       return false;
     }
     const result = await addMultipleStock(items, currentStore.id);

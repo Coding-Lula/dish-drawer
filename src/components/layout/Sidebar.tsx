@@ -60,7 +60,7 @@ export function Sidebar({ currentStore, onStoreChange }: SidebarProps) {
   const [collapsed, setCollapsed] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
-  const { stores, loading, addStore, deleteStore } = useStores();
+  const { stores, loading, addStore, deleteStore, refetch: refetchStores } = useStores();
   const { user, role, signOut } = useAuth();
   const [storeToDelete, setStoreToDelete] = useState<StoreType | null>(null);
 
@@ -68,12 +68,6 @@ export function Sidebar({ currentStore, onStoreChange }: SidebarProps) {
   const navItems = allNavItems.filter(item => 
     role && item.roles.includes(role)
   );
-
-  useEffect(() => {
-    if (!currentStore && stores.length > 0) {
-      onStoreChange(stores[0]);
-    }
-  }, [stores, currentStore, onStoreChange]);
 
   const handleSignOut = async () => {
     await signOut();
