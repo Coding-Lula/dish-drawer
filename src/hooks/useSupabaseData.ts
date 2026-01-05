@@ -400,13 +400,16 @@ export function useStoreStock(storeId: string | null) {
 
   const addMultipleStock = async (items: { ingredientId: string; quantity: number; totalCost: number }[], storeId: string) => {
     if (!storeId || items.length === 0) return false;
-
+    
+    
     const stockUpdates: any[] = [];
     const stockInserts: any[] = [];
     const ingredientCostUpdates: any[] = [];
     const inventoryLogs: any[] = [];
 
     const ingredientIds = items.map(i => i.ingredientId);
+
+
 
     const { data: existingStocks, error: existingError } = await supabase
       .from('store_stock')
@@ -442,9 +445,13 @@ export function useStoreStock(storeId: string | null) {
           ? ((oldQuantity * oldCost) + (item.quantity * unitCost)) / newQuantity
           : unitCost;
 
-        stockUpdates.push({ id: existingStock.id, current_quantity: newQuantity });
+        stockUpdates.push({ id: existingStock.id, store_id: storeId, ingredient_id: item.ingredientId, current_quantity: newQuantity });
         ingredientCostUpdates.push({ id: item.ingredientId, average_cost: newWAC });
       } else {
+        // Delete this
+        console.log('DEBUG - Creating NEW stock insert for ingredient:', item.ingredientId);
+        console.log('DEBUG - store_id in insert object:', storeId);
+        //Stop delete
         stockInserts.push({
           store_id: storeId,
           ingredient_id: item.ingredientId,
@@ -464,10 +471,17 @@ export function useStoreStock(storeId: string | null) {
         reason: 'purchase'
       });
     }
-
+    //Delete this
+     console.log('DEBUG - stockUpdates array:', JSON.stringify(stockUpdates, null, 2));
+     //Stop here
     if (stockUpdates.length > 0) {
+     
       const { error } = await supabase.from('store_stock').upsert(stockUpdates);
       if (error) {
+        //Delete this
+        console.log('DEBUG - Error inserting stock:', error);
+        console.log('DEBUG - Error details:', JSON.stringify(error, null, 2));
+        //
         toast({ title: 'Error updating stock', description: error.message, variant: 'destructive' });
         return false;
       }
@@ -480,7 +494,7 @@ export function useStoreStock(storeId: string | null) {
         return false;
       }
     }
-
+/*
     if (ingredientCostUpdates.length > 0) {
       const { error } = await supabase.from('ingredients').upsert(ingredientCostUpdates);
        if (error) {
@@ -488,7 +502,21 @@ export function useStoreStock(storeId: string | null) {
         return false;
       }
     }
+*/
 
+if (ingredientCostUpdates.length > 0) {
+  for (const update of ingredientCostUpdates) {
+    const { error } = await supabase
+      .from('ingredients')
+      .update({ average_cost: update.average_cost })
+      .eq('id', update.id);
+    
+    if (error) {
+      console.error(`Failed to update ingredient ${update.id}:`, error);
+      // Continue with other updates
+    }
+  }
+}
     if (inventoryLogs.length > 0) {
       const { error } = await supabase.from('inventory_logs').insert(inventoryLogs);
        if (error) {
@@ -593,7 +621,31 @@ export function useInventoryLogs(storeId: string | null) {
 
   return { logs, loading, getLastUnitCost, refetch: fetchLogs };
 }
-
+// Delete this
+export const testStoreStockInsert = async (storeId: string, ingredientId: string) => {
+  console.log('TEST - storeId:', storeId, 'ingredientId:', ingredientId);
+  
+  const testData = {
+    store_id: storeId,
+    ingredient_id: ingredientId,
+    current_quantity: 10,
+    min_threshold: 10,
+    target_stock: 100
+  };
+  
+  console.log('TEST - Inserting:', testData);
+  
+  const { error } = await supabase.from('store_stock').insert([testData]);
+  
+  if (error) {
+    console.log('TEST - ERROR:', error);
+    return false;
+  } else {
+    console.log('TEST - SUCCESS');
+    return true;
+  }
+};
+//Stop here
 export function useDishes() {
   const [dishes, setDishes] = useState<Dish[]>([]);
   const [loading, setLoading] = useState(true);

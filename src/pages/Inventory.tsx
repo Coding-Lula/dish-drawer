@@ -15,6 +15,7 @@ import {
   useStoreStock, 
   useIngredients, 
   useInventoryLogs, 
+  testStoreStockInsert,
   useStores,
   useInventoryTransfers,
   useSubRecipes,
@@ -261,6 +262,12 @@ function InventoryContent() {
           <h1 className="text-3xl font-bold text-foreground">Inventário</h1>
           <p className="text-muted-foreground">{currentStore?.name} • Nível de Stock</p>
         </div>
+         <Button 
+    onClick={() => testStoreStockInsert(currentStore?.id, '34498112-99ee-4844-adcd-754701a57529')}
+    variant="outline"
+  >
+    Test Insert
+  </Button>
         <div className="flex gap-2 flex-wrap">
           <AddInventoryModal onSubmit={handleAddIngredient} />
           <MultiAddStockModal ingredients={ingredients} onSubmit={handleAddMultipleStock} />
