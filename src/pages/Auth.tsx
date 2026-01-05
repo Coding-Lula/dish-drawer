@@ -16,7 +16,7 @@ const passwordSchema = z.string().min(6, 'Password must be at least 6 characters
 
 export default function Auth() {
   const navigate = useNavigate();
-  const { user, loading, signIn, signUp } = useAuth();
+  const { user, role, loading, signIn, signUp } = useAuth();
   const { toast } = useToast();
   
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -28,10 +28,12 @@ export default function Auth() {
   const [signupRole, setSignupRole] = useState<AppRole>('cashier');
 
   useEffect(() => {
-    if (!loading && user) {
+    // Only redirect if user exists AND has a role assigned
+    // This prevents the cycle where Auth redirects to / but ProtectedRoute redirects back
+    if (!loading && user && role) {
       navigate('/');
     }
-  }, [user, loading, navigate]);
+  }, [user, role, loading, navigate]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -67,7 +69,7 @@ export default function Auth() {
         title: 'Welcome back!',
         description: 'You have successfully logged in.',
       });
-      navigate('/');
+      // Navigation will happen via useEffect once role is loaded
     }
   };
 
@@ -115,7 +117,7 @@ export default function Auth() {
         title: 'Account Created!',
         description: 'You can now access the system.',
       });
-      navigate('/');
+      // Navigation will happen via useEffect once role is loaded
     }
   };
 
