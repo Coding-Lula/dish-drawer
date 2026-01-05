@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -6,54 +6,50 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { Factory, Package, AlertTriangle } from 'lucide-react';
-import type { Ingredient, SubRecipe, StoreStock } from '@/hooks/useSupabaseData';
+import type { Ingredient, IngredientRecipe, StoreStock } from '@/hooks/useSupabaseData';
 
 interface ProcessBatchModalProps {
   ingredients: Ingredient[];
-  subRecipes: SubRecipe[];
+  ingredientRecipes: IngredientRecipe[];
   stocks: StoreStock[];
-  onProcess: (subRecipeId: string, quantity: number) => Promise<any>;
+  onProcess: (processedIngredientId: string, quantity: number) => Promise<any>;
 }
 
 export function ProcessBatchModal({ 
   ingredients, 
-  subRecipes,
+  ingredientRecipes,
   stocks,
   onProcess 
 }: ProcessBatchModalProps) {
   const [open, setOpen] = useState(false);
-  const [subRecipeId, setSubRecipeId] = useState('');
+  const [processedIngredientId, setProcessedIngredientId] = useState('');
   const [quantity, setQuantity] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const selectedSubRecipe = useMemo(() => {
-    return subRecipes.find(r => r.id === subRecipeId);
-  }, [subRecipeId, subRecipes]);
-
-  const selectedProcessed = useMemo(() => {
-    if (!selectedSubRecipe) return null;
-    return ingredients.find(i => i.id === selectedSubRecipe.processed_ingredient_id);
-  }, [selectedSubRecipe, ingredients]);
-
-  const rawMaterialsNeeded = useMemo(() => {
-    if (!selectedSubRecipe) return [];
-    return selectedSubRecipe.sub_recipe_items.map(item => {
-      const rawIngredient = ingredients.find(i => i.id === item.raw_ingredient_id);
-      const stock = stocks.find(s => s.ingredient_id === item.raw_ingredient_id);
-      const requiredQty = item.quantity_required * (parseFloat(quantity) || 0);
-      const available = stock?.current_quantity || 0;
-      const sufficient = available >= requiredQty;
-      const costPerUnit = rawIngredient?.average_cost || 0;
-
-      return {
-        ingredient: rawIngredient,
-        requiredQty,
-        available,
-        sufficient,
-        cost: requiredQty * costPerUnit
-      };
-    });
-  }, [selectedSubRecipe, quantity, ingredients, stocks]);
+  // Get processed ingredients (those marked as is_processed)
+  const processedIngredients = ingredients.filter(i => i.is_processed);
+  const selectedProcessed = ingredients.find(i => i.id === processedIngredientId);
+  
+  // Get sub-recipe for selected processed ingredient
+  const subRecipe = ingredientRecipes.filter(r => r.processed_ingredient_id === processedIngredientId);
+  
+  // Calculate required raw materials and check availability
+  const rawMaterialsNeeded = subRecipe.map(recipe => {
+    const rawIngredient = ingredients.find(i => i.id === recipe.raw_ingredient_id);
+    const stock = stocks.find(s => s.ingredient_id === recipe.raw_ingredient_id);
+    const requiredQty = recipe.quantity_required * (parseFloat(quantity) || 0);
+    const available = stock?.current_quantity || 0;
+    const sufficient = available >= requiredQty;
+    const costPerUnit = rawIngredient?.average_cost || 0;
+    
+    return {
+      ingredient: rawIngredient,
+      requiredQty,
+      available,
+      sufficient,
+      cost: requiredQty * costPerUnit
+    };
+  });
 
   const allMaterialsSufficient = rawMaterialsNeeded.every(m => m.sufficient);
   const totalCost = rawMaterialsNeeded.reduce((sum, m) => sum + m.cost, 0);
@@ -61,15 +57,15 @@ export function ProcessBatchModal({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!subRecipeId || !quantity) return;
+    if (!processedIngredientId || !quantity) return;
 
     setIsSubmitting(true);
-    const result = await onProcess(subRecipeId, parseFloat(quantity));
+    const result = await onProcess(processedIngredientId, parseFloat(quantity));
     setIsSubmitting(false);
 
     if (result) {
       setOpen(false);
-      setSubRecipeId('');
+      setProcessedIngredientId('');
       setQuantity('');
     }
   };
@@ -87,24 +83,24 @@ export function ProcessBatchModal({
           <DialogTitle>Processar Lote de Produção</DialogTitle>
         </DialogHeader>
         
-        {subRecipes.length === 0 ? (
+        {processedIngredients.length === 0 ? (
           <div className="text-center py-8 text-muted-foreground">
             <Factory className="w-12 h-12 mx-auto mb-3 opacity-30" />
-            <p>Nenhuma sub-receita configurada.</p>
-            <p className="text-sm mt-2">Crie sub-receitas na página de Sub-Recipes.</p>
+            <p>Nenhum ingrediente processado configurado.</p>
+            <p className="text-sm mt-2">Primeiro, marque ingredientes como "Processado" e defina suas sub-receitas.</p>
           </div>
         ) : (
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-2">
-              <Label>Sub-Receita a Produzir</Label>
-              <Select value={subRecipeId} onValueChange={setSubRecipeId}>
+              <Label>Ingrediente a Produzir</Label>
+              <Select value={processedIngredientId} onValueChange={setProcessedIngredientId}>
                 <SelectTrigger>
-                  <SelectValue placeholder="Selecionar sub-receita" />
+                  <SelectValue placeholder="Selecionar ingrediente processado" />
                 </SelectTrigger>
                 <SelectContent>
-                  {subRecipes.map(recipe => (
-                    <SelectItem key={recipe.id} value={recipe.id}>
-                      {recipe.name}
+                  {processedIngredients.map(ing => (
+                    <SelectItem key={ing.id} value={ing.id}>
+                      {ing.name}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -129,7 +125,7 @@ export function ProcessBatchModal({
               </div>
             </div>
 
-            {subRecipeId && (
+            {processedIngredientId && subRecipe.length > 0 && (
               <div className="space-y-3 p-4 rounded-lg bg-muted/30 border">
                 <h4 className="font-semibold text-sm">Matérias-Primas Necessárias</h4>
                 <div className="space-y-2">
@@ -167,13 +163,21 @@ export function ProcessBatchModal({
               </div>
             )}
 
+            {processedIngredientId && subRecipe.length === 0 && (
+              <div className="p-4 rounded-lg bg-amber-500/10 border border-amber-500/20 text-center">
+                <AlertTriangle className="w-8 h-8 text-amber-600 mx-auto mb-2" />
+                <p className="text-amber-700 font-medium">Sub-receita não configurada</p>
+                <p className="text-sm text-amber-600">Defina a sub-receita na página de Fichas Técnicas.</p>
+              </div>
+            )}
+
             <div className="flex gap-2 justify-end">
               <Button type="button" variant="outline" onClick={() => setOpen(false)}>
                 Cancelar
               </Button>
               <Button 
                 type="submit" 
-                disabled={isSubmitting || !allMaterialsSufficient || !quantity}
+                disabled={isSubmitting || !allMaterialsSufficient || subRecipe.length === 0 || !quantity}
               >
                 {isSubmitting ? 'Processando...' : 'Confirmar Produção'}
               </Button>

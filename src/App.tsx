@@ -14,7 +14,6 @@ import RevenueAllocation from "./pages/RevenueAllocation";
 import Finance from "./pages/Finance";
 import Auth from "./pages/Auth";
 import NotFound from "./pages/NotFound";
-import SubRecipes from "./pages/SubRecipes";
 
 const queryClient = new QueryClient();
 
@@ -64,11 +63,6 @@ const App = () => (
           <Route path="/finance" element={
             <ProtectedRoute allowedRoles={['manager']}>
               <Finance />
-            </ProtectedRoute>
-          } />
-          <Route path="/sub-recipes" element={
-            <ProtectedRoute allowedRoles={['manager']}>
-              <SubRecipes />
             </ProtectedRoute>
           } />
           <Route path="*" element={<NotFound />} />

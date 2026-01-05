@@ -6,18 +6,19 @@ import { Progress } from '@/components/ui/progress';
 import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
-import { MultiAddStockModal } from '@/components/modals/MultiAddStockModal';
+import { AddStockModal } from '@/components/modals/AddStockModal';
 import { AddInventoryModal } from '@/components/modals/AddInventoryModal';
 import { RestockListModal } from '@/components/modals/RestockListModal';
 import { TransferInventoryModal } from '@/components/modals/TransferInventoryModal';
 import { ProcessBatchModal } from '@/components/modals/ProcessBatchModal';
+import { IngredientRecipeModal } from '@/components/modals/IngredientRecipeModal';
 import { 
   useStoreStock, 
   useIngredients, 
   useInventoryLogs, 
   useStores,
   useInventoryTransfers,
-  useSubRecipes,
+  useIngredientRecipes,
   useProductionLogs
 } from '@/hooks/useSupabaseData';
 import { Package, AlertTriangle, TrendingDown, Flame, Edit2, Check, X, Trash2, Factory } from 'lucide-react';
@@ -34,13 +35,16 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { useState } from 'react';
+import { supabase } from '@/integrations/supabase/client';
+import { useToast } from '@/hooks/use-toast';
 
 function InventoryContent() {
+  const { toast } = useToast();
   const { currentStore } = useCurrentStore();
   const { stores } = useStores();
   const { 
     stocks, 
-    addMultipleStock,
+    addStock, 
     updateMinThreshold, 
     updateTargetStock,
     loading: stocksLoading, 
@@ -49,7 +53,7 @@ function InventoryContent() {
   const { ingredients, addIngredient, deleteIngredient, updateIngredient, loading: ingredientsLoading, refetch: refetchIngredients } = useIngredients();
   const { getLastUnitCost, loading: logsLoading } = useInventoryLogs(currentStore?.id || null);
   const { createTransfer } = useInventoryTransfers();
-  const { subRecipes, refetch: refetchSubRecipes } = useSubRecipes();
+  const { ingredientRecipes, saveIngredientRecipe, refetch: refetchRecipes } = useIngredientRecipes();
   const { processBatch, refetch: refetchProduction } = useProductionLogs(currentStore?.id || null);
 
   const [filter, setFilter] = useState<'all' | 'low' | 'ok' | 'processed'>('all');
@@ -62,6 +66,7 @@ function InventoryContent() {
 
   const loading = stocksLoading || ingredientsLoading || logsLoading;
 
+  // Merge ingredients with their stock data
   const inventoryItems = ingredients.map(ingredient => {
     const stock = stocks.find(s => s.ingredient_id === ingredient.id);
     const currentQuantity = stock?.current_quantity ?? 0;
@@ -122,8 +127,8 @@ function InventoryContent() {
     return result;
   };
 
-  const handleProcessBatch = async (subRecipeId: string, quantity: number) => {
-    const result = await processBatch(subRecipeId, quantity, ingredients, stocks);
+  const handleProcessBatch = async (processedIngredientId: string, quantity: number) => {
+    const result = await processBatch(processedIngredientId, quantity, ingredientRecipes, ingredients, stocks);
     if (result) {
       refetchStocks();
       refetchIngredients();
@@ -139,12 +144,16 @@ function InventoryContent() {
     }
   };
 
-  const handleAddMultipleStock = async (items: { ingredientId: string; quantity: number; totalCost: number }[]) => {
-    const result = await addMultipleStock(items);
-    if (result) {
-      refetchStocks();
-      refetchIngredients();
+  const handleSaveIngredientRecipe = async (processedIngredientId: string, rawMaterials: { raw_ingredient_id: string; quantity_required: number }[]) => {
+    const success = await saveIngredientRecipe(processedIngredientId, rawMaterials);
+    if (success) {
+      refetchRecipes();
     }
+    return success;
+  };
+
+  const handleAddStock = async (ingredientId: string, quantity: number, totalCost: number) => {
+    const result = await addStock(ingredientId, quantity, totalCost);
     return result;
   };
 
@@ -235,7 +244,7 @@ function InventoryContent() {
         </div>
         <div className="flex gap-2 flex-wrap">
           <AddInventoryModal onSubmit={handleAddIngredient} />
-          <MultiAddStockModal ingredients={ingredients} onSubmit={handleAddMultipleStock} />
+          <AddStockModal ingredients={ingredients} onSubmit={handleAddStock} />
           <RestockListModal storeName={currentStore?.name || ''} restockItems={restockItems} />
           {stores.length > 1 && (
             <TransferInventoryModal
@@ -248,7 +257,7 @@ function InventoryContent() {
           )}
           <ProcessBatchModal
             ingredients={ingredients}
-            subRecipes={subRecipes}
+            ingredientRecipes={ingredientRecipes}
             stocks={stocks}
             onProcess={handleProcessBatch}
           />
@@ -350,7 +359,7 @@ function InventoryContent() {
                       )}
                       {!item.hasStock && <Badge variant="secondary" className="text-xs">No stock entry</Badge>}
                     </div>
-                    {/* Toggle for Processed Ingredient */}
+                    {/* Toggle for Processed Ingredient and Sub-Recipe */}
                     <div className="flex items-center gap-4 mt-1 mb-2">
                       <div className="flex items-center gap-2">
                         <Switch
@@ -362,6 +371,14 @@ function InventoryContent() {
                           Ingrediente Processado
                         </Label>
                       </div>
+                      {item.ingredient?.is_processed && item.ingredient && (
+                        <IngredientRecipeModal
+                          ingredient={item.ingredient}
+                          allIngredients={ingredients}
+                          existingRecipes={ingredientRecipes}
+                          onSave={(rawMaterials) => handleSaveIngredientRecipe(item.ingredient_id, rawMaterials)}
+                        />
+                      )}
                     </div>
                     <div className="flex items-center gap-3">
                       <Progress value={Math.min(100, item.percentageOfTarget)} className={cn("h-2 flex-1", item.isLow && "[&>div]:bg-destructive")} />
