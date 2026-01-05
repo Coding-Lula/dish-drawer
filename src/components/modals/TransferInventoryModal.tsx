@@ -1,11 +1,11 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
-import { ArrowRightLeft } from 'lucide-react';
+import { ArrowRightLeft, PlusCircle, Trash2 } from 'lucide-react';
 import type { Store, Ingredient, StoreStock } from '@/hooks/useSupabaseData';
 
 interface TransferInventoryModalProps {
@@ -13,7 +13,7 @@ interface TransferInventoryModalProps {
   ingredients: Ingredient[];
   currentStoreId: string;
   stocks: StoreStock[];
-  onTransfer: (fromStoreId: string, toStoreId: string, ingredientId: string, quantity: number, notes?: string) => Promise<any>;
+  onTransfer: (fromStoreId: string, toStoreId: string, items: { ingredientId: string; quantity: number }[], notes?: string) => Promise<any>;
 }
 
 export function TransferInventoryModal({ 
@@ -26,31 +26,56 @@ export function TransferInventoryModal({
   const [open, setOpen] = useState(false);
   const [fromStoreId, setFromStoreId] = useState(currentStoreId);
   const [toStoreId, setToStoreId] = useState('');
-  const [ingredientId, setIngredientId] = useState('');
-  const [quantity, setQuantity] = useState('');
+  const [items, setItems] = useState([{ ingredientId: '', quantity: '' }]);
   const [notes, setNotes] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const selectedIngredient = ingredients.find(i => i.id === ingredientId);
-  const availableStock = stocks.find(s => s.ingredient_id === ingredientId && s.store_id === fromStoreId);
+  useEffect(() => {
+    if (open) {
+      setFromStoreId(currentStoreId);
+      setToStoreId('');
+      setItems([{ ingredientId: '', quantity: '' }]);
+      setNotes('');
+    }
+  }, [open, currentStoreId]);
+
   const otherStores = stores.filter(s => s.id !== fromStoreId);
+
+  const handleItemChange = (index, field, value) => {
+    const newItems = [...items];
+    newItems[index][field] = value;
+    setItems(newItems);
+  };
+
+  const addItem = () => {
+    setItems([...items, { ingredientId: '', quantity: '' }]);
+  };
+
+  const removeItem = (index) => {
+    const newItems = items.filter((_, i) => i !== index);
+    setItems(newItems);
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!fromStoreId || !toStoreId || !ingredientId || !quantity) return;
+    const validItems = items.filter(item => item.ingredientId && item.quantity)
+      .map(item => ({
+        ingredientId: item.ingredientId,
+        quantity: parseFloat(item.quantity)
+      }));
+
+    if (!fromStoreId || !toStoreId || validItems.length === 0) return;
 
     setIsSubmitting(true);
-    const result = await onTransfer(fromStoreId, toStoreId, ingredientId, parseFloat(quantity), notes || undefined);
+    const result = await onTransfer(fromStoreId, toStoreId, validItems, notes || undefined);
     setIsSubmitting(false);
 
     if (result) {
       setOpen(false);
-      setIngredientId('');
-      setQuantity('');
-      setNotes('');
-      setToStoreId('');
     }
   };
+
+  const isFormValid = fromStoreId && toStoreId && items.every(item => item.ingredientId && item.quantity);
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
@@ -60,7 +85,7 @@ export function TransferInventoryModal({
           Transferir Stock
         </Button>
       </DialogTrigger>
-      <DialogContent>
+      <DialogContent className="max-w-3xl">
         <DialogHeader>
           <DialogTitle>Transferir Inventário Entre Lojas</DialogTitle>
         </DialogHeader>
@@ -94,43 +119,56 @@ export function TransferInventoryModal({
             </div>
           </div>
 
-          <div className="space-y-2">
-            <Label>Ingrediente</Label>
-            <Select value={ingredientId} onValueChange={setIngredientId}>
-              <SelectTrigger>
-                <SelectValue placeholder="Selecionar ingrediente" />
-              </SelectTrigger>
-              <SelectContent>
-                {ingredients.map(ing => (
-                  <SelectItem key={ing.id} value={ing.id}>{ing.name}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            {selectedIngredient && availableStock && (
-              <p className="text-xs text-muted-foreground">
-                Disponível: {availableStock.current_quantity} {selectedIngredient.unit}
-              </p>
-            )}
+          <div className="space-y-2 max-h-[300px] overflow-y-auto pr-2">
+            <Label>Itens a Transferir</Label>
+            {items.map((item, index) => {
+              const selectedIngredient = ingredients.find(i => i.id === item.ingredientId);
+              const availableStock = stocks.find(s => s.ingredient_id === item.ingredientId && s.store_id === fromStoreId);
+              return (
+                <div key={index} className="grid grid-cols-12 gap-2 items-center">
+                  <div className="col-span-6">
+                    <Select value={item.ingredientId} onValueChange={(value) => handleItemChange(index, 'ingredientId', value)}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Selecionar ingrediente" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {ingredients.map(ing => (
+                          <SelectItem key={ing.id} value={ing.id}>{ing.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="col-span-4">
+                    <Input
+                      type="number"
+                      step="0.1"
+                      min="0.1"
+                      max={availableStock?.current_quantity || 999999}
+                      value={item.quantity}
+                      onChange={(e) => handleItemChange(index, 'quantity', e.target.value)}
+                      placeholder={`Quantidade (${selectedIngredient?.unit || 'un'})`}
+                      required
+                    />
+                  </div>
+                  <div className="col-span-2 flex items-center gap-1">
+                    {availableStock && (
+                      <span className="text-xs text-muted-foreground whitespace-nowrap">
+                        Disp: {availableStock.current_quantity}
+                      </span>
+                    )}
+                    <Button type="button" variant="ghost" size="icon" onClick={() => removeItem(index)}>
+                      <Trash2 className="w-4 h-4 text-destructive" />
+                    </Button>
+                  </div>
+                </div>
+              );
+            })}
           </div>
 
-          <div className="space-y-2">
-            <Label>Quantidade</Label>
-            <div className="flex items-center gap-2">
-              <Input
-                type="number"
-                step="0.1"
-                min="0.1"
-                max={availableStock?.current_quantity || 999999}
-                value={quantity}
-                onChange={(e) => setQuantity(e.target.value)}
-                placeholder="0"
-                required
-              />
-              {selectedIngredient && (
-                <span className="text-muted-foreground whitespace-nowrap">{selectedIngredient.unit}</span>
-              )}
-            </div>
-          </div>
+          <Button type="button" variant="outline" size="sm" onClick={addItem} className="gap-1">
+            <PlusCircle className="w-3 h-3" />
+            Adicionar Item
+          </Button>
 
           <div className="space-y-2">
             <Label>Notas (opcional)</Label>
@@ -145,7 +183,7 @@ export function TransferInventoryModal({
             <Button type="button" variant="outline" onClick={() => setOpen(false)}>
               Cancelar
             </Button>
-            <Button type="submit" disabled={isSubmitting || !toStoreId || !ingredientId || !quantity}>
+            <Button type="submit" disabled={isSubmitting || !isFormValid}>
               {isSubmitting ? 'Transferindo...' : 'Confirmar Transferência'}
             </Button>
           </div>

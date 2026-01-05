@@ -21,9 +21,17 @@ export interface Ingredient {
   created_at: string;
 }
 
-export interface IngredientRecipe {
+export interface SubRecipe {
   id: string;
+  name: string;
   processed_ingredient_id: string;
+  created_at: string;
+  sub_recipe_items: SubRecipeItem[]; // For convenience
+}
+
+export interface SubRecipeItem {
+  id: string;
+  sub_recipe_id: string;
   raw_ingredient_id: string;
   quantity_required: number;
   created_at: string;
@@ -390,6 +398,98 @@ export function useStoreStock(storeId: string | null) {
     }
   };
 
+  const addMultipleStock = async (items: { ingredientId: string; quantity: number; totalCost: number }[]) => {
+    if (!storeId || items.length === 0) return false;
+
+    const stockUpdates: any[] = [];
+    const stockInserts: any[] = [];
+    const ingredientCostUpdates: any[] = [];
+    const inventoryLogs: any[] = [];
+
+    const ingredientIds = items.map(i => i.ingredientId);
+    const { data: ingredientsData, error: ingredientsError } = await supabase
+      .from('ingredients')
+      .select('id, average_cost')
+      .in('id', ingredientIds);
+
+    if (ingredientsError) {
+      toast({ title: 'Error fetching ingredients', description: ingredientsError.message, variant: 'destructive' });
+      return false;
+    }
+
+    for (const item of items) {
+      const unitCost = item.quantity > 0 ? item.totalCost / item.quantity : 0;
+      const existingStock = stocks.find(s => s.ingredient_id === item.ingredientId);
+      const ingredient = ingredientsData.find(i => i.id === item.ingredientId);
+
+      if (existingStock && ingredient) {
+        const oldQuantity = existingStock.current_quantity;
+        const oldCost = ingredient.average_cost || 0;
+        const newQuantity = oldQuantity + item.quantity;
+        const newWAC = newQuantity > 0
+          ? ((oldQuantity * oldCost) + (item.quantity * unitCost)) / newQuantity
+          : unitCost;
+
+        stockUpdates.push({ id: existingStock.id, current_quantity: newQuantity });
+        ingredientCostUpdates.push({ id: item.ingredientId, average_cost: newWAC });
+      } else {
+        stockInserts.push({
+          store_id: storeId,
+          ingredient_id: item.ingredientId,
+          current_quantity: item.quantity,
+          min_threshold: 10,
+          target_stock: 100
+        });
+        ingredientCostUpdates.push({ id: item.ingredientId, average_cost: unitCost });
+      }
+
+      inventoryLogs.push({
+        ingredient_id: item.ingredientId,
+        store_id: storeId,
+        change_amount: item.quantity,
+        purchase_price: item.totalCost,
+        unit_cost: unitCost,
+        reason: 'purchase'
+      });
+    }
+
+    if (stockUpdates.length > 0) {
+      const { error } = await supabase.from('store_stock').upsert(stockUpdates);
+      if (error) {
+        toast({ title: 'Error updating stock', description: error.message, variant: 'destructive' });
+        return false;
+      }
+    }
+
+    if (stockInserts.length > 0) {
+      const { error } = await supabase.from('store_stock').insert(stockInserts);
+      if (error) {
+        toast({ title: 'Error creating stock', description: error.message, variant: 'destructive' });
+        return false;
+      }
+    }
+
+    if (ingredientCostUpdates.length > 0) {
+      const { error } = await supabase.from('ingredients').upsert(ingredientCostUpdates);
+       if (error) {
+        toast({ title: 'Error updating ingredient costs', description: error.message, variant: 'destructive' });
+        return false;
+      }
+    }
+
+    if (inventoryLogs.length > 0) {
+      const { error } = await supabase.from('inventory_logs').insert(inventoryLogs);
+       if (error) {
+        toast({ title: 'Error creating inventory logs', description: error.message, variant: 'destructive' });
+        return false;
+      }
+    }
+
+    fetchStocks();
+    toast({ title: 'Stock updated', description: `${items.length} items have been restocked.` });
+    return true;
+  };
+
   const updateMinThreshold = async (stockId: string, minThreshold: number) => {
     const { error } = await supabase
       .from('store_stock')
@@ -445,7 +545,7 @@ export function useStoreStock(storeId: string | null) {
     fetchStocks();
   }, [fetchStocks]);
 
-  return { stocks, loading, addStock, updateMinThreshold, updateTargetStock, deductStock, refetch: fetchStocks };
+  return { stocks, loading, addStock, addMultipleStock, updateMinThreshold, updateTargetStock, deductStock, refetch: fetchStocks };
 }
 
 // Inventory Logs hook for fetching last unit costs
@@ -1143,177 +1243,226 @@ export function useInventoryTransfers() {
     setLoading(false);
   }, [toast]);
 
-  const createTransfer = async (
+  const createBulkTransfer = async (
     fromStoreId: string,
     toStoreId: string,
-    ingredientId: string,
-    quantity: number,
+    items: { ingredientId: string; quantity: number }[],
     notes?: string
   ) => {
-    // First, check if source store has enough stock
-    const { data: sourceStock, error: sourceError } = await supabase
+    const ingredientIds = items.map(item => item.ingredientId);
+
+    // Fetch all relevant stocks in one go
+    const { data: allStocks, error: stockError } = await supabase
       .from('store_stock')
       .select('*')
-      .eq('store_id', fromStoreId)
-      .eq('ingredient_id', ingredientId)
-      .maybeSingle();
+      .in('store_id', [fromStoreId, toStoreId])
+      .in('ingredient_id', ingredientIds);
 
-    if (sourceError) {
-      toast({ title: 'Error checking source stock', description: sourceError.message, variant: 'destructive' });
+    if (stockError) {
+      toast({ title: 'Error fetching stock data', description: stockError.message, variant: 'destructive' });
       return null;
     }
 
-    if (!sourceStock || sourceStock.current_quantity < quantity) {
-      toast({ 
-        title: 'Insufficient stock', 
-        description: `Source store only has ${sourceStock?.current_quantity || 0} units available.`, 
-        variant: 'destructive' 
-      });
-      return null;
-    }
-
-    // Deduct from source store
-    const { error: deductError } = await supabase
-      .from('store_stock')
-      .update({ current_quantity: sourceStock.current_quantity - quantity })
-      .eq('id', sourceStock.id);
-
-    if (deductError) {
-      toast({ title: 'Error deducting stock', description: deductError.message, variant: 'destructive' });
-      return null;
-    }
-
-    // Add to destination store
-    const { data: destStock, error: destError } = await supabase
-      .from('store_stock')
-      .select('*')
-      .eq('store_id', toStoreId)
-      .eq('ingredient_id', ingredientId)
-      .maybeSingle();
-
-    if (destError) {
-      toast({ title: 'Error checking destination stock', description: destError.message, variant: 'destructive' });
-      return null;
-    }
-
-    if (destStock) {
-      // Update existing stock
-      await supabase
-        .from('store_stock')
-        .update({ current_quantity: destStock.current_quantity + quantity })
-        .eq('id', destStock.id);
-    } else {
-      // Create new stock entry
-      await supabase
-        .from('store_stock')
-        .insert({
-          store_id: toStoreId,
-          ingredient_id: ingredientId,
-          current_quantity: quantity,
-          min_threshold: 10,
-          target_stock: 100
+    // Validate stock levels
+    for (const item of items) {
+      const sourceStock = allStocks.find(s => s.store_id === fromStoreId && s.ingredient_id === item.ingredientId);
+      if (!sourceStock || sourceStock.current_quantity < item.quantity) {
+        toast({
+          title: 'Insufficient Stock',
+          description: `Not enough stock for item ID ${item.ingredientId}. Available: ${sourceStock?.current_quantity || 0}, Required: ${item.quantity}`,
+          variant: 'destructive',
         });
+        return null;
+      }
     }
 
-    // Log inventory changes
-    await supabase.from('inventory_logs').insert([
-      {
-        ingredient_id: ingredientId,
-        store_id: fromStoreId,
-        change_amount: -quantity,
-        reason: 'transfer_out'
-      },
-      {
-        ingredient_id: ingredientId,
-        store_id: toStoreId,
-        change_amount: quantity,
-        reason: 'transfer_in'
-      }
-    ]);
+    const sourceStockUpdates: any[] = [];
+    const destStockUpdates: any[] = [];
+    const destStockInserts: any[] = [];
+    const inventoryLogs: any[] = [];
+    const transferRecords: any[] = [];
 
-    // Create transfer record
-    const { data: transfer, error: transferError } = await supabase
-      .from('inventory_transfers')
-      .insert({
+    for (const item of items) {
+      const sourceStock = allStocks.find(s => s.store_id === fromStoreId && s.ingredient_id === item.ingredientId)!;
+      sourceStockUpdates.push({
+        id: sourceStock.id,
+        current_quantity: sourceStock.current_quantity - item.quantity,
+      });
+
+      const destStock = allStocks.find(s => s.store_id === toStoreId && s.ingredient_id === item.ingredientId);
+      if (destStock) {
+        destStockUpdates.push({
+          id: destStock.id,
+          current_quantity: destStock.current_quantity + item.quantity,
+        });
+      } else {
+        destStockInserts.push({
+          store_id: toStoreId,
+          ingredient_id: item.ingredientId,
+          current_quantity: item.quantity,
+          min_threshold: 10,
+          target_stock: 100,
+        });
+      }
+
+      inventoryLogs.push(
+        { ingredient_id: item.ingredientId, store_id: fromStoreId, change_amount: -item.quantity, reason: 'transfer_out' },
+        { ingredient_id: item.ingredientId, store_id: toStoreId, change_amount: item.quantity, reason: 'transfer_in' }
+      );
+
+      transferRecords.push({
         from_store_id: fromStoreId,
         to_store_id: toStoreId,
-        ingredient_id: ingredientId,
-        quantity,
-        notes
-      })
-      .select()
-      .single();
+        ingredient_id: item.ingredientId,
+        quantity: item.quantity,
+        notes,
+      });
+    }
 
-    if (transferError) {
-      toast({ title: 'Error recording transfer', description: transferError.message, variant: 'destructive' });
+    // Execute all updates
+    const { error: sourceUpdateError } = await supabase.from('store_stock').upsert(sourceStockUpdates);
+    if (sourceUpdateError) {
+      toast({ title: 'Error deducting stock', description: sourceUpdateError.message, variant: 'destructive' });
       return null;
     }
 
-    setTransfers(prev => [transfer, ...prev]);
-    toast({ title: 'Transfer completed successfully' });
-    return transfer;
+    const { error: destUpdateError } = await supabase.from('store_stock').upsert(destStockUpdates);
+    if (destUpdateError) {
+      toast({ title: 'Error updating destination stock', description: destUpdateError.message, variant: 'destructive' });
+      // Potentially roll back source updates here
+      return null;
+    }
+
+    if (destStockInserts.length > 0) {
+      const { error: destInsertError } = await supabase.from('store_stock').insert(destStockInserts);
+      if (destInsertError) {
+        toast({ title: 'Error creating new stock entries', description: destInsertError.message, variant: 'destructive' });
+        return null;
+      }
+    }
+
+    const { error: logError } = await supabase.from('inventory_logs').insert(inventoryLogs);
+    if (logError) {
+      toast({ title: 'Error creating inventory logs', description: logError.message, variant: 'destructive' });
+      return null;
+    }
+
+    const { data: newTransfers, error: transferError } = await supabase.from('inventory_transfers').insert(transferRecords).select();
+    if (transferError) {
+      toast({ title: 'Error recording transfers', description: transferError.message, variant: 'destructive' });
+      return null;
+    }
+
+    setTransfers(prev => [...newTransfers, ...prev]);
+    toast({ title: 'Bulk transfer successful', description: `${items.length} items transferred.` });
+    return newTransfers;
   };
 
   useEffect(() => {
     fetchTransfers();
   }, [fetchTransfers]);
 
-  return { transfers, loading, createTransfer, refetch: fetchTransfers };
+  return { transfers, loading, createTransfer: createBulkTransfer, refetch: fetchTransfers };
 }
 
-// Ingredient Recipes (Sub-recipes) hook
-export function useIngredientRecipes() {
-  const [ingredientRecipes, setIngredientRecipes] = useState<IngredientRecipe[]>([]);
+// Sub-Recipes hook
+export function useSubRecipes() {
+  const [subRecipes, setSubRecipes] = useState<SubRecipe[]>([]);
   const [loading, setLoading] = useState(true);
   const { toast } = useToast();
 
-  const fetchIngredientRecipes = useCallback(async () => {
+  const fetchSubRecipes = useCallback(async () => {
+    setLoading(true);
     const { data, error } = await supabase
-      .from('ingredient_recipes')
-      .select('*');
+      .from('sub_recipes')
+      .select(`
+        *,
+        sub_recipe_items (
+          *
+        )
+      `)
+      .order('name');
+
     if (error) {
-      toast({ title: 'Error fetching ingredient recipes', description: error.message, variant: 'destructive' });
+      toast({ title: 'Error fetching sub-recipes', description: error.message, variant: 'destructive' });
     } else {
-      setIngredientRecipes(data || []);
+      setSubRecipes(data || []);
     }
     setLoading(false);
   }, [toast]);
 
-  const saveIngredientRecipe = async (
-    processedIngredientId: string, 
-    rawMaterials: { raw_ingredient_id: string; quantity_required: number }[]
+  const saveSubRecipe = async (
+    recipe: { id?: string; name: string; processed_ingredient_id: string; },
+    items: { raw_ingredient_id: string; quantity_required: number }[]
   ) => {
-    // Delete existing recipes
-    await supabase
-      .from('ingredient_recipes')
-      .delete()
-      .eq('processed_ingredient_id', processedIngredientId);
+    let recipeId = recipe.id;
 
-    if (rawMaterials.length > 0) {
-      const { error } = await supabase.from('ingredient_recipes').insert(
-        rawMaterials.map(item => ({
-          processed_ingredient_id: processedIngredientId,
+    if (recipeId) {
+      const { data, error } = await supabase
+        .from('sub_recipes')
+        .update({ name: recipe.name, processed_ingredient_id: recipe.processed_ingredient_id })
+        .eq('id', recipeId)
+        .select('id')
+        .single();
+
+      if (error) {
+        toast({ title: 'Error updating sub-recipe', description: error.message, variant: 'destructive' });
+        return null;
+      }
+    } else {
+      const { data, error } = await supabase
+        .from('sub_recipes')
+        .insert({ name: recipe.name, processed_ingredient_id: recipe.processed_ingredient_id })
+        .select('id')
+        .single();
+
+      if (error) {
+        toast({ title: 'Error creating sub-recipe', description: error.message, variant: 'destructive' });
+        return null;
+      }
+      recipeId = data.id;
+    }
+
+    if (!recipeId) return null;
+
+    await supabase.from('sub_recipe_items').delete().eq('sub_recipe_id', recipeId);
+
+    if (items.length > 0) {
+      const { error: itemsError } = await supabase.from('sub_recipe_items').insert(
+        items.map(item => ({
+          sub_recipe_id: recipeId,
           raw_ingredient_id: item.raw_ingredient_id,
-          quantity_required: item.quantity_required
+          quantity_required: item.quantity_required,
         }))
       );
 
-      if (error) {
-        toast({ title: 'Error saving ingredient recipe', description: error.message, variant: 'destructive' });
-        return false;
+      if (itemsError) {
+        toast({ title: 'Error saving sub-recipe items', description: itemsError.message, variant: 'destructive' });
+        return null;
       }
     }
 
-    await fetchIngredientRecipes();
     toast({ title: 'Sub-recipe saved successfully' });
+    fetchSubRecipes();
+    return recipeId;
+  };
+
+  const deleteSubRecipe = async (recipeId: string) => {
+    const { error } = await supabase.from('sub_recipes').delete().eq('id', recipeId);
+    if (error) {
+      toast({ title: 'Error deleting sub-recipe', description: error.message, variant: 'destructive' });
+      return false;
+    }
+    setSubRecipes(prev => prev.filter(r => r.id !== recipeId));
+    toast({ title: 'Sub-recipe deleted successfully' });
     return true;
   };
 
   useEffect(() => {
-    fetchIngredientRecipes();
-  }, [fetchIngredientRecipes]);
+    fetchSubRecipes();
+  }, [fetchSubRecipes]);
 
-  return { ingredientRecipes, loading, saveIngredientRecipe, refetch: fetchIngredientRecipes };
+  return { subRecipes, loading, saveSubRecipe, deleteSubRecipe, refetch: fetchSubRecipes };
 }
 
 // Production Logs hook
@@ -1338,18 +1487,30 @@ export function useProductionLogs(storeId: string | null) {
   }, [storeId, toast]);
 
   const processBatch = async (
-    processedIngredientId: string,
+    subRecipeId: string,
     quantityToProduce: number,
-    ingredientRecipes: IngredientRecipe[],
     ingredients: Ingredient[],
     stocks: StoreStock[]
   ) => {
     if (!storeId) return null;
 
     // Get the sub-recipe for this processed ingredient
-    const subRecipe = ingredientRecipes.filter(r => r.processed_ingredient_id === processedIngredientId);
+    const { data: subRecipe, error: recipeError } = await supabase
+      .from('sub_recipes')
+      .select('*, sub_recipe_items(*)')
+      .eq('id', subRecipeId)
+      .single();
+
+    if (recipeError || !subRecipe) {
+      toast({
+        title: 'Recipe not found',
+        description: 'The selected sub-recipe could not be found.',
+        variant: 'destructive'
+      });
+      return null;
+    }
     
-    if (subRecipe.length === 0) {
+    if (subRecipe.sub_recipe_items.length === 0) {
       toast({ 
         title: 'No recipe found', 
         description: 'This ingredient has no sub-recipe defined.', 
@@ -1362,10 +1523,10 @@ export function useProductionLogs(storeId: string | null) {
     let totalCost = 0;
     const rawMaterialsNeeded: { ingredientId: string; quantity: number; cost: number; stockId: string }[] = [];
 
-    for (const recipe of subRecipe) {
-      const requiredQty = recipe.quantity_required * quantityToProduce;
-      const stock = stocks.find(s => s.ingredient_id === recipe.raw_ingredient_id);
-      const ingredient = ingredients.find(i => i.id === recipe.raw_ingredient_id);
+    for (const item of subRecipe.sub_recipe_items) {
+      const requiredQty = item.quantity_required * quantityToProduce;
+      const stock = stocks.find(s => s.ingredient_id === item.raw_ingredient_id);
+      const ingredient = ingredients.find(i => i.id === item.raw_ingredient_id);
 
       if (!stock || stock.current_quantity < requiredQty) {
         toast({ 
@@ -1379,7 +1540,7 @@ export function useProductionLogs(storeId: string | null) {
       const cost = requiredQty * (ingredient?.average_cost || 0);
       totalCost += cost;
       rawMaterialsNeeded.push({ 
-        ingredientId: recipe.raw_ingredient_id, 
+        ingredientId: item.raw_ingredient_id,
         quantity: requiredQty, 
         cost,
         stockId: stock.id
@@ -1398,6 +1559,7 @@ export function useProductionLogs(storeId: string | null) {
     }
 
     // Add processed ingredient to stock
+    const processedIngredientId = subRecipe.processed_ingredient_id;
     const processedStock = stocks.find(s => s.ingredient_id === processedIngredientId);
     if (processedStock) {
       await supabase

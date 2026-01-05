@@ -44,6 +44,7 @@ const allNavItems = [
   { path: '/pos', label: 'Ponto de Venda', icon: ShoppingCart, roles: ['manager', 'cashier'] },
   { path: '/inventory', label: 'Inventário', icon: Package, roles: ['manager', 'cashier'] },
   { path: '/recipes', label: 'Folhas Técnicas', icon: UtensilsCrossed, roles: ['manager'] },
+  { path: '/sub-recipes', label: 'Sub-Recipes', icon: UtensilsCrossed, roles: ['manager'] },
   { path: '/expenses', label: 'Despesas', icon: Receipt, roles: ['manager'] },
   { path: '/finance', label: 'Financeiro', icon: Wallet, roles: ['manager'] },
   { path: '/end-of-day', label: 'Fim do Dia', icon: Moon, roles: ['manager'] },
