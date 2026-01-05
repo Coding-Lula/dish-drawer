@@ -162,7 +162,11 @@ function InventoryContent() {
   };
 
   const handleAddMultipleStock = async (items: { ingredientId: string; quantity: number; totalCost: number }[]) => {
-    const result = await addMultipleStock(items);
+    if (!currentStore?.id) {
+      // You might want to show a toast message to the user here
+      return false;
+    }
+    const result = await addMultipleStock(items, currentStore.id);
     if (result) {
       refetchStocks();
       refetchIngredients();

@@ -13,7 +13,11 @@ function SubRecipesContent() {
   const [isModalOpen, setIsModalOpen] = useState(false);
 
   const handleAddNew = () => {
-    setSelectedRecipe(null);
+    setSelectedRecipe({
+      name: '',
+      processed_ingredient_id: '',
+      sub_recipe_items: []
+    });
     setIsModalOpen(true);
   };
 

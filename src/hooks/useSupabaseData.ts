@@ -398,7 +398,7 @@ export function useStoreStock(storeId: string | null) {
     }
   };
 
-  const addMultipleStock = async (items: { ingredientId: string; quantity: number; totalCost: number }[]) => {
+  const addMultipleStock = async (items: { ingredientId: string; quantity: number; totalCost: number }[], storeId: string) => {
     if (!storeId || items.length === 0) return false;
 
     const stockUpdates: any[] = [];
@@ -407,6 +407,18 @@ export function useStoreStock(storeId: string | null) {
     const inventoryLogs: any[] = [];
 
     const ingredientIds = items.map(i => i.ingredientId);
+
+    const { data: existingStocks, error: existingError } = await supabase
+      .from('store_stock')
+      .select('id, ingredient_id, current_quantity')
+      .eq('store_id', storeId)
+      .in('ingredient_id', items.map(i => i.ingredientId));
+
+    if (existingError) {
+      toast({ title: 'Error fetching existing stock', description: existingError.message, variant: 'destructive' });
+      return false;
+    }
+
     const { data: ingredientsData, error: ingredientsError } = await supabase
       .from('ingredients')
       .select('id, average_cost')
@@ -419,7 +431,7 @@ export function useStoreStock(storeId: string | null) {
 
     for (const item of items) {
       const unitCost = item.quantity > 0 ? item.totalCost / item.quantity : 0;
-      const existingStock = stocks.find(s => s.ingredient_id === item.ingredientId);
+      const existingStock = existingStocks.find(s => s.ingredient_id === item.ingredientId);
       const ingredient = ingredientsData.find(i => i.id === item.ingredientId);
 
       if (existingStock && ingredient) {

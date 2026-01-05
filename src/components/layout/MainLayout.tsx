@@ -36,11 +36,12 @@ export function MainLayout({ children }: MainLayoutProps) {
           return;
         }
       }
-      if (!currentStore) {
+      // Remove currentStore from this condition - just check if we haven't set it yet
+      if (stores[0]) {
         setCurrentStore(stores[0]);
       }
     }
-  }, [stores, currentStore]);
+  }, [stores]); // Remove currentStore from dependencies
 
   useEffect(() => {
     if (currentStore) {
