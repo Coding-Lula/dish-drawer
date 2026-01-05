@@ -41,13 +41,13 @@ import {
 
 const allNavItems = [
   { path: '/', label: 'Dashboard', icon: LayoutDashboard, roles: ['manager', 'cashier'] },
-  { path: '/pos', label: 'Point of Sale', icon: ShoppingCart, roles: ['manager', 'cashier'] },
-  { path: '/inventory', label: 'Inventory', icon: Package, roles: ['manager', 'cashier'] },
-  { path: '/recipes', label: 'Technical Sheets', icon: UtensilsCrossed, roles: ['manager'] },
-  { path: '/expenses', label: 'Expenses', icon: Receipt, roles: ['manager'] },
-  { path: '/finance', label: 'Finance', icon: Wallet, roles: ['manager'] },
-  { path: '/end-of-day', label: 'End of Day', icon: Moon, roles: ['manager'] },
-  { path: '/revenue-allocation', label: 'Revenue Allocation', icon: PieChart, roles: ['manager'] },
+  { path: '/pos', label: 'Ponto de Venda', icon: ShoppingCart, roles: ['manager', 'cashier'] },
+  { path: '/inventory', label: 'Inventário', icon: Package, roles: ['manager', 'cashier'] },
+  { path: '/recipes', label: 'Folhas Técnicas', icon: UtensilsCrossed, roles: ['manager'] },
+  { path: '/expenses', label: 'Despesas', icon: Receipt, roles: ['manager'] },
+  { path: '/finance', label: 'Financeiro', icon: Wallet, roles: ['manager'] },
+  { path: '/end-of-day', label: 'Fim do Dia', icon: Moon, roles: ['manager'] },
+  { path: '/revenue-allocation', label: 'Alocação de Receita', icon: PieChart, roles: ['manager'] },
 ];
 
 interface SidebarProps {

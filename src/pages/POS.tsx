@@ -29,8 +29,9 @@ interface SplitBill {
 
 const paymentMethods = [
   { id: 'cash', name: 'Cash', icon: '💵', isRevenue: true, isCash: true },
+  { id: 'cartao', name: 'Cartão', icon: '💳', isRevenue: true, isCash: true },
   { id: 'mpesa', name: 'M-Pesa', icon: '📱', isRevenue: true, isCash: true },
-  { id: 'mkesh', name: 'M-Kesh', icon: '💳', isRevenue: true, isCash: true },
+  { id: 'mkesh', name: 'M-Kesh', icon: '🟡', isRevenue: true, isCash: true },
   { id: 'paga_facil', name: 'Paga Fácil', icon: '🏦', isRevenue: true, isCash: true },
   { id: 'credit', name: 'Credito', icon: '📝', isRevenue: false, isCash: false },
   { id: 'self_consumption', name: 'Mesa 0', icon: '🍽️', isRevenue: false, isCash: false },
@@ -78,7 +79,7 @@ function CartContent({
           <div className="flex gap-1">
             {cart.length > 1 && (
               <Button variant="ghost" size="sm" onClick={() => setShowSplitBillModal(true)} className="gap-1">
-                <Split className="w-4 h-4" /> Split
+                <Split className="w-4 h-4" /> Dividir Mesa
               </Button>
             )}
             {cart.length > 0 && <Button variant="ghost" size="sm" onClick={() => setCart([])} className="text-destructive">Clear</Button>}
@@ -139,7 +140,7 @@ function CartContent({
               <Printer className="w-4 h-4" />
             </Button>
             <Button className="flex-1 h-12 text-lg" onClick={handleCheckout} disabled={cart.length === 0 || isProcessing || !selectedTable}>
-              {isProcessing ? 'Processing...' : <><CreditCard className="w-5 h-5 mr-2" />Complete Sale</>}
+              {isProcessing ? 'Processing...' : <><CreditCard className="w-5 h-5 mr-2" />Completar Venda</>}
             </Button>
           </div>
         </div>

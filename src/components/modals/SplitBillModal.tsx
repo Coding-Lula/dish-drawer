@@ -167,7 +167,7 @@ export function SplitBillModal({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Split className="w-5 h-5" />
-            Split Bill - {tableName}
+            Dividir Conta - {tableName}
           </DialogTitle>
         </DialogHeader>
 
@@ -175,9 +175,9 @@ export function SplitBillModal({
           {/* Bill Tabs */}
           <div className="col-span-1 flex flex-col">
             <div className="flex items-center justify-between mb-2">
-              <span className="text-sm font-medium">Bills</span>
+              <span className="text-sm font-medium">Contas</span>
               <Button size="sm" variant="outline" onClick={addNewBill} className="h-7 gap-1">
-                <Plus className="w-3 h-3" /> New Bill
+                <Plus className="w-3 h-3" /> Nova Conta
               </Button>
             </div>
             <ScrollArea className="flex-1 border rounded-lg p-2">
@@ -193,7 +193,7 @@ export function SplitBillModal({
                     )}
                   >
                     <div className="flex items-center justify-between">
-                      <span className="font-medium">Bill {idx + 1}</span>
+                      <span className="font-medium">Conta {idx + 1}</span>
                       {bill.isPaid && <Check className="w-4 h-4 text-green-600" />}
                     </div>
                     <div className={cn("text-sm", selectedBill === bill.id ? "text-primary-foreground/80" : "text-muted-foreground")}>
@@ -212,7 +212,7 @@ export function SplitBillModal({
                 <Card className="flex-1 overflow-hidden flex flex-col">
                   <CardHeader className="pb-2">
                     <CardTitle className="text-base flex items-center justify-between">
-                      <span>Bill Items</span>
+                      <span>Itens de Conta</span>
                       <Badge variant={currentBill.isPaid ? "default" : "secondary"}>
                         {currentBill.isPaid ? 'Paid' : 'Unpaid'}
                       </Badge>
