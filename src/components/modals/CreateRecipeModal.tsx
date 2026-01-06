@@ -141,23 +141,25 @@ export function CreateRecipeModal({ dish, ingredients, existingRecipes, onSave }
                           Cost: {(quantity * Number(ingredient.average_cost)).toFixed(2)} MT
                         </p>
                       </div>
-                      <Input
-                        type="number"
-                        step="0.01"
-                        min="0.01"
-                        value={quantity}
-                        onChange={(e) => updateQuantity(ingredient.id, parseFloat(e.target.value) || 0.01)}
-                        className="w-20 h-8 text-sm"
-                      />
-                      <span className="text-xs text-muted-foreground w-10">{ingredient.unit}</span>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8 text-destructive"
-                        onClick={() => toggleIngredient(ingredient)}
-                      >
-                        <Trash2 className="w-3 h-3" />
-                      </Button>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <Input
+                          type="number"
+                          step="0.01"
+                          min="0.01"
+                          value={quantity}
+                          onChange={(e) => updateQuantity(ingredient.id, parseFloat(e.target.value) || 0.01)}
+                          className="w-20 h-8 text-sm"
+                        />
+                        <span className="text-xs text-muted-foreground w-10">{ingredient.unit}</span>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 text-destructive shrink-0"
+                          onClick={() => toggleIngredient(ingredient)}
+                        >
+                          <Trash2 className="w-3 h-3" />
+                        </Button>
+                      </div>
                     </div>
                   ))}
                   
