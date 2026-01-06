@@ -2,6 +2,7 @@ import { MainLayout } from '@/components/layout/MainLayout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { useDishes, useRecipes, useIngredients } from '@/hooks/useSupabaseData';
+import { ScrollArea } from '@/components/ui/scroll-area';
 import { AddDishModal } from '@/components/modals/AddDishModal';
 import { CreateRecipeModal } from '@/components/modals/CreateRecipeModal';
 import { UtensilsCrossed, Package, Cog } from 'lucide-react';
@@ -77,22 +78,24 @@ function RecipesContent() {
       </div>
 
       <div className="grid gap-6 lg:grid-cols-3">
-        <Card className="lg:col-span-1">
+        <Card className="lg:col-span-1 flex flex-col max-h-[calc(100vh-200px)]">
           <CardHeader className="pb-3"><CardTitle className="text-lg">Menu Items</CardTitle></CardHeader>
-          <CardContent className="p-2">
-            <div className="space-y-1">
-              {dishes.map(dish => (
-                <button key={dish.id} onClick={() => setSelectedDish(dish.id)} className={cn("w-full text-left p-3 rounded-lg transition-all", selectedDish === dish.id ? "bg-primary text-primary-foreground" : "hover:bg-muted/50")}>
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="font-medium">{dish.name}</p>
-                      <p className={cn("text-sm", selectedDish === dish.id ? "text-primary-foreground/80" : "text-muted-foreground")}>{dish.category}</p>
+          <CardContent className="p-2 flex-1 overflow-hidden">
+            <ScrollArea className="h-full">
+              <div className="space-y-1 pr-2">
+                {dishes.map(dish => (
+                  <button key={dish.id} onClick={() => setSelectedDish(dish.id)} className={cn("w-full text-left p-3 rounded-lg transition-all", selectedDish === dish.id ? "bg-primary text-primary-foreground" : "hover:bg-muted/50")}>
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="font-medium">{dish.name}</p>
+                        <p className={cn("text-sm", selectedDish === dish.id ? "text-primary-foreground/80" : "text-muted-foreground")}>{dish.category}</p>
+                      </div>
+                      <span className="font-semibold">{Number(dish.selling_price).toLocaleString()} MT</span>
                     </div>
-                    <span className="font-semibold">{Number(dish.selling_price).toLocaleString()} MT</span>
-                  </div>
-                </button>
-              ))}
-            </div>
+                  </button>
+                ))}
+              </div>
+            </ScrollArea>
           </CardContent>
         </Card>
 

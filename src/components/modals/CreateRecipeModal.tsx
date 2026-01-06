@@ -96,12 +96,12 @@ export function CreateRecipeModal({ dish, ingredients, existingRecipes, onSave }
             </div>
           </div>
 
-          <div className="flex-1 overflow-hidden grid grid-cols-2 gap-4">
+          <div className="flex-1 overflow-hidden grid grid-cols-2 gap-4 min-h-0">
             {/* Available Ingredients */}
-            <div className="flex flex-col">
+            <div className="flex flex-col min-h-0">
               <Label className="mb-2">Available Ingredients</Label>
-              <ScrollArea className="flex-1 border rounded-lg p-2">
-                <div className="space-y-1">
+              <ScrollArea className="h-[300px] border rounded-lg p-2">
+                <div className="space-y-1 pr-2">
                   {ingredients.map(ingredient => {
                     const isSelected = selectedIngredients.some(s => s.ingredient.id === ingredient.id);
                     return (
@@ -128,9 +128,9 @@ export function CreateRecipeModal({ dish, ingredients, existingRecipes, onSave }
             </div>
 
             {/* Selected Ingredients with Quantities */}
-            <div className="flex flex-col">
+            <div className="flex flex-col min-h-0">
               <Label className="mb-2">Recipe Ingredients ({selectedIngredients.length})</Label>
-              <ScrollArea className="flex-1 border rounded-lg p-2">
+              <ScrollArea className="h-[300px] border rounded-lg p-2">
                 <div className="space-y-2">
                   {selectedIngredients.map(({ ingredient, quantity }) => (
                     <div key={ingredient.id} className="flex items-center gap-2 p-2 rounded-md bg-muted/30 border">
