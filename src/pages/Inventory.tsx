@@ -8,6 +8,7 @@ import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { MultiAddStockModal } from '@/components/modals/MultiAddStockModal';
 import { AddInventoryModal } from '@/components/modals/AddInventoryModal';
+import { AddItemToStoreModal } from '@/components/modals/AddItemToStoreModal';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { TransferInventoryModal } from '@/components/modals/TransferInventoryModal';
 import { ProcessBatchModal } from '@/components/modals/ProcessBatchModal';
@@ -15,7 +16,6 @@ import {
   useStoreStock, 
   useIngredients, 
   useInventoryLogs, 
-  testStoreStockInsert,
   useStores,
   useInventoryTransfers,
   useSubRecipes,
@@ -46,6 +46,7 @@ function InventoryContent() {
     addMultipleStock,
     updateMinThreshold, 
     updateTargetStock,
+    addItemToStore,
     loading: stocksLoading, 
     refetch: refetchStocks 
   } = useStoreStock(currentStore?.id || null);
@@ -65,20 +66,23 @@ function InventoryContent() {
 
   const loading = stocksLoading || ingredientsLoading || logsLoading;
 
-  const inventoryItems = ingredients.map(ingredient => {
-    const stock = stocks.find(s => s.ingredient_id === ingredient.id);
-    const currentQuantity = stock?.current_quantity ?? 0;
-    const minThreshold = stock?.min_threshold ?? 10;
-    const targetStock = stock?.target_stock ?? 100;
+  // Only show items that exist in store_stock for this store
+  const inventoryItems = stocks.map(stock => {
+    const ingredient = ingredients.find(i => i.id === stock.ingredient_id);
+    if (!ingredient) return null;
+    
+    const currentQuantity = stock.current_quantity;
+    const minThreshold = stock.min_threshold;
+    const targetStock = stock.target_stock;
     const percentageOfTarget = targetStock > 0 ? (currentQuantity / targetStock) * 100 : 0;
     const isLow = currentQuantity < minThreshold;
     const amountToBuy = Math.max(0, targetStock - currentQuantity);
-    const lastUnitCost = getLastUnitCost(ingredient.id);
+    const lastUnitCost = getLastUnitCost(stock.ingredient_id);
     const estimatedCost = lastUnitCost ? amountToBuy * lastUnitCost : null;
     
     return {
-      id: stock?.id || `ingredient-${ingredient.id}`,
-      ingredient_id: ingredient.id,
+      id: stock.id,
+      ingredient_id: stock.ingredient_id,
       ingredient,
       current_quantity: currentQuantity,
       min_threshold: minThreshold,
@@ -86,15 +90,19 @@ function InventoryContent() {
       percentageOfTarget,
       isLow,
       amountToBuy,
-      hasStock: !!stock,
+      hasStock: true,
       lastUnitCost,
       estimatedCost
     };
-  }).sort((a, b) => {
+  }).filter(Boolean).sort((a, b) => {
+    if (!a || !b) return 0;
     if (a.isLow && !b.isLow) return -1;
     if (!a.isLow && b.isLow) return 1;
     return a.percentageOfTarget - b.percentageOfTarget;
-  });
+  }) as NonNullable<typeof inventoryItems[number]>[];
+
+  // Get ingredient IDs already in store
+  const existingIngredientIds = stocks.map(s => s.ingredient_id);
 
   const filteredItems = inventoryItems.filter(item => {
     if (filter === 'low') return item.isLow;
@@ -262,15 +270,14 @@ function InventoryContent() {
           <h1 className="text-3xl font-bold text-foreground">Inventário</h1>
           <p className="text-muted-foreground">{currentStore?.name} • Nível de Stock</p>
         </div>
-         <Button 
-    onClick={() => testStoreStockInsert(currentStore?.id, '34498112-99ee-4844-adcd-754701a57529')}
-    variant="outline"
-  >
-    Test Insert
-  </Button>
         <div className="flex gap-2 flex-wrap">
+          <AddItemToStoreModal 
+            ingredients={ingredients} 
+            existingIngredientIds={existingIngredientIds} 
+            onAddItem={addItemToStore} 
+          />
           <AddInventoryModal onSubmit={handleAddIngredient} />
-          <MultiAddStockModal ingredients={ingredients} onSubmit={handleAddMultipleStock} />
+          <MultiAddStockModal ingredients={ingredients.filter(i => existingIngredientIds.includes(i.id))} onSubmit={handleAddMultipleStock} />
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="outline" className="gap-2">
@@ -309,8 +316,8 @@ function InventoryContent() {
               <Package className="w-6 h-6 text-primary" />
             </div>
             <div>
-              <p className="text-sm text-muted-foreground">Itens Totais</p>
-              <p className="text-2xl font-bold text-foreground">{ingredients.length}</p>
+              <p className="text-sm text-muted-foreground">Itens na Loja</p>
+              <p className="text-2xl font-bold text-foreground">{inventoryItems.length}</p>
             </div>
           </CardContent>
         </Card>
@@ -394,7 +401,6 @@ function InventoryContent() {
                       {item.isLow && (
                         <Badge variant="destructive" className="gap-1"><Flame className="w-3 h-3" />Stock Baixo</Badge>
                       )}
-                      {!item.hasStock && <Badge variant="secondary" className="text-xs">No stock entry</Badge>}
                     </div>
                     {/* Toggle for Processed Ingredient */}
                     <div className="flex items-center gap-4 mt-1 mb-2">
