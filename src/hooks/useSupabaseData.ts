@@ -603,11 +603,68 @@ if (ingredientCostUpdates.length > 0) {
     return data;
   };
 
+  // Manual adjustment - set stock to specific value (Manager only in UI)
+  const manualAdjustStock = async (stockId: string, newQuantity: number) => {
+    if (!storeId || newQuantity < 0) return false;
+    
+    const { error } = await supabase
+      .from('store_stock')
+      .update({ current_quantity: newQuantity })
+      .eq('id', stockId);
+    
+    if (error) {
+      toast({ title: 'Erro ao ajustar stock', description: error.message, variant: 'destructive' });
+      return false;
+    }
+    
+    setStocks(prev => prev.map(s => 
+      s.id === stockId ? { ...s, current_quantity: newQuantity } : s
+    ));
+    toast({ title: 'Stock ajustado com sucesso' });
+    return true;
+  };
+
+  // Report loss - deduct from stock (Manager only in UI)
+  const reportLoss = async (ingredientId: string, amount: number) => {
+    const stock = stocks.find(s => s.ingredient_id === ingredientId);
+    if (!stock || amount <= 0) return false;
+    
+    const newQuantity = Math.max(0, stock.current_quantity - amount);
+    
+    const { error } = await supabase
+      .from('store_stock')
+      .update({ current_quantity: newQuantity })
+      .eq('id', stock.id);
+    
+    if (error) {
+      toast({ title: 'Erro ao reportar perda', description: error.message, variant: 'destructive' });
+      return false;
+    }
+    
+    setStocks(prev => prev.map(s => 
+      s.id === stock.id ? { ...s, current_quantity: newQuantity } : s
+    ));
+    toast({ title: 'Perda reportada', description: `${amount} unidades deduzidas do stock` });
+    return true;
+  };
+
   useEffect(() => {
     fetchStocks();
   }, [fetchStocks]);
 
-  return { stocks, loading, addStock, addMultipleStock, updateMinThreshold, updateTargetStock, deductStock, addItemToStore, refetch: fetchStocks };
+  return { 
+    stocks, 
+    loading, 
+    addStock, 
+    addMultipleStock, 
+    updateMinThreshold, 
+    updateTargetStock, 
+    deductStock, 
+    addItemToStore, 
+    manualAdjustStock,
+    reportLoss,
+    refetch: fetchStocks 
+  };
 }
 
 // Inventory Logs hook for fetching last unit costs

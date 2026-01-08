@@ -9,6 +9,8 @@ import { Label } from '@/components/ui/label';
 import { MultiAddStockModal } from '@/components/modals/MultiAddStockModal';
 import { AddInventoryModal } from '@/components/modals/AddInventoryModal';
 import { AddItemToStoreModal } from '@/components/modals/AddItemToStoreModal';
+import { ReportLossModal } from '@/components/modals/ReportLossModal';
+import { ManualAdjustmentModal } from '@/components/modals/ManualAdjustmentModal';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { TransferInventoryModal } from '@/components/modals/TransferInventoryModal';
 import { ProcessBatchModal } from '@/components/modals/ProcessBatchModal';
@@ -21,7 +23,8 @@ import {
   useSubRecipes,
   useProductionLogs
 } from '@/hooks/useSupabaseData';
-import { Package, AlertTriangle, TrendingDown, Flame, Edit2, Check, X, Trash2, Factory, ChevronDown } from 'lucide-react';
+import { useAuth } from '@/hooks/useAuth';
+import { Package, AlertTriangle, TrendingDown, Flame, Edit2, Check, X, Trash2, Factory, ChevronDown, Shield } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import {
   AlertDialog,
@@ -39,6 +42,7 @@ import { useToast } from '@/hooks/use-toast';
 
 function InventoryContent() {
   const { toast } = useToast();
+  const { isManager } = useAuth();
   const { currentStore } = useCurrentStore();
   const { stores } = useStores();
   const { 
@@ -47,6 +51,8 @@ function InventoryContent() {
     updateMinThreshold, 
     updateTargetStock,
     addItemToStore,
+    manualAdjustStock,
+    reportLoss,
     loading: stocksLoading, 
     refetch: refetchStocks 
   } = useStoreStock(currentStore?.id || null);
@@ -268,16 +274,52 @@ function InventoryContent() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold text-foreground">Inventário</h1>
-          <p className="text-muted-foreground">{currentStore?.name} • Nível de Stock</p>
+          <p className="text-muted-foreground">
+            {currentStore?.name} • Nível de Stock
+            {isManager && (
+              <Badge variant="secondary" className="ml-2 gap-1">
+                <Shield className="w-3 h-3" />
+                Manager
+              </Badge>
+            )}
+          </p>
         </div>
         <div className="flex gap-2 flex-wrap">
-          <AddItemToStoreModal 
-            ingredients={ingredients} 
-            existingIngredientIds={existingIngredientIds} 
-            onAddItem={addItemToStore} 
-          />
-          <AddInventoryModal onSubmit={handleAddIngredient} />
+          {/* Manager Only: Add Item to Store */}
+          {isManager && (
+            <AddItemToStoreModal 
+              ingredients={ingredients} 
+              existingIngredientIds={existingIngredientIds} 
+              onAddItem={addItemToStore} 
+            />
+          )}
+          
+          {/* Manager Only: Create New Ingredient */}
+          {isManager && (
+            <AddInventoryModal onSubmit={handleAddIngredient} />
+          )}
+          
+          {/* All Roles: Restock (add to existing items) */}
           <MultiAddStockModal ingredients={ingredients.filter(i => existingIngredientIds.includes(i.id))} onSubmit={handleAddMultipleStock} />
+          
+          {/* Manager Only: Manual Adjustment */}
+          {isManager && (
+            <ManualAdjustmentModal
+              ingredients={ingredients}
+              stocks={stocks}
+              onAdjust={manualAdjustStock}
+            />
+          )}
+          
+          {/* Manager Only: Report Loss */}
+          {isManager && (
+            <ReportLossModal
+              ingredients={ingredients}
+              stocks={stocks}
+              onReportLoss={reportLoss}
+            />
+          )}
+          
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="outline" className="gap-2">
@@ -290,7 +332,9 @@ function InventoryContent() {
               <DropdownMenuItem onClick={() => handleDownloadList('low')}>Download Low List</DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
-          {stores.length > 1 && (
+          
+          {/* Manager Only: Transfer Stock */}
+          {isManager && stores.length > 1 && (
             <TransferInventoryModal
               stores={stores}
               ingredients={ingredients}
@@ -299,12 +343,16 @@ function InventoryContent() {
               onTransfer={handleTransfer}
             />
           )}
-          <ProcessBatchModal
-            ingredients={ingredients}
-            subRecipes={subRecipes}
-            stocks={stocks}
-            onProcess={handleProcessBatch}
-          />
+          
+          {/* Manager Only: Process Batch */}
+          {isManager && (
+            <ProcessBatchModal
+              ingredients={ingredients}
+              subRecipes={subRecipes}
+              stocks={stocks}
+              onProcess={handleProcessBatch}
+            />
+          )}
         </div>
       </div>
 
@@ -402,19 +450,21 @@ function InventoryContent() {
                         <Badge variant="destructive" className="gap-1"><Flame className="w-3 h-3" />Stock Baixo</Badge>
                       )}
                     </div>
-                    {/* Toggle for Processed Ingredient */}
-                    <div className="flex items-center gap-4 mt-1 mb-2">
-                      <div className="flex items-center gap-2">
-                        <Switch
-                          id={`processed-${item.id}`}
-                          checked={item.ingredient?.is_processed || false}
-                          onCheckedChange={(checked) => handleToggleProcessed(item.ingredient_id, checked)}
-                        />
-                        <Label htmlFor={`processed-${item.id}`} className="text-xs text-muted-foreground cursor-pointer">
-                          Ingrediente Processado
-                        </Label>
+                    {/* Toggle for Processed Ingredient - Manager Only */}
+                    {isManager && (
+                      <div className="flex items-center gap-4 mt-1 mb-2">
+                        <div className="flex items-center gap-2">
+                          <Switch
+                            id={`processed-${item.id}`}
+                            checked={item.ingredient?.is_processed || false}
+                            onCheckedChange={(checked) => handleToggleProcessed(item.ingredient_id, checked)}
+                          />
+                          <Label htmlFor={`processed-${item.id}`} className="text-xs text-muted-foreground cursor-pointer">
+                            Ingrediente Processado
+                          </Label>
+                        </div>
                       </div>
-                    </div>
+                    )}
                     <div className="flex items-center gap-3">
                       <Progress value={Math.min(100, item.percentageOfTarget)} className={cn("h-2 flex-1", item.isLow && "[&>div]:bg-destructive")} />
                       <span className="text-sm text-muted-foreground w-12 text-right">{Math.round(item.percentageOfTarget)}%</span>
@@ -440,8 +490,8 @@ function InventoryContent() {
                       )}
                     </div>
                     
-                    {/* Target Stock Editing */}
-                    {item.hasStock && (
+                    {/* Target Stock Editing - Manager Only */}
+                    {item.hasStock && isManager && (
                       <div className="flex items-center gap-1 justify-end">
                         <span className="text-xs text-muted-foreground">Target:</span>
                         {editingTarget === item.id ? (
@@ -473,8 +523,8 @@ function InventoryContent() {
                       </div>
                     )}
                     
-                    {/* Min Threshold Editing */}
-                    {item.hasStock && (
+                    {/* Min Threshold Editing - Manager Only */}
+                    {item.hasStock && isManager && (
                       <div className="flex items-center gap-1 justify-end">
                         <span className="text-xs text-muted-foreground">Min:</span>
                         {editingThreshold === item.id ? (
@@ -506,6 +556,20 @@ function InventoryContent() {
                       </div>
                     )}
                     
+                    {/* Show read-only values for Cashiers */}
+                    {item.hasStock && !isManager && (
+                      <>
+                        <div className="flex items-center gap-1 justify-end">
+                          <span className="text-xs text-muted-foreground">Target:</span>
+                          <span className="text-xs text-foreground">{item.target_stock} {item.ingredient?.unit}</span>
+                        </div>
+                        <div className="flex items-center gap-1 justify-end">
+                          <span className="text-xs text-muted-foreground">Min:</span>
+                          <span className="text-xs text-foreground">{item.min_threshold} {item.ingredient?.unit}</span>
+                        </div>
+                      </>
+                    )}
+                    
                     {item.amountToBuy > 0 && (
                       <p className="text-xs font-medium text-amber-600">
                         Need: +{item.amountToBuy} {item.ingredient?.unit}
@@ -517,28 +581,30 @@ function InventoryContent() {
                     </p>
                   </div>
 
-                  {/* Delete Button */}
-                  <AlertDialog>
-                    <AlertDialogTrigger asChild>
-                      <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-destructive">
-                        <Trash2 className="w-4 h-4" />
-                      </Button>
-                    </AlertDialogTrigger>
-                    <AlertDialogContent>
-                      <AlertDialogHeader>
-                        <AlertDialogTitle>Eliminar Item</AlertDialogTitle>
-                        <AlertDialogDescription>
-                          Tem certeza que deseja eliminar "{item.ingredient?.name}"? Esta ação não pode ser desfeita e irá remover todo o histórico de stock associado.
-                        </AlertDialogDescription>
-                      </AlertDialogHeader>
-                      <AlertDialogFooter>
-                        <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                        <AlertDialogAction onClick={() => handleDeleteIngredient(item.ingredient_id)} className="bg-destructive hover:bg-destructive/90">
-                          Eliminar
-                        </AlertDialogAction>
-                      </AlertDialogFooter>
-                    </AlertDialogContent>
-                  </AlertDialog>
+                  {/* Delete Button - Manager Only */}
+                  {isManager && (
+                    <AlertDialog>
+                      <AlertDialogTrigger asChild>
+                        <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-destructive">
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
+                      </AlertDialogTrigger>
+                      <AlertDialogContent>
+                        <AlertDialogHeader>
+                          <AlertDialogTitle>Eliminar Item</AlertDialogTitle>
+                          <AlertDialogDescription>
+                            Tem certeza que deseja eliminar "{item.ingredient?.name}"? Esta ação não pode ser desfeita e irá remover todo o histórico de stock associado.
+                          </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                          <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                          <AlertDialogAction onClick={() => handleDeleteIngredient(item.ingredient_id)} className="bg-destructive hover:bg-destructive/90">
+                            Eliminar
+                          </AlertDialogAction>
+                        </AlertDialogFooter>
+                      </AlertDialogContent>
+                    </AlertDialog>
+                  )}
                 </div>
               </CardContent>
             </Card>
