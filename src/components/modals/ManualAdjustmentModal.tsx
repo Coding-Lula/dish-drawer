@@ -4,8 +4,10 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Edit2 } from 'lucide-react';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
+import { Edit2, Check, ChevronsUpDown } from 'lucide-react';
+import { cn } from '@/lib/utils';
 import { Ingredient, StoreStock } from '@/hooks/useSupabaseData';
 
 interface ManualAdjustmentModalProps {
@@ -17,6 +19,7 @@ interface ManualAdjustmentModalProps {
 export function ManualAdjustmentModal({ ingredients, stocks, onAdjust }: ManualAdjustmentModalProps) {
   const [open, setOpen] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const [comboboxOpen, setComboboxOpen] = useState(false);
   const [selectedStockId, setSelectedStockId] = useState('');
   const [newQuantity, setNewQuantity] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -83,18 +86,49 @@ export function ManualAdjustmentModal({ ingredients, stocks, onAdjust }: ManualA
           <div className="space-y-4">
             <div className="space-y-2">
               <Label>Selecionar Item</Label>
-              <Select value={selectedStockId} onValueChange={handleStockSelect}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Escolha um item..." />
-                </SelectTrigger>
-                <SelectContent>
-                  {stockItems.map(item => (
-                    <SelectItem key={item.id} value={item.id}>
-                      {item.ingredient.name} (atual: {item.current_quantity} {item.ingredient.unit})
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <Popover open={comboboxOpen} onOpenChange={setComboboxOpen}>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    role="combobox"
+                    aria-expanded={comboboxOpen}
+                    className="w-full justify-between font-normal"
+                  >
+                    {selectedStockId
+                      ? stockItems.find(item => item.id === selectedStockId)?.ingredient.name
+                      : "Pesquisar item..."}
+                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-full p-0" align="start">
+                  <Command>
+                    <CommandInput placeholder="Pesquisar item..." />
+                    <CommandList>
+                      <CommandEmpty>Nenhum item encontrado.</CommandEmpty>
+                      <CommandGroup>
+                        {stockItems.map(item => (
+                          <CommandItem
+                            key={item.id}
+                            value={item.ingredient.name}
+                            onSelect={() => {
+                              handleStockSelect(item.id);
+                              setComboboxOpen(false);
+                            }}
+                          >
+                            <Check
+                              className={cn(
+                                "mr-2 h-4 w-4",
+                                selectedStockId === item.id ? "opacity-100" : "opacity-0"
+                              )}
+                            />
+                            {item.ingredient.name} (atual: {item.current_quantity} {item.ingredient.unit})
+                          </CommandItem>
+                        ))}
+                      </CommandGroup>
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
             </div>
 
             <div className="space-y-2">
