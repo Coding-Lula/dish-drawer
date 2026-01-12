@@ -131,17 +131,18 @@ function InventoryContent() {
       `RESTOCK LIST (${type.toUpperCase()}) - ${currentStore?.name}`,
       `Date: ${new Date().toLocaleDateString()}`,
       ``,
-      `${'Item'.padEnd(25)} | ${'Required'.padEnd(12)} | ${'Unit Cost'.padEnd(12)} | Est. Cost`,
-      '─'.repeat(70),
+      `${'Item'.padEnd(25)} | ${'Current'.padEnd(12)} | ${'Required'.padEnd(12)} | ${'Unit Cost'.padEnd(12)} | Est. Cost`,
+      '─'.repeat(85),
       ...listToDownload.map(item => {
         const name = item.ingredient.name.substring(0, 24).padEnd(25);
+        const current = `${item.currentQuantity} ${item.ingredient.unit}`.padEnd(12);
         const required = `${item.amountToBuy} ${item.ingredient.unit}`.padEnd(12);
         const unitCost = item.lastUnitCost ? `${item.lastUnitCost.toFixed(2)} MT`.padEnd(12) : 'N/A'.padEnd(12);
         const estCost = item.estimatedCost ? `${item.estimatedCost.toFixed(2)} MT` : 'N/A';
-        return `${name} | ${required} | ${unitCost} | ${estCost}`;
+        return `${name} | ${current} | ${required} | ${unitCost} | ${estCost}`;
       }),
-      '─'.repeat(70),
-      `${'TOTAL ESTIMATED COST:'.padEnd(54)} ${totalEstimatedCost.toLocaleString()} MT`
+      '─'.repeat(85),
+      `${'TOTAL ESTIMATED COST:'.padEnd(69)} ${totalEstimatedCost.toLocaleString()} MT`
     ];
 
     const blob = new Blob([lines.join('\n')], { type: 'text/plain' });
