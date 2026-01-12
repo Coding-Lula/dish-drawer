@@ -2,9 +2,10 @@ import { useState } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Plus, Package, Trash2, PlusCircle } from 'lucide-react';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
+import { Plus, Package, Trash2, PlusCircle, Check, ChevronsUpDown } from 'lucide-react';
+import { cn } from '@/lib/utils';
 import type { Ingredient } from '@/hooks/useSupabaseData';
 
 interface MultiAddStockModalProps {
@@ -16,6 +17,7 @@ export function MultiAddStockModal({ ingredients, onSubmit }: MultiAddStockModal
   const [open, setOpen] = useState(false);
   const [items, setItems] = useState([{ ingredientId: '', quantity: '', totalCost: '' }]);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [openComboboxIndex, setOpenComboboxIndex] = useState<number | null>(null);
 
   const handleItemChange = (index, field, value) => {
     const newItems = [...items];
@@ -76,18 +78,49 @@ export function MultiAddStockModal({ ingredients, onSubmit }: MultiAddStockModal
               return (
                 <div key={index} className="grid grid-cols-12 gap-2 items-center">
                   <div className="col-span-5">
-                    <Select value={item.ingredientId} onValueChange={(value) => handleItemChange(index, 'ingredientId', value)}>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Choose ingredient" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {ingredients.map(ing => (
-                          <SelectItem key={ing.id} value={ing.id}>
-                            {ing.name} ({ing.unit})
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    <Popover open={openComboboxIndex === index} onOpenChange={(isOpen) => setOpenComboboxIndex(isOpen ? index : null)}>
+                      <PopoverTrigger asChild>
+                        <Button
+                          variant="outline"
+                          role="combobox"
+                          aria-expanded={openComboboxIndex === index}
+                          className="w-full justify-between font-normal h-10"
+                        >
+                          <span className="truncate">
+                            {selectedIngredient ? selectedIngredient.name : "Pesquisar..."}
+                          </span>
+                          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-[280px] p-0" align="start">
+                        <Command>
+                          <CommandInput placeholder="Pesquisar ingrediente..." />
+                          <CommandList>
+                            <CommandEmpty>Nenhum ingrediente encontrado.</CommandEmpty>
+                            <CommandGroup>
+                              {ingredients.map(ing => (
+                                <CommandItem
+                                  key={ing.id}
+                                  value={ing.name}
+                                  onSelect={() => {
+                                    handleItemChange(index, 'ingredientId', ing.id);
+                                    setOpenComboboxIndex(null);
+                                  }}
+                                >
+                                  <Check
+                                    className={cn(
+                                      "mr-2 h-4 w-4",
+                                      item.ingredientId === ing.id ? "opacity-100" : "opacity-0"
+                                    )}
+                                  />
+                                  {ing.name} ({ing.unit})
+                                </CommandItem>
+                              ))}
+                            </CommandGroup>
+                          </CommandList>
+                        </Command>
+                      </PopoverContent>
+                    </Popover>
                   </div>
                   <div className="col-span-3">
                     <Input
