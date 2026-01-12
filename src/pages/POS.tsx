@@ -87,60 +87,62 @@ function CartContent({
         </CardTitle>
       </CardHeader>
 
-      <CardContent className="flex-1 overflow-auto py-4">
-        {cart.length === 0 ? (
-          <div className="h-full flex flex-col items-center justify-center text-muted-foreground">
-            <ShoppingBag className="w-12 h-12 mb-2 opacity-30" />
-            <p>Cart is empty</p>
-            <p className="text-xs mt-1">Select table and add items</p>
-          </div>
-        ) : (
-          <div className="space-y-3">
-            {cart.map((item: CartItem) => (
-              <div key={item.dish.id} className="flex items-center gap-3 p-3 rounded-lg bg-muted/30 border">
-                <div className="flex-1 min-w-0">
-                  <p className="font-medium truncate">{item.dish.name}</p>
-                  <p className="text-sm text-muted-foreground">{Number(item.dish.selling_price).toLocaleString()} MT × {item.quantity}</p>
+      <CardContent className="flex-1 min-h-0 py-2">
+        <div className="h-[220px] overflow-y-auto">
+          {cart.length === 0 ? (
+            <div className="h-full flex flex-col items-center justify-center text-muted-foreground">
+              <ShoppingBag className="w-10 h-10 mb-2 opacity-30" />
+              <p className="text-sm">Cart is empty</p>
+              <p className="text-xs mt-1">Select table and add items</p>
+            </div>
+          ) : (
+            <div className="space-y-2 pr-2">
+              {cart.map((item: CartItem) => (
+                <div key={item.dish.id} className="flex items-center gap-2 p-2 rounded-lg bg-muted/30 border">
+                  <div className="flex-1 min-w-0">
+                    <p className="font-medium text-sm truncate">{item.dish.name}</p>
+                    <p className="text-xs text-muted-foreground">{Number(item.dish.selling_price).toLocaleString()} MT × {item.quantity}</p>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <Button variant="outline" size="icon" className="h-6 w-6" onClick={() => updateQuantity(item.dish.id, item.quantity - 1)}><Minus className="w-3 h-3" /></Button>
+                    <span className="w-5 text-center text-sm">{item.quantity}</span>
+                    <Button variant="outline" size="icon" className="h-6 w-6" onClick={() => updateQuantity(item.dish.id, item.quantity + 1)}><Plus className="w-3 h-3" /></Button>
+                    <Button variant="ghost" size="icon" className="h-6 w-6 text-destructive" onClick={() => updateQuantity(item.dish.id, 0)}><Trash2 className="w-3 h-3" /></Button>
+                  </div>
                 </div>
-                <div className="flex items-center gap-2">
-                  <Button variant="outline" size="icon" className="h-7 w-7" onClick={() => updateQuantity(item.dish.id, item.quantity - 1)}><Minus className="w-3 h-3" /></Button>
-                  <span className="w-6 text-center">{item.quantity}</span>
-                  <Button variant="outline" size="icon" className="h-7 w-7" onClick={() => updateQuantity(item.dish.id, item.quantity + 1)}><Plus className="w-3 h-3" /></Button>
-                  <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => updateQuantity(item.dish.id, 0)}><Trash2 className="w-3 h-3" /></Button>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
+              ))}
+            </div>
+          )}
+        </div>
       </CardContent>
 
-      <div className="border-t p-4 space-y-4">
+      <div className="border-t p-4 space-y-3">
         <div>
-          <p className="text-sm font-medium text-muted-foreground mb-2">Payment Method</p>
-          <div className="grid grid-cols-3 gap-2">
+          <p className="text-xs font-medium text-muted-foreground mb-1.5">Payment Method</p>
+          <div className="grid grid-cols-4 gap-1">
             {paymentMethods.map(method => (
-              <Button key={method.id} variant={selectedPayment === method.id ? "default" : "outline"} size="sm" className={cn("flex flex-col h-auto py-2", !method.isRevenue && selectedPayment === method.id && "bg-amber-600 hover:bg-amber-700")} onClick={() => setSelectedPayment(method.id)}>
-                <span className="text-base">{method.icon}</span>
-                <span className="text-xs">{method.name}</span>
+              <Button key={method.id} variant={selectedPayment === method.id ? "default" : "outline"} size="sm" className={cn("flex flex-col h-auto py-1 px-1", !method.isRevenue && selectedPayment === method.id && "bg-amber-600 hover:bg-amber-700")} onClick={() => setSelectedPayment(method.id)}>
+                <span className="text-sm">{method.icon}</span>
+                <span className="text-[10px] leading-tight">{method.name}</span>
               </Button>
             ))}
           </div>
           {!paymentMethods.find(m => m.id === selectedPayment)?.isRevenue && (
-            <p className="text-xs text-amber-600 mt-2 text-center">⚠️ This payment type does not contribute to revenue</p>
+            <p className="text-[10px] text-amber-600 mt-1 text-center">⚠️ No revenue</p>
           )}
         </div>
 
-        <div className="space-y-3">
+        <div className="space-y-2">
           <div className="flex justify-between items-baseline">
-            <span className="text-muted-foreground">Total</span>
-            <span className="text-3xl font-bold">{cartTotal.toLocaleString()} MT</span>
+            <span className="text-muted-foreground text-sm">Total</span>
+            <span className="text-2xl font-bold">{cartTotal.toLocaleString()} MT</span>
           </div>
           <div className="flex gap-2">
-            <Button variant="outline" onClick={handlePrintReceipt} disabled={cart.length === 0} className="gap-2">
+            <Button variant="outline" size="sm" onClick={handlePrintReceipt} disabled={cart.length === 0}>
               <Printer className="w-4 h-4" />
             </Button>
-            <Button className="flex-1 h-12 text-lg" onClick={handleCheckout} disabled={cart.length === 0 || isProcessing || !selectedTable}>
-              {isProcessing ? 'Processing...' : <><CreditCard className="w-5 h-5 mr-2" />Completar Venda</>}
+            <Button className="flex-1 h-10" onClick={handleCheckout} disabled={cart.length === 0 || isProcessing || !selectedTable}>
+              {isProcessing ? 'Processing...' : <><CreditCard className="w-4 h-4 mr-1" />Completar</>}
             </Button>
           </div>
         </div>
@@ -304,7 +306,7 @@ function POSPage({ currentStore }: { currentStore: any }) {
     processCheckout(customerName);
   };
 
-  const handleProcessSingleBill = async (bill: SplitBill) => {
+  const handleProcessSingleBill = async (bill: SplitBill, customerName?: string) => {
     if (!selectedTable) return;
     
     const billTotal = bill.items.reduce((sum, item) => sum + (Number(item.dish.selling_price) * item.quantity), 0);
@@ -316,12 +318,21 @@ function POSPage({ currentStore }: { currentStore: any }) {
       }
     }
 
-    await addTransaction(
+    const transaction = await addTransaction(
       billTotal,
       bill.paymentMethod || 'cash',
       selectedTable,
       bill.items.map(item => ({ dishId: item.dish.id, quantity: item.quantity, unitPrice: Number(item.dish.selling_price) }))
     );
+
+    // Record credit if payment method is credit
+    if (bill.paymentMethod === 'credit' && customerName && transaction) {
+      await addCredit({
+        customer_name: customerName,
+        sale_amount: billTotal,
+        transaction_id: transaction.id
+      });
+    }
 
     // Update the table-specific cart
     setTableCarts(prev => {
@@ -341,7 +352,11 @@ function POSPage({ currentStore }: { currentStore: any }) {
       return { ...prev, [selectedTable]: newTableCart };
     });
 
-    toast({ title: 'Bill paid!', description: `Paid ${billTotal.toLocaleString()} MT` });
+    const method = paymentMethods.find(m => m.id === bill.paymentMethod);
+    toast({ 
+      title: 'Bill paid!', 
+      description: `${billTotal.toLocaleString()} MT via ${method?.name}${customerName ? ` - ${customerName}` : ''}` 
+    });
   };
 
   const handlePrintBill = (bill: SplitBill, billNumber: number) => {
