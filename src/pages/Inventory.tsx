@@ -135,7 +135,7 @@ function InventoryContent() {
       '─'.repeat(85),
       ...listToDownload.map(item => {
         const name = item.ingredient.name.substring(0, 24).padEnd(25);
-        const current = `${item.currentQuantity} ${item.ingredient.unit}`.padEnd(12);
+        const current = `${item.current_quantity} ${item.ingredient.unit}`.padEnd(12);
         const required = `${item.amountToBuy} ${item.ingredient.unit}`.padEnd(12);
         const unitCost = item.lastUnitCost ? `${item.lastUnitCost.toFixed(2)} MT`.padEnd(12) : 'N/A'.padEnd(12);
         const estCost = item.estimatedCost ? `${item.estimatedCost.toFixed(2)} MT` : 'N/A';

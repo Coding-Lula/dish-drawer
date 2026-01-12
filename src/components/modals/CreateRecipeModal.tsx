@@ -138,9 +138,11 @@ export function CreateRecipeModal({ dish, ingredients, existingRecipes, onSave }
                       <div className="flex-1 min-w-0">
                         <p className="font-medium text-sm truncate">{ingredient.name}</p>
                         <p className="text-xs text-muted-foreground">
-                          Cost: {(quantity * Number(ingredient.average_cost)).toFixed(2)} MT
+                          {(quantity * Number(ingredient.average_cost)).toFixed(2)} MT
                         </p>
                       </div>
+                      
+                      {/* Fixed width controls to keep the delete button aligned */}
                       <div className="flex items-center gap-2 shrink-0">
                         <Input
                           type="number"
@@ -148,16 +150,18 @@ export function CreateRecipeModal({ dish, ingredients, existingRecipes, onSave }
                           min="0.01"
                           value={quantity}
                           onChange={(e) => updateQuantity(ingredient.id, parseFloat(e.target.value) || 0.01)}
-                          className="w-20 h-8 text-sm"
+                          className="w-16 h-8 text-sm px-2"
                         />
-                        <span className="text-xs text-muted-foreground w-10">{ingredient.unit}</span>
+                        <span className="text-[10px] text-muted-foreground w-8 truncate uppercase font-medium">
+                          {ingredient.unit}
+                        </span>
                         <Button
                           variant="ghost"
                           size="icon"
-                          className="h-8 w-8 text-destructive shrink-0"
+                          className="h-8 w-8 text-destructive shrink-0 hover:bg-destructive/10"
                           onClick={() => toggleIngredient(ingredient)}
                         >
-                          <Trash2 className="w-3 h-3" />
+                          <Trash2 className="w-4 h-4" />
                         </Button>
                       </div>
                     </div>
