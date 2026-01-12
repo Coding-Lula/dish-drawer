@@ -4,8 +4,9 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Split, Printer, CreditCard, Check, Plus, Minus } from 'lucide-react';
+import { Split, Printer, CreditCard, Check, Plus, Minus, User } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { Dish } from '@/hooks/useSupabaseData';
 
@@ -19,14 +20,15 @@ interface SplitBill {
   items: CartItem[];
   paymentMethod: string | null;
   isPaid: boolean;
+  customerName?: string;
 }
 
 interface SplitBillModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   cart: CartItem[];
-  paymentMethods: { id: string; name: string; icon: string }[];
-  onProcessSingleBill: (bill: SplitBill) => Promise<void>;
+  paymentMethods: { id: string; name: string; icon: string; isRevenue?: boolean }[];
+  onProcessSingleBill: (bill: SplitBill, customerName?: string) => Promise<void>;
   onPrintBill: (bill: SplitBill, billNumber: number) => void;
   storeName: string;
   tableName: string;
@@ -48,6 +50,8 @@ export function SplitBillModal({
   const [selectedBill, setSelectedBill] = useState<string>('bill-1');
   const [isProcessing, setIsProcessing] = useState(false);
   const [splitQuantities, setSplitQuantities] = useState<Record<string, Record<string, number>>>({});
+  const [creditCustomerName, setCreditCustomerName] = useState<Record<string, string>>({});
+  const [showCreditInput, setShowCreditInput] = useState<string | null>(null);
 
   // Reset bills when modal opens with new cart
   useEffect(() => {
@@ -57,6 +61,8 @@ export function SplitBillModal({
       ]);
       setSelectedBill('bill-1');
       setSplitQuantities({});
+      setCreditCustomerName({});
+      setShowCreditInput(null);
     }
   }, [open, cart]);
 
@@ -112,14 +118,30 @@ export function SplitBillModal({
 
   const setPaymentMethod = (billId: string, method: string) => {
     setBills(prev => prev.map(b => b.id === billId ? { ...b, paymentMethod: method } : b));
+    // Show credit input if credit method is selected
+    if (method === 'credit') {
+      setShowCreditInput(billId);
+    } else {
+      setShowCreditInput(null);
+    }
   };
 
   const payBill = async (billId: string) => {
     const bill = bills.find(b => b.id === billId);
     if (!bill || !bill.paymentMethod) return;
-
-    setIsProcessing(true);
-    await onProcessSingleBill(bill);
+    
+    // If credit payment, require customer name
+    if (bill.paymentMethod === 'credit') {
+      const customerName = creditCustomerName[billId]?.trim();
+      if (!customerName) {
+        return; // Customer name is required for credit
+      }
+      setIsProcessing(true);
+      await onProcessSingleBill(bill, customerName);
+    } else {
+      setIsProcessing(true);
+      await onProcessSingleBill(bill);
+    }
 
     const newBills = bills.filter(b => b.id !== billId);
 
@@ -131,6 +153,12 @@ export function SplitBillModal({
     }
 
     setIsProcessing(false);
+    setCreditCustomerName(prev => {
+      const newState = { ...prev };
+      delete newState[billId];
+      return newState;
+    });
+    setShowCreditInput(null);
   };
 
   const handlePrintBill = (bill: SplitBill, index: number) => {
@@ -302,20 +330,42 @@ export function SplitBillModal({
                 {/* Payment Section */}
                 {!currentBill.isPaid && currentBill.items.length > 0 && (
                   <div className="mt-4 space-y-3">
-                    <div className="grid grid-cols-3 gap-2">
-                      {paymentMethods.slice(0, 6).map(method => (
+                    <div className="grid grid-cols-4 gap-1.5">
+                      {paymentMethods.slice(0, 7).map(method => (
                         <Button
                           key={method.id}
                           variant={currentBill.paymentMethod === method.id ? "default" : "outline"}
                           size="sm"
-                          className="flex flex-col h-auto py-2"
+                          className={cn(
+                            "flex flex-col h-auto py-1.5",
+                            method.id === 'credit' && currentBill.paymentMethod === method.id && "bg-amber-600 hover:bg-amber-700"
+                          )}
                           onClick={() => setPaymentMethod(currentBill.id, method.id)}
                         >
-                          <span>{method.icon}</span>
-                          <span className="text-xs">{method.name}</span>
+                          <span className="text-sm">{method.icon}</span>
+                          <span className="text-[10px]">{method.name}</span>
                         </Button>
                       ))}
                     </div>
+                    
+                    {/* Credit customer name input */}
+                    {showCreditInput === currentBill.id && currentBill.paymentMethod === 'credit' && (
+                      <div className="p-3 rounded-lg bg-amber-500/10 border border-amber-500/20 space-y-2">
+                        <Label htmlFor={`customer-${currentBill.id}`} className="text-sm text-amber-700 flex items-center gap-2">
+                          <User className="w-4 h-4" />
+                          Customer Name (Required for Credit)
+                        </Label>
+                        <Input
+                          id={`customer-${currentBill.id}`}
+                          value={creditCustomerName[currentBill.id] || ''}
+                          onChange={(e) => setCreditCustomerName(prev => ({ ...prev, [currentBill.id]: e.target.value }))}
+                          placeholder="Enter customer name"
+                          className="h-8"
+                          autoFocus
+                        />
+                      </div>
+                    )}
+                    
                     <div className="flex items-center justify-between">
                       <span className="text-xl font-bold">{getBillTotal(currentBill).toLocaleString()} MT</span>
                       <div className="flex gap-2">
@@ -324,7 +374,11 @@ export function SplitBillModal({
                         </Button>
                         <Button 
                           size="sm" 
-                          disabled={!currentBill.paymentMethod || isProcessing}
+                          disabled={
+                            !currentBill.paymentMethod || 
+                            isProcessing || 
+                            (currentBill.paymentMethod === 'credit' && !creditCustomerName[currentBill.id]?.trim())
+                          }
                           onClick={() => payBill(currentBill.id)}
                         >
                           <CreditCard className="w-4 h-4 mr-1" /> Pay This Bill

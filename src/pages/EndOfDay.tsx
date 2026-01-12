@@ -138,13 +138,19 @@ function EndOfDayContent() {
   const nonRevenueAmount = transactions
     .filter(t => !paymentMethods[t.payment_method]?.isRevenue)
     .reduce((sum, t) => sum + Number(t.total_amount), 0);
-  const netRevenue = totalSales - nonRevenueAmount;
   
+  // Total expenses (all expenses for the day)
+  const totalExpenses = expenses.reduce((sum, e) => sum + Number(e.amount), 0);
+  
+  // Stock expenses specifically
   const stockExpenses = expenses
     .filter(e => e.category === 'Stock' && !e.is_deducted)
     .reduce((sum, e) => sum + Number(e.amount), 0);
 
-  // Calculate allocation amounts
+  // Net revenue = Total Sales - Non-Revenue - All Expenses
+  const netRevenue = totalSales - nonRevenueAmount - totalExpenses;
+
+  // Calculate allocation amounts based on net revenue (after expenses)
   const calculateAllocationAmount = (percent) => {
     return (netRevenue * percent) / 100;
   };
@@ -342,10 +348,11 @@ function EndOfDayContent() {
   const restockAmount = restockAllocation ? calculateAllocationAmount(restockAllocation.percent) : 0;
   const finalRestockTransfer = Math.max(0, restockAmount - stockExpenses);
 
-  const cashInDrawer = transactions
+  // Expected cash in drawer = Cash transactions - All expenses
+  const cashTransactions = transactions
     .filter(t => paymentMethods[t.payment_method]?.isCash)
-    .reduce((sum, t) => sum + Number(t.total_amount), 0) - 
-    expenses.reduce((sum, e) => sum + Number(e.amount), 0);
+    .reduce((sum, t) => sum + Number(t.total_amount), 0);
+  const cashInDrawer = cashTransactions - totalExpenses;
 
   return (
     <div className="space-y-6 max-w-6xl mx-auto">
@@ -374,6 +381,10 @@ function EndOfDayContent() {
           <div className="flex justify-between items-center text-destructive">
             <span>Less: Non-Revenue</span>
             <span className="font-semibold">- {nonRevenueAmount.toLocaleString()} MT</span>
+          </div>
+          <div className="flex justify-between items-center text-destructive">
+            <span>Less: Expenses</span>
+            <span className="font-semibold">- {totalExpenses.toLocaleString()} MT</span>
           </div>
           <Separator />
           <div className="flex justify-between items-center">
