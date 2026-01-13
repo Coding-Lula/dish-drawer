@@ -7,6 +7,7 @@ import { Slider } from '@/components/ui/slider';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
 import { useTransactions, useDailySummaries, useExpenses, useCredits, useAllocationCategories } from '@/hooks/useSupabaseData';
+import { useTableSalesBreakdown } from '@/hooks/useTransactionItems';
 import { exportDailyReportPDF } from '@/utils/exportUtils';
 import { 
   PieChart, 
@@ -41,6 +42,7 @@ function RevenueAllocationContent() {
   const { credits, settleCredit } = useCredits(currentStore?.id || null);
   const { categories, addCategory, updateCategory, deleteCategory } = useAllocationCategories();
   const { saveSummary } = useDailySummaries(currentStore?.id || null);
+  const { breakdown: tableSales } = useTableSalesBreakdown(currentStore?.id || null);
 
   const [newCategoryName, setNewCategoryName] = useState('');
   const [localPercents, setLocalPercents] = useState<Record<string, number>>({});
@@ -90,7 +92,8 @@ function RevenueAllocationContent() {
     exportDailyReportPDF(currentStore?.name || 'Store', grandTotal, 
       categories.map(c => ({ name: c.name, amount: (grandTotal * getPercent(c.id, c.percent)) / 100, percent: getPercent(c.id, c.percent) }))
         .concat([{ name: 'Net Profit', amount: netProfitAmount, percent: netProfitPercent }]),
-      stockExpenses
+      stockExpenses,
+      tableSales
     );
   };
 

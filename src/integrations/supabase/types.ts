@@ -973,6 +973,48 @@ export type Database = {
         }
         Relationships: []
       }
+      store_dish_prices: {
+        Row: {
+          created_at: string
+          custom_price: number
+          dish_id: string
+          id: string
+          store_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          custom_price: number
+          dish_id: string
+          id?: string
+          store_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          custom_price?: number
+          dish_id?: string
+          id?: string
+          store_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "store_dish_prices_dish_id_fkey"
+            columns: ["dish_id"]
+            isOneToOne: false
+            referencedRelation: "dishes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "store_dish_prices_store_id_fkey"
+            columns: ["store_id"]
+            isOneToOne: false
+            referencedRelation: "stores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       store_stock: {
         Row: {
           created_at: string

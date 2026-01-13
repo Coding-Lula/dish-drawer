@@ -13,7 +13,8 @@ import {
   PieChart,
   Wallet,
   LogOut,
-  Trash2
+  Trash2,
+  History
 } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { 
@@ -43,6 +44,7 @@ const allNavItems = [
   { path: '/', label: 'Dashboard', icon: LayoutDashboard, roles: ['manager', 'cashier'] },
   { path: '/pos', label: 'Ponto de Venda', icon: ShoppingCart, roles: ['manager', 'cashier'] },
   { path: '/inventory', label: 'Inventário', icon: Package, roles: ['manager', 'cashier'] },
+  { path: '/restock-history', label: 'Histórico Reposição', icon: History, roles: ['manager', 'cashier'] },
   { path: '/recipes', label: 'Folhas Técnicas', icon: UtensilsCrossed, roles: ['manager'] },
   { path: '/sub-recipes', label: 'Sub-Recipes', icon: UtensilsCrossed, roles: ['manager'] },
   { path: '/expenses', label: 'Despesas', icon: Receipt, roles: ['manager'] },
