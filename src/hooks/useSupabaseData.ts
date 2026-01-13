@@ -1769,3 +1769,46 @@ export function useProductionLogs(storeId: string | null) {
 
   return { productionLogs, loading, processBatch, refetch: fetchProductionLogs };
 }
+
+// Suppliers hook
+export function useSuppliers() {
+  const [suppliers, setSuppliers] = useState<Supplier[]>([]);
+  const [loading, setLoading] = useState(true);
+  const { toast } = useToast();
+
+  const fetchSuppliers = useCallback(async () => {
+    const { data, error } = await supabase
+      .from('suppliers')
+      .select('*')
+      .order('name');
+    if (error) {
+      toast({ title: 'Error fetching suppliers', description: error.message, variant: 'destructive' });
+    } else {
+      setSuppliers(data || []);
+    }
+    setLoading(false);
+  }, [toast]);
+
+  const addSupplier = async (supplier: { name: string; contact_info?: string }) => {
+    const { data, error } = await supabase
+      .from('suppliers')
+      .insert([supplier])
+      .select()
+      .single();
+    
+    if (error) {
+      toast({ title: 'Error adding supplier', description: error.message, variant: 'destructive' });
+      return null;
+    }
+    
+    setSuppliers(prev => [...prev, data].sort((a, b) => a.name.localeCompare(b.name)));
+    toast({ title: 'Supplier added' });
+    return data;
+  };
+
+  useEffect(() => {
+    fetchSuppliers();
+  }, [fetchSuppliers]);
+
+  return { suppliers, loading, addSupplier, refetch: fetchSuppliers };
+}
