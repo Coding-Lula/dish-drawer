@@ -129,7 +129,7 @@ export function useTableSalesBreakdown(storeId: string | null) {
     // Get today's transactions with table info
     const { data: transactions, error: txError } = await supabase
       .from('transactions')
-      .select('id, table_id')
+      .select('id, table_id, restaurant_tables(id, name, table_number)')
       .eq('store_id', storeId)
       .gte('date', today);
 
@@ -145,23 +145,13 @@ export function useTableSalesBreakdown(storeId: string | null) {
       return;
     }
 
-    // Get table names
-    const tableIds = [...new Set(transactions.map(t => t.table_id).filter(Boolean))];
-    let tableMap: Record<string, string> = {};
-    
-    if (tableIds.length > 0) {
-      const { data: tables } = await supabase
-        .from('restaurant_tables')
-        .select('id, name, table_number')
-        .in('id', tableIds);
-      
-      if (tables) {
-        tableMap = tables.reduce((acc, t) => {
-          acc[t.id] = t.name || `Mesa ${t.table_number}`;
-          return acc;
-        }, {} as Record<string, string>);
+    // Build table map from joined data
+    const tableMap: Record<string, string> = {};
+    transactions.forEach((t: any) => {
+      if (t.restaurant_tables) {
+        tableMap[t.table_id as string] = t.restaurant_tables.name || `Mesa ${t.restaurant_tables.table_number}`;
       }
-    }
+    });
 
     const transactionIds = transactions.map(t => t.id);
 
