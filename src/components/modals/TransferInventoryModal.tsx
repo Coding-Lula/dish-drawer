@@ -30,8 +30,11 @@ export function TransferInventoryModal({
   const [notes, setNotes] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  console.log('TransferInventoryModal - currentStoreId:', currentStoreId);
+
   useEffect(() => {
     if (open) {
+       console.log('Modal opened - currentStoreId:', currentStoreId, 'fromStoreId:', fromStoreId);
       setFromStoreId(currentStoreId);
       setToStoreId('');
       setItems([{ ingredientId: '', quantity: '' }]);
@@ -65,9 +68,17 @@ export function TransferInventoryModal({
       }));
 
     if (!fromStoreId || !toStoreId || validItems.length === 0) return;
-
+    //Delete
+      console.log('TRANSFER DATA:', {
+      fromStoreId,
+      toStoreId,
+      items: validItems,
+      notes,
+      currentStoreId // Also log the prop for comparison
+    });
+    //Stop delete
     setIsSubmitting(true);
-    const result = await onTransfer(fromStoreId, toStoreId, validItems, notes || undefined);
+    const result = await onTransfer(fromStoreId, toStoreId, validItems, notes);
     setIsSubmitting(false);
 
     if (result) {

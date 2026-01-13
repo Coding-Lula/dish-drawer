@@ -1439,11 +1439,48 @@ export function useInventoryTransfers() {
     }
 
     // Execute all updates
+    /*
     const { error: sourceUpdateError } = await supabase.from('store_stock').upsert(sourceStockUpdates);
     if (sourceUpdateError) {
       toast({ title: 'Error deducting stock', description: sourceUpdateError.message, variant: 'destructive' });
       return null;
-    }
+    }*/
+   //Restore above if this transfer issue is not fixed
+   // Execute all updates - Use update instead of upsert for existing records
+const { error: sourceUpdateError } = await supabase
+  .from('store_stock')
+  .update({ current_quantity: sourceStockUpdates[0].current_quantity })
+  .eq('id', sourceStockUpdates[0].id);
+
+if (sourceUpdateError) {
+  toast({ title: 'Error deducting stock', description: sourceUpdateError.message, variant: 'destructive' });
+  return null;
+}
+
+// For multiple updates, you need to handle them individually or batch them
+for (const update of sourceStockUpdates) {
+  const { error } = await supabase
+    .from('store_stock')
+    .update({ current_quantity: update.current_quantity })
+    .eq('id', update.id);
+  
+  if (error) {
+    toast({ title: 'Error deducting stock', description: error.message, variant: 'destructive' });
+    return null;
+  }
+}
+
+for (const update of destStockUpdates) {
+  const { error } = await supabase
+    .from('store_stock')
+    .update({ current_quantity: update.current_quantity })
+    .eq('id', update.id);
+  
+  if (error) {
+    toast({ title: 'Error updating destination stock', description: error.message, variant: 'destructive' });
+    return null;
+  }
+}
 
     const { error: destUpdateError } = await supabase.from('store_stock').upsert(destStockUpdates);
     if (destUpdateError) {

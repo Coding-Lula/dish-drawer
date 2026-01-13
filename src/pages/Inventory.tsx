@@ -59,6 +59,7 @@ function InventoryContent() {
   const { ingredients, addIngredient, deleteIngredient, updateIngredient, loading: ingredientsLoading, refetch: refetchIngredients } = useIngredients();
   const { getLastUnitCost, loading: logsLoading } = useInventoryLogs(currentStore?.id || null);
   const { createTransfer } = useInventoryTransfers();
+  console.log('useInventoryTransfers hook:', { createTransfer: typeof createTransfer });
   const { subRecipes, refetch: refetchSubRecipes } = useSubRecipes();
   const { processBatch, refetch: refetchProduction } = useProductionLogs(currentStore?.id || null);
 
@@ -155,12 +156,48 @@ function InventoryContent() {
   };
 
   const handleTransfer = async (fromStoreId: string, toStoreId: string, items: { ingredientId: string; quantity: number }[], notes?: string) => {
+  console.log('=== TRANSFER DEBUG ===');
+  console.log('1. handleTransfer called with:', { fromStoreId, toStoreId, items, notes });
+  console.log('2. createTransfer function exists?', typeof createTransfer);
+  console.log('3. currentStore:', currentStore?.id, currentStore?.name);
+  
+  if (!createTransfer) {
+    console.error('ERROR: createTransfer is undefined!');
+    toast({ title: 'Transfer function not available', variant: 'destructive' });
+    return false;
+  }
+  
+  try {
+    console.log('4. Calling createTransfer...');
     const result = await createTransfer(fromStoreId, toStoreId, items, notes);
+    console.log('5. Transfer result:', result);
+    
     if (result) {
+      console.log('6. Transfer successful, refetching stocks...');
       refetchStocks();
+    } else {
+      console.log('6. Transfer returned false/undefined');
     }
     return result;
-  };
+  } catch (error) {
+    console.error('7. Transfer error details:');
+    console.error('Error message:', error.message);
+    console.error('Error stack:', error.stack);
+    console.error('Full error object:', error);
+    
+    // Check for Supabase specific error
+    if (error.details) console.error('Supabase details:', error.details);
+    if (error.hint) console.error('Supabase hint:', error.hint);
+    if (error.code) console.error('Supabase error code:', error.code);
+    
+    toast({ 
+      title: 'Transfer failed', 
+      description: error.message || 'Unknown error occurred',
+      variant: 'destructive' 
+    });
+    return false;
+  }
+};
 
   const handleProcessBatch = async (subRecipeId: string, quantity: number) => {
     const result = await processBatch(subRecipeId, quantity, ingredients, stocks);
@@ -344,6 +381,7 @@ function InventoryContent() {
               onTransfer={handleTransfer}
             />
           )}
+          
           
           {/* Manager Only: Process Batch */}
           {isManager && (
