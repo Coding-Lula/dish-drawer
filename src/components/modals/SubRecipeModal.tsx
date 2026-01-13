@@ -11,6 +11,7 @@ export function SubRecipeModal({ isOpen, onClose, recipe, ingredients }) {
   const { saveSubRecipe } = useSubRecipes();
   const [name, setName] = useState('');
   const [processedIngredientId, setProcessedIngredientId] = useState('');
+  const [quantityProduced, setQuantityProduced] = useState(1);
   const [items, setItems] = useState([{ raw_ingredient_id: '', quantity_required: 1 }]);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -21,6 +22,7 @@ export function SubRecipeModal({ isOpen, onClose, recipe, ingredients }) {
     if (recipe) {
       setName(recipe.name);
       setProcessedIngredientId(recipe.processed_ingredient_id);
+      setQuantityProduced(recipe.quantity_produced || 1);
       setItems(recipe.sub_recipe_items.map(item => ({
         raw_ingredient_id: item.raw_ingredient_id,
         quantity_required: item.quantity_required,
@@ -28,6 +30,7 @@ export function SubRecipeModal({ isOpen, onClose, recipe, ingredients }) {
     } else {
       setName('');
       setProcessedIngredientId('');
+      setQuantityProduced(1);
       setItems([{ raw_ingredient_id: '', quantity_required: 1 }]);
     }
   }, [recipe, isOpen]);
@@ -55,6 +58,7 @@ export function SubRecipeModal({ isOpen, onClose, recipe, ingredients }) {
       id: recipe?.id,
       name,
       processed_ingredient_id: processedIngredientId,
+      quantity_produced: quantityProduced,
     };
 
     await saveSubRecipe(recipeData, items);
@@ -74,18 +78,31 @@ export function SubRecipeModal({ isOpen, onClose, recipe, ingredients }) {
             <Label>Sub-Recipe Name</Label>
             <Input value={name} onChange={(e) => setName(e.target.value)} required />
           </div>
-          <div className="space-y-2">
-            <Label>Produced Ingredient</Label>
-            <Select value={processedIngredientId} onValueChange={setProcessedIngredientId} required>
-              <SelectTrigger>
-                <SelectValue placeholder="Select an ingredient" />
-              </SelectTrigger>
-              <SelectContent>
-                {processedIngredients.map(ing => (
-                  <SelectItem key={ing.id} value={ing.id}>{ing.name}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label>Produced Ingredient</Label>
+              <Select value={processedIngredientId} onValueChange={setProcessedIngredientId} required>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select an ingredient" />
+                </SelectTrigger>
+                <SelectContent>
+                  {processedIngredients.map(ing => (
+                    <SelectItem key={ing.id} value={ing.id}>{ing.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>Quantity Produced</Label>
+              <Input
+                type="number"
+                value={quantityProduced}
+                onChange={(e) => setQuantityProduced(parseFloat(e.target.value))}
+                min="1"
+                step="1"
+                required
+              />
+            </div>
           </div>
 
           <div>

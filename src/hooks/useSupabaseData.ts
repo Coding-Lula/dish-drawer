@@ -25,8 +25,9 @@ export interface SubRecipe {
   id: string;
   name: string;
   processed_ingredient_id: string;
+  quantity_produced: number;
   created_at: string;
-  sub_recipe_items: SubRecipeItem[]; // For convenience
+  sub_recipe_items: SubRecipeItem[];
 }
 
 export interface SubRecipeItem {
@@ -1521,15 +1522,6 @@ for (const update of destStockUpdates) {
   return { transfers, loading, createTransfer: createBulkTransfer, refetch: fetchTransfers };
 }
 
-// Sub-Recipes hook - uses ingredient_recipes table
-export interface IngredientRecipe {
-  id: string;
-  processed_ingredient_id: string;
-  raw_ingredient_id: string;
-  quantity_required: number;
-  created_at: string;
-}
-
 export function useSubRecipes() {
   const [subRecipes, setSubRecipes] = useState<SubRecipe[]>([]);
   const [loading, setLoading] = useState(true);
@@ -1537,60 +1529,61 @@ export function useSubRecipes() {
 
   const fetchSubRecipes = useCallback(async () => {
     setLoading(true);
-    // Get all ingredient recipes and group by processed_ingredient_id
-    const { data, error } = await supabase
-      .from('ingredient_recipes')
-      .select('*')
-      .order('created_at');
+    const { data: recipesData, error: recipesError } = await supabase
+      .from('sub_recipes')
+      .select('*');
 
-    if (error) {
-      toast({ title: 'Error fetching sub-recipes', description: error.message, variant: 'destructive' });
+    if (recipesError) {
+      toast({ title: 'Error fetching sub-recipes', description: recipesError.message, variant: 'destructive' });
       setLoading(false);
       return;
     }
 
-    // Group recipes by processed_ingredient_id
-    const groupedRecipes = (data || []).reduce((acc, item) => {
-      const key = item.processed_ingredient_id;
-      if (!acc[key]) {
-        acc[key] = {
-          id: key, // Use processed_ingredient_id as the "sub-recipe" id
-          name: '', // Will be filled from ingredient name
-          processed_ingredient_id: key,
-          created_at: item.created_at,
-          sub_recipe_items: []
-        };
-      }
-      acc[key].sub_recipe_items.push({
-        id: item.id,
-        sub_recipe_id: key,
-        raw_ingredient_id: item.raw_ingredient_id,
-        quantity_required: item.quantity_required,
-        created_at: item.created_at
-      });
-      return acc;
-    }, {} as Record<string, SubRecipe>);
+    const { data: itemsData, error: itemsError } = await supabase
+      .from('sub_recipe_items')
+      .select('*');
 
-    setSubRecipes(Object.values(groupedRecipes));
+    if (itemsError) {
+      toast({ title: 'Error fetching sub-recipe items', description: itemsError.message, variant: 'destructive' });
+      setLoading(false);
+      return;
+    }
+
+    const recipesWithItems = recipesData.map(recipe => ({
+      ...recipe,
+      sub_recipe_items: itemsData.filter(item => item.sub_recipe_id === recipe.id),
+    }));
+
+    setSubRecipes(recipesWithItems);
     setLoading(false);
   }, [toast]);
 
   const saveSubRecipe = async (
-    recipe: { id?: string; name: string; processed_ingredient_id: string; },
+    recipe: { id?: string; name: string; processed_ingredient_id: string; quantity_produced: number },
     items: { raw_ingredient_id: string; quantity_required: number }[]
   ) => {
-    const processedIngredientId = recipe.processed_ingredient_id;
+    const { data: savedRecipe, error } = await supabase
+      .from('sub_recipes')
+      .upsert({
+        id: recipe.id,
+        name: recipe.name,
+        processed_ingredient_id: recipe.processed_ingredient_id,
+        quantity_produced: recipe.quantity_produced,
+      })
+      .select()
+      .single();
 
-    // Delete existing recipes for this processed ingredient
-    await supabase
-      .from('ingredient_recipes')
-      .delete()
-      .eq('processed_ingredient_id', processedIngredientId);
+    if (error) {
+      toast({ title: 'Error saving sub-recipe', description: error.message, variant: 'destructive' });
+      return null;
+    }
+
+    await supabase.from('sub_recipe_items').delete().eq('sub_recipe_id', savedRecipe.id);
 
     if (items.length > 0) {
-      const { error: itemsError } = await supabase.from('ingredient_recipes').insert(
+      const { error: itemsError } = await supabase.from('sub_recipe_items').insert(
         items.map(item => ({
-          processed_ingredient_id: processedIngredientId,
+          sub_recipe_id: savedRecipe.id,
           raw_ingredient_id: item.raw_ingredient_id,
           quantity_required: item.quantity_required,
         }))
@@ -1604,19 +1597,19 @@ export function useSubRecipes() {
 
     toast({ title: 'Sub-recipe saved successfully' });
     fetchSubRecipes();
-    return processedIngredientId;
+    return savedRecipe;
   };
 
-  const deleteSubRecipe = async (processedIngredientId: string) => {
+  const deleteSubRecipe = async (id: string) => {
     const { error } = await supabase
-      .from('ingredient_recipes')
+      .from('sub_recipes')
       .delete()
-      .eq('processed_ingredient_id', processedIngredientId);
+      .eq('id', id);
     if (error) {
       toast({ title: 'Error deleting sub-recipe', description: error.message, variant: 'destructive' });
       return false;
     }
-    setSubRecipes(prev => prev.filter(r => r.processed_ingredient_id !== processedIngredientId));
+    setSubRecipes(prev => prev.filter(r => r.id !== id));
     toast({ title: 'Sub-recipe deleted successfully' });
     return true;
   };
@@ -1651,82 +1644,75 @@ export function useProductionLogs(storeId: string | null) {
 
   const processBatch = async (
     subRecipeId: string,
-    quantityToProduce: number,
+    batchesToProduce: number,
     ingredients: Ingredient[],
     stocks: StoreStock[]
   ) => {
     if (!storeId) return null;
 
-    // Get the sub-recipe items for this processed ingredient from ingredient_recipes
-    const { data: recipeItems, error: recipeError } = await supabase
-      .from('ingredient_recipes')
-      .select('*')
-      .eq('processed_ingredient_id', subRecipeId);
+    const { data: subRecipeData, error: subRecipeError } = await supabase
+      .from('sub_recipes')
+      .select('*, sub_recipe_items(*)')
+      .eq('id', subRecipeId)
+      .single();
 
-    if (recipeError) {
+    if (subRecipeError) {
       toast({
-        title: 'Recipe not found',
+        title: 'Sub-recipe not found',
         description: 'The selected sub-recipe could not be found.',
         variant: 'destructive'
       });
       return null;
     }
-    
-    if (!recipeItems || recipeItems.length === 0) {
-      toast({ 
-        title: 'No recipe found', 
-        description: 'This ingredient has no sub-recipe defined.', 
-        variant: 'destructive' 
-      });
-      return null;
-    }
 
-    // Calculate required raw materials and check availability
+    const recipeItems = subRecipeData.sub_recipe_items;
+
+    const totalQuantityProduced = batchesToProduce * subRecipeData.quantity_produced;
+
+    // Pre-production stock check
     let totalCost = 0;
-    const rawMaterialsNeeded: { ingredientId: string; quantity: number; cost: number; stockId: string }[] = [];
+    const stockUpdates: { id: string; newQuantity: number }[] = [];
+    const rawMaterialsNeeded: { ingredientId: string; quantity: number; cost: number }[] = [];
 
     for (const item of recipeItems) {
-      const requiredQty = item.quantity_required * quantityToProduce;
+      const requiredQty = item.quantity_required * batchesToProduce;
       const stock = stocks.find(s => s.ingredient_id === item.raw_ingredient_id);
       const ingredient = ingredients.find(i => i.id === item.raw_ingredient_id);
 
       if (!stock || stock.current_quantity < requiredQty) {
-        toast({ 
-          title: 'Insufficient raw materials', 
-          description: `Not enough ${ingredient?.name || 'ingredient'} in stock. Need ${requiredQty}, have ${stock?.current_quantity || 0}.`, 
-          variant: 'destructive' 
+        toast({
+          title: 'Insufficient raw materials',
+          description: `Not enough ${ingredient?.name || 'ingredient'} in stock. Need ${requiredQty}, have ${stock?.current_quantity || 0}.`,
+          variant: 'destructive'
         });
         return null;
       }
 
       const cost = requiredQty * (ingredient?.average_cost || 0);
       totalCost += cost;
-      rawMaterialsNeeded.push({ 
+      stockUpdates.push({ id: stock.id, newQuantity: stock.current_quantity - requiredQty });
+      rawMaterialsNeeded.push({
         ingredientId: item.raw_ingredient_id,
-        quantity: requiredQty, 
+        quantity: requiredQty,
         cost,
-        stockId: stock.id
       });
     }
 
-    // Deduct raw materials from stock
-    for (const material of rawMaterialsNeeded) {
-      const stock = stocks.find(s => s.id === material.stockId);
-      if (stock) {
-        await supabase
-          .from('store_stock')
-          .update({ current_quantity: stock.current_quantity - material.quantity })
-          .eq('id', material.stockId);
-      }
+    // Atomically update all stock levels
+    for (const update of stockUpdates) {
+      await supabase
+        .from('store_stock')
+        .update({ current_quantity: update.newQuantity })
+        .eq('id', update.id);
     }
 
-    // Add processed ingredient to stock - subRecipeId IS the processed_ingredient_id
-    const processedIngredientId = subRecipeId;
+    // Add processed ingredient to stock
+    const processedIngredientId = subRecipeData.processed_ingredient_id;
     const processedStock = stocks.find(s => s.ingredient_id === processedIngredientId);
     if (processedStock) {
       await supabase
         .from('store_stock')
-        .update({ current_quantity: processedStock.current_quantity + quantityToProduce })
+        .update({ current_quantity: processedStock.current_quantity + totalQuantityProduced })
         .eq('id', processedStock.id);
     } else {
       await supabase
@@ -1734,7 +1720,7 @@ export function useProductionLogs(storeId: string | null) {
         .insert({
           store_id: storeId,
           ingredient_id: processedIngredientId,
-          current_quantity: quantityToProduce,
+          current_quantity: totalQuantityProduced,
           min_threshold: 10,
           target_stock: 100
         });
@@ -1744,10 +1730,10 @@ export function useProductionLogs(storeId: string | null) {
     const processedIngredient = ingredients.find(i => i.id === processedIngredientId);
     const oldQty = processedStock?.current_quantity || 0;
     const oldCost = processedIngredient?.average_cost || 0;
-    const unitCost = quantityToProduce > 0 ? totalCost / quantityToProduce : 0;
-    const newQty = oldQty + quantityToProduce;
-    const newWAC = newQty > 0 ? ((oldQty * oldCost) + (quantityToProduce * unitCost)) / newQty : unitCost;
-    
+    const unitCost = totalQuantityProduced > 0 ? totalCost / totalQuantityProduced : 0;
+    const newQty = oldQty + totalQuantityProduced;
+    const newWAC = newQty > 0 ? ((oldQty * oldCost) + (totalQuantityProduced * unitCost)) / newQty : unitCost;
+
     await supabase.from('ingredients').update({ average_cost: newWAC }).eq('id', processedIngredientId);
 
     // Create production log
@@ -1756,7 +1742,7 @@ export function useProductionLogs(storeId: string | null) {
       .insert({
         store_id: storeId,
         processed_ingredient_id: processedIngredientId,
-        quantity_produced: quantityToProduce,
+        quantity_produced: totalQuantityProduced,
         unit_cost: unitCost,
         total_cost: totalCost
       })
