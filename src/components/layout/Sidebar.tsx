@@ -146,7 +146,7 @@ export function Sidebar({ currentStore, onStoreChange }: SidebarProps) {
                   </SelectContent>
                 </Select>
                 {role === 'manager' && (
-                  <div className="flex gap-2 mt-2">
+                  <div className="flex gap-1 mt-">
                     <NewStoreModal onSubmit={addStore} />
                     {stores.length > 1 && currentStore && (
                       <AlertDialog open={!!storeToDelete} onOpenChange={(open) => !open && setStoreToDelete(null)}>
@@ -207,9 +207,11 @@ export function Sidebar({ currentStore, onStoreChange }: SidebarProps) {
         </nav>
 
         {/* Footer with User Info */}
+        
         {!collapsed && (
+          
           <div className="p-4 border-t border-border">
-            <div className="flex items-center gap-3 mb-3">
+            <div className="flex items-center gap-1 mb-1">
               <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center">
                 <span className="text-sm font-medium text-primary">{getInitials()}</span>
               </div>
@@ -218,6 +220,7 @@ export function Sidebar({ currentStore, onStoreChange }: SidebarProps) {
                 <p className="text-xs text-muted-foreground capitalize">{role}</p>
               </div>
             </div>
+            
             <Button 
               variant="outline" 
               size="sm" 

@@ -28,13 +28,12 @@ interface SplitBill {
 }
 
 const paymentMethods = [
-  { id: 'cash', name: 'Cash', icon: '💵', isRevenue: true, isCash: true },
-  { id: 'cartao', name: 'Cartão', icon: '💳', isRevenue: true, isCash: true },
-  { id: 'mpesa', name: 'M-Pesa', icon: '📱', isRevenue: true, isCash: true },
-  { id: 'mkesh', name: 'M-Kesh', icon: '🟡', isRevenue: true, isCash: true },
-  { id: 'paga_facil', name: 'Paga Fácil', icon: '🏦', isRevenue: true, isCash: true },
-  { id: 'credit', name: 'Credito', icon: '📝', isRevenue: false, isCash: false },
-  { id: 'self_consumption', name: 'Mesa 0', icon: '🍽️', isRevenue: false, isCash: false },
+  { id: 'cash', name: 'Cash', icon: '', isRevenue: true, isCash: true },
+  { id: 'cartao', name: 'Cartão', icon: '', isRevenue: true, isCash: true },
+  { id: 'mpesa', name: 'M-Pesa', icon: '', isRevenue: true, isCash: true },
+  { id: 'paga_facil', name: 'Paga Fácil', icon: '', isRevenue: true, isCash: true },
+  { id: 'credit', name: 'Credito', icon: '', isRevenue: false, isCash: false },
+  { id: 'self_consumption', name: 'Mesa 0', icon: '', isRevenue: false, isCash: false },
 ];
 
 function POSContent() {
@@ -408,7 +407,7 @@ function POSPage({ currentStore }: { currentStore: any }) {
         <div className="mb-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <div>
             <h1 className="text-2xl font-bold text-foreground">Ponto de vendas</h1>
-            <p className="text-muted-foreground">Selecione os itens para adicionar ao carrinho</p>
+            <p className="text-muted-foreground">Selecione os itens para adicionar a mesa</p>
           </div>
           <div className="flex items-center gap-3 w-full sm:w-auto">
             <ManageTablesModal tables={tables} onAddTable={addTable} onDeleteTable={deleteTable} />

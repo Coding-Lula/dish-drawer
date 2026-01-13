@@ -131,49 +131,32 @@ export function CreateRecipeModal({ dish, ingredients, existingRecipes, onSave }
             <div className="flex flex-col min-h-0">
               <Label className="mb-2">Recipe Ingredients ({selectedIngredients.length})</Label>
               <ScrollArea className="h-[300px] border rounded-lg p-2">
-                <div className="space-y-2">
-                  {selectedIngredients.map(({ ingredient, quantity }) => (
-                    <div key={ingredient.id} className="flex items-center gap-2 p-2 rounded-md bg-muted/30 border">
-                      <Package className="w-4 h-4 text-muted-foreground shrink-0" />
-                      <div className="flex-1 min-w-0">
-                        <p className="font-medium text-sm truncate">{ingredient.name}</p>
-                        <p className="text-xs text-muted-foreground">
-                          {(quantity * Number(ingredient.average_cost)).toFixed(2)} MT
-                        </p>
-                      </div>
-                      
-                      {/* Fixed width controls to keep the delete button aligned */}
-                      <div className="flex items-center gap-2 shrink-0">
-                        <Input
-                          type="number"
-                          step="0.01"
-                          min="0.01"
-                          value={quantity}
-                          onChange={(e) => updateQuantity(ingredient.id, parseFloat(e.target.value) || 0.01)}
-                          className="w-16 h-8 text-sm px-2"
-                        />
-                        <span className="text-[10px] text-muted-foreground w-8 truncate uppercase font-medium">
-                          {ingredient.unit}
-                        </span>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-8 w-8 text-destructive shrink-0 hover:bg-destructive/10"
-                          onClick={() => toggleIngredient(ingredient)}
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </Button>
-                      </div>
-                    </div>
-                  ))}
-                  
-                  {selectedIngredients.length === 0 && (
-                    <div className="text-center py-8 text-muted-foreground">
-                      <Package className="w-8 h-8 mx-auto mb-2 opacity-30" />
-                      <p className="text-sm">Select ingredients from the left</p>
-                    </div>
-                  )}
-                </div>
+            <div className="space-y-2">
+            {selectedIngredients.map(({ ingredient, quantity }) => (
+    
+            <div key={ingredient.id} className="flex items-center gap-2 p-2 rounded-md bg-muted/20 border">
+              <Package className="w-4 h-4 text-muted-foreground shrink-0" />
+      
+            {/* 'min-w-0' is crucial for 'truncate' to work inside a flex container */}
+            <div className="flex-1 min-w-0">
+              <p className="font-medium text-sm truncate">{ingredient.name}</p>
+              <p className="text-xs text-muted-foreground">
+              Cost: {(quantity * Number(ingredient.average_cost)).toFixed(2)} MT
+              </p>
+            </div>
+
+            {/* Ensure the delete button has 'shrink-0' so it doesn't squash */}
+            <Button 
+              variant="ghost" 
+              size="icon" 
+              className="shrink-0 h-8 w-8 text-destructive"
+              onClick={() => toggleIngredient(ingredient)}
+            >
+            <Trash2 className="h-4 w-4" />
+            </Button>
+          </div>
+  ))}
+</div>
               </ScrollArea>
             </div>
           </div>
