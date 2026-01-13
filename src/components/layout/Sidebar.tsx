@@ -14,7 +14,8 @@ import {
   Wallet,
   LogOut,
   Trash2,
-  History
+  History,
+  Users
 } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { 
@@ -49,6 +50,7 @@ const allNavItems = [
   { path: '/sub-recipes', label: 'Sub-Recipes', icon: UtensilsCrossed, roles: ['manager'] },
   { path: '/expenses', label: 'Despesas', icon: Receipt, roles: ['manager'] },
   { path: '/finance', label: 'Financeiro', icon: Wallet, roles: ['manager'] },
+  { path: '/debtors', label: 'Debtors', icon: Users, roles: ['manager', 'cashier'] },
   { path: '/end-of-day', label: 'Fim do Dia', icon: Moon, roles: ['manager'] },
   { path: '/revenue-allocation', label: 'Alocação de Receita', icon: PieChart, roles: ['manager'] },
 ];
