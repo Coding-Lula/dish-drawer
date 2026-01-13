@@ -407,7 +407,7 @@ function POSPage({ currentStore }: { currentStore: any }) {
         <div className="mb-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <div>
             <h1 className="text-2xl font-bold text-foreground">Ponto de vendas</h1>
-            <p className="text-muted-foreground">Selecione os itens para adicionar a mesa</p>
+            <p className="text-muted-foreground">Selecione os itens para adicionar a </p>
           </div>
           <div className="flex items-center gap-3 w-full sm:w-auto">
             <ManageTablesModal tables={tables} onAddTable={addTable} onDeleteTable={deleteTable} />

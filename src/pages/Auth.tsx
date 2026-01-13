@@ -145,7 +145,7 @@ export default function Auth() {
           <Tabs defaultValue="login">
             <TabsList className="grid w-full grid-cols-2 mb-6">
               <TabsTrigger value="login">Login</TabsTrigger>
-              {/* <TabsTrigger value="signup">Sign Up</TabsTrigger> */}
+              { <TabsTrigger value="signup">Sign Up</TabsTrigger> }
             </TabsList>
             
             <TabsContent value="login">
@@ -214,7 +214,7 @@ export default function Auth() {
                   <Input
                     id="signup-password"
                     type="password"
-                    placeholder="••••••••"
+                    placeholder=""
                     value={signupPassword}
                     onChange={(e) => setSignupPassword(e.target.value)}
                     required
