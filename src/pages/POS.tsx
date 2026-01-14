@@ -6,6 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import { useDishes, useRecipes, useTransactions, useStoreStock, useCredits, useRestaurantTablesManagement } from '@/hooks/useSupabaseData';
 import type { Dish } from '@/hooks/useSupabaseData';
+import { useStoreDishPrices } from '@/hooks/useStoreDishPrices';
 import { ManageTablesModal } from '@/components/modals/ManageTablesModal';
 import { CreditCustomerModal } from '@/components/modals/CreditCustomerModal';
 import { SplitBillModal } from '@/components/modals/SplitBillModal';
@@ -18,6 +19,7 @@ import { CartModal } from '@/components/modals/CartModal';
 interface CartItem {
   dish: Dish;
   quantity: number;
+  unitPrice: number; // Store the effective price at time of adding
 }
 
 interface SplitBill {
@@ -100,7 +102,7 @@ function CartContent({
                 <div key={item.dish.id} className="flex items-center gap-2 p-2 rounded-lg bg-muted/30 border">
                   <div className="flex-1 min-w-0">
                     <p className="font-medium text-sm truncate">{item.dish.name}</p>
-                    <p className="text-xs text-muted-foreground">{Number(item.dish.selling_price).toLocaleString()} MT × {item.quantity}</p>
+                    <p className="text-xs text-muted-foreground">{Number(item.unitPrice).toLocaleString()} MT × {item.quantity}</p>
                   </div>
                   <div className="flex items-center gap-1">
                     <Button variant="outline" size="icon" className="h-6 w-6" onClick={() => updateQuantity(item.dish.id, item.quantity - 1)}><Minus className="w-3 h-3" /></Button>
@@ -158,6 +160,7 @@ function POSPage({ currentStore }: { currentStore: any }) {
   const { addTransaction } = useTransactions(currentStore?.id || null);
   const { deductStock } = useStoreStock(currentStore?.id || null);
   const { addCredit } = useCredits(currentStore?.id || null);
+  const { getEffectivePrice, hasOverride } = useStoreDishPrices(currentStore?.id || null);
 
   const [tableCarts, setTableCarts] = useState<Record<string, CartItem[]>>({});
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
@@ -179,7 +182,7 @@ function POSPage({ currentStore }: { currentStore: any }) {
   const currentCart = selectedTable ? tableCarts[selectedTable] || [] : [];
   const categories = [...new Set(dishes.map(d => d.category).filter(Boolean))];
   const filteredDishes = selectedCategory ? dishes.filter(d => d.category === selectedCategory) : dishes;
-  const cartTotal = currentCart.reduce((sum, item) => sum + (Number(item.dish.selling_price) * item.quantity), 0);
+  const cartTotal = currentCart.reduce((sum, item) => sum + (Number(item.unitPrice) * item.quantity), 0);
 
   const addToCart = (dish: Dish) => {
     if (!selectedTable) {
@@ -191,6 +194,9 @@ function POSPage({ currentStore }: { currentStore: any }) {
       setShowTableMap(true);
       return;
     }
+    
+    // Get the effective price for this store
+    const effectivePrice = getEffectivePrice(dish.id, Number(dish.selling_price));
     
     setTableCarts(prev => {
       const tableCart = prev[selectedTable] || [];
@@ -207,7 +213,7 @@ function POSPage({ currentStore }: { currentStore: any }) {
       
       return {
         ...prev,
-        [selectedTable]: [...tableCart, { dish, quantity: 1 }]
+        [selectedTable]: [...tableCart, { dish, quantity: 1, unitPrice: effectivePrice }]
       };
     });
   };
@@ -275,7 +281,7 @@ function POSPage({ currentStore }: { currentStore: any }) {
       cartTotal,
       selectedPayment,
       selectedTable,
-      currentCart.map(item => ({ dishId: item.dish.id, quantity: item.quantity, unitPrice: Number(item.dish.selling_price) }))
+      currentCart.map(item => ({ dishId: item.dish.id, quantity: item.quantity, unitPrice: Number(item.unitPrice) }))
     );
 
     if (selectedPayment === 'credit' && customerName && transaction) {
@@ -308,7 +314,7 @@ function POSPage({ currentStore }: { currentStore: any }) {
   const handleProcessSingleBill = async (bill: SplitBill, customerName?: string) => {
     if (!selectedTable) return;
     
-    const billTotal = bill.items.reduce((sum, item) => sum + (Number(item.dish.selling_price) * item.quantity), 0);
+    const billTotal = bill.items.reduce((sum, item) => sum + (Number(item.unitPrice) * item.quantity), 0);
 
     for (const cartItem of bill.items) {
       const dishRecipes = recipes.filter(r => r.dish_id === cartItem.dish.id);
@@ -321,7 +327,7 @@ function POSPage({ currentStore }: { currentStore: any }) {
       billTotal,
       bill.paymentMethod || 'cash',
       selectedTable,
-      bill.items.map(item => ({ dishId: item.dish.id, quantity: item.quantity, unitPrice: Number(item.dish.selling_price) }))
+      bill.items.map(item => ({ dishId: item.dish.id, quantity: item.quantity, unitPrice: Number(item.unitPrice) }))
     );
 
     // Record credit if payment method is credit
@@ -359,13 +365,13 @@ function POSPage({ currentStore }: { currentStore: any }) {
   };
 
   const handlePrintBill = (bill: SplitBill, billNumber: number) => {
-    const billTotal = bill.items.reduce((sum, item) => sum + (Number(item.dish.selling_price) * item.quantity), 0);
+    const billTotal = bill.items.reduce((sum, item) => sum + (Number(item.unitPrice) * item.quantity), 0);
     const receipt = [
       `${currentStore?.name}`,
       `Table: ${tables.find(t => t.id === selectedTable)?.name || 'N/A'} - Bill ${billNumber}`,
       `Date: ${new Date().toLocaleString()}`,
       '─'.repeat(30),
-      ...bill.items.map(item => `${item.dish.name} x${item.quantity} - ${(Number(item.dish.selling_price) * item.quantity).toLocaleString()} MT`),
+      ...bill.items.map(item => `${item.dish.name} x${item.quantity} - ${(Number(item.unitPrice) * item.quantity).toLocaleString()} MT`),
       '─'.repeat(30),
       `TOTAL: ${billTotal.toLocaleString()} MT`
     ].join('\n');
@@ -387,7 +393,7 @@ function POSPage({ currentStore }: { currentStore: any }) {
       `Table: ${tables.find(t => t.id === selectedTable)?.name || 'N/A'}`,
       `Date: ${new Date().toLocaleString()}`,
       '─'.repeat(30),
-      ...currentCart.map(item => `${item.dish.name} x${item.quantity} - ${(Number(item.dish.selling_price) * item.quantity).toLocaleString()} MT`),
+      ...currentCart.map(item => `${item.dish.name} x${item.quantity} - ${(Number(item.unitPrice) * item.quantity).toLocaleString()} MT`),
       '─'.repeat(30),
       `TOTAL: ${cartTotal.toLocaleString()} MT`
     ].join('\n');
@@ -448,18 +454,26 @@ function POSPage({ currentStore }: { currentStore: any }) {
 
         <div className="flex-1 overflow-auto">
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-3 xl:grid-cols-4 gap-3">
-            {filteredDishes.map(dish => (
-              <Card key={dish.id} className="cursor-pointer transition-all hover:shadow-lg hover:scale-[1.02]" onClick={() => addToCart(dish)}>
-                <CardContent className="p-4 text-center">
-                  <div className="w-12 h-12 rounded-full bg-primary/20 flex items-center justify-center mx-auto mb-2">
-                    <ShoppingBag className="w-6 h-6 text-primary" />
-                  </div>
-                  <h3 className="font-semibold text-sm">{dish.name}</h3>
-                  <Badge variant="secondary" className="text-xs mt-1">{dish.category}</Badge>
-                  <p className="text-lg font-bold text-primary mt-2">{Number(dish.selling_price).toLocaleString()} MT</p>
-                </CardContent>
-              </Card>
-            ))}
+            {filteredDishes.map(dish => {
+              const effectivePrice = getEffectivePrice(dish.id, Number(dish.selling_price));
+              const isOverridden = hasOverride(dish.id);
+              
+              return (
+                <Card key={dish.id} className="cursor-pointer transition-all hover:shadow-lg hover:scale-[1.02]" onClick={() => addToCart(dish)}>
+                  <CardContent className="p-4 text-center">
+                    <div className="w-12 h-12 rounded-full bg-primary/20 flex items-center justify-center mx-auto mb-2">
+                      <ShoppingBag className="w-6 h-6 text-primary" />
+                    </div>
+                    <h3 className="font-semibold text-sm">{dish.name}</h3>
+                    <Badge variant="secondary" className="text-xs mt-1">{dish.category}</Badge>
+                    <p className="text-lg font-bold text-primary mt-2">
+                      {effectivePrice.toLocaleString()} MT
+                      {isOverridden && <span className="text-xs ml-1 text-muted-foreground">(custom)</span>}
+                    </p>
+                  </CardContent>
+                </Card>
+              );
+            })}
           </div>
         </div>
       </div>

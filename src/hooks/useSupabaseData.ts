@@ -1522,6 +1522,8 @@ for (const update of destStockUpdates) {
   return { transfers, loading, createTransfer: createBulkTransfer, refetch: fetchTransfers };
 }
 
+// SubRecipes hook - uses ingredient_recipes table to build virtual sub-recipes
+// Each processed ingredient with its recipe items forms a "sub-recipe"
 export function useSubRecipes() {
   const [subRecipes, setSubRecipes] = useState<SubRecipe[]>([]);
   const [loading, setLoading] = useState(true);
@@ -1529,32 +1531,49 @@ export function useSubRecipes() {
 
   const fetchSubRecipes = useCallback(async () => {
     setLoading(true);
-    const { data: recipesData, error: recipesError } = await supabase
-      .from('sub_recipes')
+    
+    // Get all processed ingredients
+    const { data: processedIngredients, error: ingredientsError } = await supabase
+      .from('ingredients')
+      .select('*')
+      .eq('is_processed', true);
+
+    if (ingredientsError) {
+      toast({ title: 'Error fetching processed ingredients', description: ingredientsError.message, variant: 'destructive' });
+      setLoading(false);
+      return;
+    }
+
+    // Get all ingredient recipes
+    const { data: recipeItems, error: recipesError } = await supabase
+      .from('ingredient_recipes')
       .select('*');
 
     if (recipesError) {
-      toast({ title: 'Error fetching sub-recipes', description: recipesError.message, variant: 'destructive' });
+      toast({ title: 'Error fetching ingredient recipes', description: recipesError.message, variant: 'destructive' });
       setLoading(false);
       return;
     }
 
-    const { data: itemsData, error: itemsError } = await supabase
-      .from('sub_recipe_items')
-      .select('*');
+    // Build sub-recipes from processed ingredients and their recipe items
+    const builtSubRecipes: SubRecipe[] = (processedIngredients || []).map(ingredient => ({
+      id: ingredient.id, // Use ingredient ID as sub-recipe ID
+      name: ingredient.name,
+      processed_ingredient_id: ingredient.id,
+      quantity_produced: 1, // Default to 1 unit
+      created_at: ingredient.created_at,
+      sub_recipe_items: (recipeItems || [])
+        .filter(item => item.processed_ingredient_id === ingredient.id)
+        .map(item => ({
+          id: item.id,
+          sub_recipe_id: ingredient.id,
+          raw_ingredient_id: item.raw_ingredient_id,
+          quantity_required: Number(item.quantity_required),
+          created_at: item.created_at
+        }))
+    })).filter(r => r.sub_recipe_items.length > 0); // Only include those with recipe items
 
-    if (itemsError) {
-      toast({ title: 'Error fetching sub-recipe items', description: itemsError.message, variant: 'destructive' });
-      setLoading(false);
-      return;
-    }
-
-    const recipesWithItems = recipesData.map(recipe => ({
-      ...recipe,
-      sub_recipe_items: itemsData.filter(item => item.sub_recipe_id === recipe.id),
-    }));
-
-    setSubRecipes(recipesWithItems);
+    setSubRecipes(builtSubRecipes);
     setLoading(false);
   }, [toast]);
 
@@ -1562,28 +1581,14 @@ export function useSubRecipes() {
     recipe: { id?: string; name: string; processed_ingredient_id: string; quantity_produced: number },
     items: { raw_ingredient_id: string; quantity_required: number }[]
   ) => {
-    const { data: savedRecipe, error } = await supabase
-      .from('sub_recipes')
-      .upsert({
-        id: recipe.id,
-        name: recipe.name,
-        processed_ingredient_id: recipe.processed_ingredient_id,
-        quantity_produced: recipe.quantity_produced,
-      })
-      .select()
-      .single();
+    // Delete existing recipe items for this processed ingredient
+    await supabase.from('ingredient_recipes').delete().eq('processed_ingredient_id', recipe.processed_ingredient_id);
 
-    if (error) {
-      toast({ title: 'Error saving sub-recipe', description: error.message, variant: 'destructive' });
-      return null;
-    }
-
-    await supabase.from('sub_recipe_items').delete().eq('sub_recipe_id', savedRecipe.id);
-
+    // Insert new recipe items
     if (items.length > 0) {
-      const { error: itemsError } = await supabase.from('sub_recipe_items').insert(
+      const { error: itemsError } = await supabase.from('ingredient_recipes').insert(
         items.map(item => ({
-          sub_recipe_id: savedRecipe.id,
+          processed_ingredient_id: recipe.processed_ingredient_id,
           raw_ingredient_id: item.raw_ingredient_id,
           quantity_required: item.quantity_required,
         }))
@@ -1597,18 +1602,21 @@ export function useSubRecipes() {
 
     toast({ title: 'Sub-recipe saved successfully' });
     fetchSubRecipes();
-    return savedRecipe;
+    return { id: recipe.processed_ingredient_id };
   };
 
   const deleteSubRecipe = async (id: string) => {
+    // Delete recipe items for this processed ingredient
     const { error } = await supabase
-      .from('sub_recipes')
+      .from('ingredient_recipes')
       .delete()
-      .eq('id', id);
+      .eq('processed_ingredient_id', id);
+    
     if (error) {
       toast({ title: 'Error deleting sub-recipe', description: error.message, variant: 'destructive' });
       return false;
     }
+    
     setSubRecipes(prev => prev.filter(r => r.id !== id));
     toast({ title: 'Sub-recipe deleted successfully' });
     return true;
@@ -1650,24 +1658,22 @@ export function useProductionLogs(storeId: string | null) {
   ) => {
     if (!storeId) return null;
 
-    const { data: subRecipeData, error: subRecipeError } = await supabase
-      .from('sub_recipes')
-      .select('*, sub_recipe_items(*)')
-      .eq('id', subRecipeId)
-      .single();
+    // Fetch recipe items from ingredient_recipes
+    const { data: recipeItems, error: recipeError } = await supabase
+      .from('ingredient_recipes')
+      .select('*')
+      .eq('processed_ingredient_id', subRecipeId);
 
-    if (subRecipeError) {
+    if (recipeError || !recipeItems || recipeItems.length === 0) {
       toast({
         title: 'Sub-recipe not found',
-        description: 'The selected sub-recipe could not be found.',
+        description: 'The selected sub-recipe could not be found or has no items.',
         variant: 'destructive'
       });
       return null;
     }
 
-    const recipeItems = subRecipeData.sub_recipe_items;
-
-    const totalQuantityProduced = batchesToProduce * subRecipeData.quantity_produced;
+    const totalQuantityProduced = batchesToProduce; // 1 batch = 1 unit of processed ingredient
 
     // Pre-production stock check
     let totalCost = 0;
@@ -1675,7 +1681,7 @@ export function useProductionLogs(storeId: string | null) {
     const rawMaterialsNeeded: { ingredientId: string; quantity: number; cost: number }[] = [];
 
     for (const item of recipeItems) {
-      const requiredQty = item.quantity_required * batchesToProduce;
+      const requiredQty = Number(item.quantity_required) * batchesToProduce;
       const stock = stocks.find(s => s.ingredient_id === item.raw_ingredient_id);
       const ingredient = ingredients.find(i => i.id === item.raw_ingredient_id);
 
@@ -1707,7 +1713,7 @@ export function useProductionLogs(storeId: string | null) {
     }
 
     // Add processed ingredient to stock
-    const processedIngredientId = subRecipeData.processed_ingredient_id;
+    const processedIngredientId = subRecipeId;
     const processedStock = stocks.find(s => s.ingredient_id === processedIngredientId);
     if (processedStock) {
       await supabase
@@ -1775,14 +1781,14 @@ export function useProductionLogs(storeId: string | null) {
       {
         ingredient_id: processedIngredientId,
         store_id: storeId,
-        change_amount: quantityToProduce,
+        change_amount: totalQuantityProduced,
         reason: 'production_output'
       }
     ];
     await supabase.from('inventory_logs').insert(inventoryLogs);
 
     setProductionLogs(prev => [log, ...prev]);
-    toast({ title: 'Batch processed successfully', description: `Produced ${quantityToProduce} units at ${unitCost.toFixed(2)} MT/unit` });
+    toast({ title: 'Batch processed successfully', description: `Produced ${totalQuantityProduced} units at ${unitCost.toFixed(2)} MT/unit` });
     return log;
   };
 
