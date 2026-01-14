@@ -122,72 +122,78 @@ export function Sidebar({ currentStore, onStoreChange }: SidebarProps) {
           </button>
         </div>
 
-        {/* Store Selector */}
-        {!collapsed && (
-          <div className="p-4 border-b border-border">
-            <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2 block">
-              Current Store
-            </label>
-            {loading ? (
-              <div className="h-10 bg-muted animate-pulse rounded-md" />
-            ) : (
-              <>
-                <Select 
-                  value={currentStore?.id || ''} 
-                  onValueChange={(id) => {
-                    const store = stores.find(s => s.id === id);
-                    if (store) onStoreChange(store);
-                  }}
-                >
-                  <SelectTrigger className="w-full bg-background">
-                    <SelectValue placeholder="Select store" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {stores.map(store => (
-                      <SelectItem key={store.id} value={store.id}>
-                        {store.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                {role === 'manager' && (
-                  <div className="flex gap-1 mt-">
-                    <NewStoreModal onSubmit={addStore} />
-                    {stores.length > 1 && currentStore && (
-                      <AlertDialog open={!!storeToDelete} onOpenChange={(open) => !open && setStoreToDelete(null)}>
-                        <AlertDialogTrigger asChild>
-                          <Button 
-                            variant="outline" 
-                            size="sm"
-                            className="text-destructive hover:text-destructive"
-                            onClick={() => setStoreToDelete(currentStore)}
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </Button>
-                        </AlertDialogTrigger>
-                        <AlertDialogContent>
-                          <AlertDialogHeader>
-                            <AlertDialogTitle>Eliminar Loja</AlertDialogTitle>
-                            <AlertDialogDescription>
-                              Tem certeza que deseja eliminar "{storeToDelete?.name}"? 
-                              Esta ação irá remover todos os dados associados (transações, stock, etc.) e não pode ser desfeita.
-                            </AlertDialogDescription>
-                          </AlertDialogHeader>
-                          <AlertDialogFooter>
-                            <AlertDialogCancel onClick={() => setStoreToDelete(null)}>Cancelar</AlertDialogCancel>
-                            <AlertDialogAction onClick={handleDeleteStore} className="bg-destructive hover:bg-destructive/90">
-                              Eliminar Loja
-                            </AlertDialogAction>
-                          </AlertDialogFooter>
-                        </AlertDialogContent>
-                      </AlertDialog>
-                    )}
-                  </div>
-                )}
-              </>
+{/* Store Selector */}
+{!collapsed && (
+  <div className="p-4 border-b border-border">
+    <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2 block">
+      Current Store
+    </label>
+    {loading ? (
+      <div className="h-10 bg-muted animate-pulse rounded-md" />
+    ) : (
+      <>
+        <Select 
+          value={currentStore?.id || ''} 
+          onValueChange={(id) => {
+            const store = stores.find(s => s.id === id);
+            if (store) onStoreChange(store);
+          }}
+        >
+          <SelectTrigger className="w-full bg-background">
+            <SelectValue placeholder="Select store" />
+          </SelectTrigger>
+          <SelectContent>
+            {stores.map(store => (
+              <SelectItem key={store.id} value={store.id}>
+                {store.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+
+        {role === 'manager' && (
+          /* Updated container: flex, gap, and margin-top */
+          <div className="flex items-center gap-2 mt-3">
+            <div className="flex-1">
+              <NewStoreModal onSubmit={addStore} />
+            </div>
+            
+            {stores.length > 1 && currentStore && (
+              <AlertDialog open={!!storeToDelete} onOpenChange={(open) => !open && setStoreToDelete(null)}>
+                <AlertDialogTrigger asChild>
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    className="text-destructive hover:bg-destructive/10 hover:text-destructive shrink-0"
+                    onClick={() => setStoreToDelete(currentStore)}
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </Button>
+                </AlertDialogTrigger>
+                {/* ... (Keep your AlertDialogContent the same) */}
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Eliminar Loja</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      Tem certeza que deseja eliminar "{storeToDelete?.name}"? 
+                      Esta ação irá remover todos os dados associados e não pode ser desfeita.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel onClick={() => setStoreToDelete(null)}>Cancelar</AlertDialogCancel>
+                    <AlertDialogAction onClick={handleDeleteStore} className="bg-destructive hover:bg-destructive/90">
+                      Eliminar Loja
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
             )}
           </div>
         )}
+      </>
+    )}
+  </div>
+)}
 
         {/* Navigation */}
         <nav className="flex-1 p-3 space-y-1 overflow-y-auto">
