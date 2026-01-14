@@ -1,18 +1,19 @@
 import { MainLayout, useCurrentStore } from '@/components/layout/MainLayout';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { useSubRecipes, useIngredients } from '@/hooks/useSupabaseData';
-import { PlusCircle, Edit, Trash2, Zap } from 'lucide-react';
+import { useSubRecipes, useIngredients, useStoreStock } from '@/hooks/useSupabaseData';
+import { PlusCircle, Edit, Trash2 } from 'lucide-react';
 import { useState } from 'react';
 import { SubRecipeModal } from '@/components/modals/SubRecipeModal';
 import { ProcessBatchModal } from '@/components/modals/ProcessBatchModal';
 
 function SubRecipesContent() {
+  const { currentStore } = useCurrentStore();
   const { subRecipes, deleteSubRecipe, loading: recipesLoading } = useSubRecipes();
   const { ingredients, loading: ingredientsLoading } = useIngredients();
-  const [selectedRecipe, setSelectedRecipe] = useState(null);
+  const { stocks } = useStoreStock(currentStore?.id || null);
+  const [selectedRecipe, setSelectedRecipe] = useState<any>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [isProcessModalOpen, setIsProcessModalOpen] = useState(false);
 
   const handleAddNew = () => {
     setSelectedRecipe({
@@ -24,14 +25,15 @@ function SubRecipesContent() {
     setIsModalOpen(true);
   };
 
-  const handleEdit = (recipe) => {
+  const handleEdit = (recipe: any) => {
     setSelectedRecipe(recipe);
     setIsModalOpen(true);
   };
 
-  const handleProduce = (recipe) => {
-    setSelectedRecipe(recipe);
-    setIsProcessModalOpen(true);
+  const handleProcessBatch = async (subRecipeId: string, quantity: number) => {
+    // This is handled by the ProcessBatchModal's onProcess callback
+    // The actual logic is in the Inventory page
+    return null;
   };
 
   const loading = recipesLoading || ingredientsLoading;
@@ -43,10 +45,27 @@ function SubRecipesContent() {
           <h1 className="text-3xl font-bold text-foreground">Sub-Recipes</h1>
           <p className="text-muted-foreground">Manage your sub-recipes for processed ingredients.</p>
         </div>
-        <Button onClick={handleAddNew} className="gap-2">
-          <PlusCircle className="w-4 h-4" />
-          Add New Sub-Recipe
-        </Button>
+        <div className="flex gap-2">
+          <ProcessBatchModal
+            ingredients={ingredients}
+            subRecipes={subRecipes.map(r => ({
+              id: r.id,
+              name: r.name,
+              processed_ingredient_id: r.processed_ingredient_id,
+              quantity_produced: r.quantity_produced,
+              items: r.sub_recipe_items.map(item => ({
+                raw_ingredient_id: item.raw_ingredient_id,
+                quantity_required: item.quantity_required
+              }))
+            }))}
+            stocks={stocks}
+            onProcess={handleProcessBatch}
+          />
+          <Button onClick={handleAddNew} className="gap-2">
+            <PlusCircle className="w-4 h-4" />
+            Add New Sub-Recipe
+          </Button>
+        </div>
       </div>
 
       {loading ? (
@@ -59,9 +78,6 @@ function SubRecipesContent() {
                 <CardTitle className="flex justify-between items-center">
                   {recipe.name}
                   <div className="flex gap-2">
-                    <Button variant="ghost" size="icon" onClick={() => handleProduce(recipe)}>
-                      <Zap className="w-4 h-4 text-primary" />
-                    </Button>
                     <Button variant="ghost" size="icon" onClick={() => handleEdit(recipe)}>
                       <Edit className="w-4 h-4" />
                     </Button>
@@ -75,7 +91,7 @@ function SubRecipesContent() {
                 <p className="text-sm text-muted-foreground">
                   Produces: {recipe.quantity_produced} {ingredients.find(i => i.id === recipe.processed_ingredient_id)?.unit} of {ingredients.find(i => i.id === recipe.processed_ingredient_id)?.name}
                 </p>
-                <ul>
+                <ul className="mt-2 space-y-1">
                   {recipe.sub_recipe_items.map((item) => {
                     const ingredient = ingredients.find(i => i.id === item.raw_ingredient_id);
                     return (
@@ -96,11 +112,6 @@ function SubRecipesContent() {
         onClose={() => setIsModalOpen(false)}
         recipe={selectedRecipe}
         ingredients={ingredients}
-      />
-      <ProcessBatchModal
-        isOpen={isProcessModalOpen}
-        onClose={() => setIsProcessModalOpen(false)}
-        recipe={selectedRecipe}
       />
     </div>
   );

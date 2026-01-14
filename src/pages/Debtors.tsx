@@ -19,7 +19,8 @@ interface Debtor extends Credit {
 
 const DebtorsPage = () => {
   const { currentStore } = useCurrentStore();
-  const { credits, loading: creditsLoading, error: creditsError } = useCredits(currentStore?.id || null);
+  const { credits, loading: creditsLoading } = useCredits(currentStore?.id || null);
+  const creditsError = null; // Error handling is done via toast in the hook
   const [debtors, setDebtors] = useState<Debtor[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);

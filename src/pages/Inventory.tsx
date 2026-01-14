@@ -53,6 +53,7 @@ function InventoryContent() {
     addItemToStore,
     manualAdjustStock,
     reportLoss,
+    removeItemFromStore,
     loading: stocksLoading, 
     refetch: refetchStocks 
   } = useStoreStock(currentStore?.id || null);
@@ -64,6 +65,7 @@ function InventoryContent() {
   const { processBatch, refetch: refetchProduction } = useProductionLogs(currentStore?.id || null);
 
   const [filter, setFilter] = useState<'all' | 'low' | 'ok' | 'processed'>('all');
+  const [searchTerm, setSearchTerm] = useState('');
   const [editingField, setEditingField] = useState<{ id: string; field: 'min' | 'target' } | null>(null);
   const [editValue, setEditValue] = useState('');
   const [editingThreshold, setEditingThreshold] = useState<string | null>(null);
@@ -101,12 +103,15 @@ function InventoryContent() {
       lastUnitCost,
       estimatedCost
     };
-  }).filter(Boolean).sort((a, b) => {
-    if (!a || !b) return 0;
-    if (a.isLow && !b.isLow) return -1;
-    if (!a.isLow && b.isLow) return 1;
-    return a.percentageOfTarget - b.percentageOfTarget;
-  }) as NonNullable<typeof inventoryItems[number]>[];
+  }).filter(Boolean)
+    .filter(item => !searchTerm || item?.ingredient?.name.toLowerCase().includes(searchTerm.toLowerCase()))
+    .sort((a, b) => {
+      if (!a || !b) return 0;
+      // First sort by low stock, then alphabetically
+      if (a.isLow && !b.isLow) return -1;
+      if (!a.isLow && b.isLow) return 1;
+      return a.ingredient.name.localeCompare(b.ingredient.name);
+    }) as NonNullable<typeof inventoryItems[number]>[];
 
   // Get ingredient IDs already in store
   const existingIngredientIds = stocks.map(s => s.ingredient_id);
@@ -256,6 +261,11 @@ function InventoryContent() {
     setEditValue('');
   };
 
+  const handleDeleteFromStore = async (stockId: string) => {
+    await removeItemFromStore(stockId);
+    refetchStocks();
+  };
+
   const handleDeleteIngredient = async (ingredientId: string) => {
     await deleteIngredient(ingredientId);
     refetchStocks();
@@ -387,7 +397,16 @@ function InventoryContent() {
           {isManager && (
             <ProcessBatchModal
               ingredients={ingredients}
-              subRecipes={subRecipes}
+              subRecipes={subRecipes.map(r => ({
+                id: r.id,
+                name: r.name,
+                processed_ingredient_id: r.processed_ingredient_id,
+                quantity_produced: r.quantity_produced,
+                items: r.sub_recipe_items.map(item => ({
+                  raw_ingredient_id: item.raw_ingredient_id,
+                  quantity_required: item.quantity_required
+                }))
+              }))}
               stocks={stocks}
               onProcess={handleProcessBatch}
             />
