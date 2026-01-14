@@ -11,10 +11,12 @@ import { ManageTablesModal } from '@/components/modals/ManageTablesModal';
 import { CreditCustomerModal } from '@/components/modals/CreditCustomerModal';
 import { SplitBillModal } from '@/components/modals/SplitBillModal';
 import { TableMapModal } from '@/components/modals/TableMapModal';
-import { Plus, Minus, Trash2, ShoppingBag, CreditCard, Printer, Table, Split } from 'lucide-react';
+import { Plus, Minus, Trash2, ShoppingBag, CreditCard, Printer, Table, Split, Pencil } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { CartModal } from '@/components/modals/CartModal';
+import { EditPriceModal } from '@/components/modals/EditPriceModal';
+import { useAuth } from '@/hooks/useAuth';
 
 interface CartItem {
   dish: Dish;
@@ -160,7 +162,8 @@ function POSPage({ currentStore }: { currentStore: any }) {
   const { addTransaction } = useTransactions(currentStore?.id || null);
   const { deductStock } = useStoreStock(currentStore?.id || null);
   const { addCredit } = useCredits(currentStore?.id || null);
-  const { getEffectivePrice, hasOverride } = useStoreDishPrices(currentStore?.id || null);
+  const { getEffectivePrice, hasOverride, setOverridePrice, removeOverridePrice, getOverridePrice } = useStoreDishPrices(currentStore?.id || null);
+  const { isManager } = useAuth();
 
   const [tableCarts, setTableCarts] = useState<Record<string, CartItem[]>>({});
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
@@ -171,6 +174,8 @@ function POSPage({ currentStore }: { currentStore: any }) {
   const [showSplitBillModal, setShowSplitBillModal] = useState(false);
   const [showTableMap, setShowTableMap] = useState(false);
   const [showCart, setShowCart] = useState(false);
+  const [showEditPriceModal, setShowEditPriceModal] = useState(false);
+  const [selectedDish, setSelectedDish] = useState<Dish | null>(null);
 
   // Initialize tables if needed
   useEffect(() => {
@@ -459,18 +464,33 @@ function POSPage({ currentStore }: { currentStore: any }) {
               const isOverridden = hasOverride(dish.id);
               
               return (
-                <Card key={dish.id} className="cursor-pointer transition-all hover:shadow-lg hover:scale-[1.02]" onClick={() => addToCart(dish)}>
-                  <CardContent className="p-4 text-center">
-                    <div className="w-12 h-12 rounded-full bg-primary/20 flex items-center justify-center mx-auto mb-2">
-                      <ShoppingBag className="w-6 h-6 text-primary" />
-                    </div>
-                    <h3 className="font-semibold text-sm">{dish.name}</h3>
-                    <Badge variant="secondary" className="text-xs mt-1">{dish.category}</Badge>
-                    <p className="text-lg font-bold text-primary mt-2">
-                      {effectivePrice.toLocaleString()} MT
-                      {isOverridden && <span className="text-xs ml-1 text-muted-foreground">(custom)</span>}
-                    </p>
-                  </CardContent>
+                <Card key={dish.id} className="transition-all hover:shadow-lg relative">
+                  <div className="cursor-pointer" onClick={() => addToCart(dish)}>
+                    <CardContent className="p-4 text-center">
+                      <div className="w-12 h-12 rounded-full bg-primary/20 flex items-center justify-center mx-auto mb-2">
+                        <ShoppingBag className="w-6 h-6 text-primary" />
+                      </div>
+                      <h3 className="font-semibold text-sm">{dish.name}</h3>
+                      <Badge variant="secondary" className="text-xs mt-1">{dish.category}</Badge>
+                      <p className="text-lg font-bold text-primary mt-2">
+                        {effectivePrice.toLocaleString()} MT
+                        {isOverridden && <span className="text-xs ml-1 text-muted-foreground">(custom)</span>}
+                      </p>
+                    </CardContent>
+                  </div>
+                  {isManager && (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="absolute top-1 right-1 h-7 w-7"
+                      onClick={() => {
+                        setSelectedDish(dish);
+                        setShowEditPriceModal(true);
+                      }}
+                    >
+                      <Pencil className="w-4 h-4 text-muted-foreground" />
+                    </Button>
+                  )}
                 </Card>
               );
             })}
@@ -547,6 +567,18 @@ function POSPage({ currentStore }: { currentStore: any }) {
         storeName={currentStore?.name || ''}
         tableName={tables.find(t => t.id === selectedTable)?.name || 'Table'}
       />
+
+      {selectedDish && (
+        <EditPriceModal
+          isOpen={showEditPriceModal}
+          onClose={() => setShowEditPriceModal(false)}
+          dishName={selectedDish.name}
+          currentPrice={getOverridePrice(selectedDish.id)}
+          defaultPrice={Number(selectedDish.selling_price)}
+          onSave={(newPrice) => setOverridePrice(selectedDish.id, newPrice)}
+          onRemoveOverride={() => removeOverridePrice(selectedDish.id)}
+        />
+      )}
     </div>
   );
 }
