@@ -17,6 +17,7 @@ import NotFound from "./pages/NotFound";
 import SubRecipes from "./pages/SubRecipes";
 import RestockHistory from "./pages/RestockHistory";
 import DebtorsPage from "./pages/Debtors";
+import SalesReport from "./pages/SalesReport";
 
 const queryClient = new QueryClient();
 
@@ -76,6 +77,11 @@ const App = () => (
           <Route path="/restock-history" element={
             <ProtectedRoute allowedRoles={['manager', 'cashier']}>
               <RestockHistory />
+            </ProtectedRoute>
+          } />
+          <Route path="/sales-report" element={
+            <ProtectedRoute allowedRoles={['manager', 'cashier']}>
+              <SalesReport />
             </ProtectedRoute>
           } />
           <Route path="/debtors" element={

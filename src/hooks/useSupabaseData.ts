@@ -624,6 +624,55 @@ if (ingredientCostUpdates.length > 0) {
     toast({ title: 'Stock ajustado com sucesso' });
     return true;
   };
+  /*
+  const removeItemFromStore = async (stockId: string) => {
+    const { error } = await supabase
+      .from('store_stock')
+      .delete()
+      .eq('id', stockId);
+    if (error) {
+      toast({ title: 'Error removing item', description: error.message, variant: 'destructive' });
+      return false;
+    }
+    toast({ title: 'Item removed from store' });
+    fetchStocks(); // Refresh the list
+  return true;
+  
+
+};
+*/
+    // Remove item from store (Manager only in UI)
+  const removeItemFromStore = async (stockId: string) => {
+    const stock = stocks.find(s => s.id === stockId);
+    if (!stock) return false;
+    
+    const { error } = await supabase
+      .from('store_stock')
+      .delete()
+      .eq('id', stockId);
+    
+    if (error) {
+      toast({ title: 'Erro ao eliminar item', description: error.message, variant: 'destructive' });
+      return false;
+    }
+    
+    // Remove from local state
+    setStocks(prev => prev.filter(s => s.id !== stockId));
+    
+    // Log the removal
+    await supabase.from('inventory_logs').insert({
+      ingredient_id: stock.ingredient_id,
+      store_id: storeId,
+      change_amount: 0,
+      purchase_price: 0,
+      unit_cost: 0,
+      reason: 'removed_from_store',
+      notes: `Item removed from store inventory`
+    });
+    
+    toast({ title: 'Item eliminado da loja' });
+    return true;
+  };
 
   // Report loss - deduct from stock (Manager only in UI)
   const reportLoss = async (ingredientId: string, amount: number) => {
@@ -664,6 +713,7 @@ if (ingredientCostUpdates.length > 0) {
     addItemToStore, 
     manualAdjustStock,
     reportLoss,
+    removeItemFromStore,
     refetch: fetchStocks 
   };
 }

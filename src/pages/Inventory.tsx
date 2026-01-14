@@ -480,7 +480,13 @@ function InventoryContent() {
           <Factory className="w-3 h-3 mr-1" /> Processados ({processedCount})
         </Button>
       </div>
-
+      {/*Search Bar */}
+      <Input
+        placeholder="Search for an item..."
+        value={searchTerm}
+        onChange={(e) => setSearchTerm(e.target.value)}
+        className="mb-4 max-w-sm"
+      />   
       {/* Stock List */}
       <div className="grid gap-3">
         {filteredItems.length === 0 ? (
@@ -656,9 +662,9 @@ function InventoryContent() {
                         </AlertDialogHeader>
                         <AlertDialogFooter>
                           <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                          <AlertDialogAction onClick={() => handleDeleteIngredient(item.ingredient_id)} className="bg-destructive hover:bg-destructive/90">
-                            Eliminar
-                          </AlertDialogAction>
+                         <AlertDialogAction onClick={() => handleDeleteFromStore(item.id)} className="bg-destructive hover:bg-destructive/90">
+                          Eliminar
+                        </AlertDialogAction>
                         </AlertDialogFooter>
                       </AlertDialogContent>
                     </AlertDialog>

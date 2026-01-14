@@ -52,6 +52,7 @@ const allNavItems = [
   { path: '/finance', label: 'Financeiro', icon: Wallet, roles: ['manager'] },
   { path: '/debtors', label: 'Debtors', icon: Users, roles: ['manager', 'cashier'] },
   { path: '/end-of-day', label: 'Fim do Dia', icon: Moon, roles: ['manager'] },
+  { path: '/sales-report', label: 'Relatório de Vendas', icon: PieChart, roles: ['manager'] },
   { path: '/revenue-allocation', label: 'Alocação de Receita', icon: PieChart, roles: ['manager'] },
 ];
 
