@@ -18,8 +18,7 @@ function SubRecipesContent() {
   const handleAddNew = () => {
     setSelectedRecipe({
       name: '',
-      processed_ingredient_id: '',
-      quantity_produced: 1,
+      outputs: [],
       sub_recipe_items: []
     });
     setIsModalOpen(true);
@@ -51,8 +50,10 @@ function SubRecipesContent() {
             subRecipes={subRecipes.map(r => ({
               id: r.id,
               name: r.name,
-              processed_ingredient_id: r.processed_ingredient_id,
-              quantity_produced: r.quantity_produced,
+              outputs: r.outputs.map(o => ({
+                processed_ingredient_id: o.processed_ingredient_id,
+                quantity_produced: o.quantity_produced
+              })),
               items: r.sub_recipe_items.map(item => ({
                 raw_ingredient_id: item.raw_ingredient_id,
                 quantity_required: item.quantity_required
@@ -88,19 +89,30 @@ function SubRecipesContent() {
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <p className="text-sm text-muted-foreground">
-                  Produces: {recipe.quantity_produced} {ingredients.find(i => i.id === recipe.processed_ingredient_id)?.unit} of {ingredients.find(i => i.id === recipe.processed_ingredient_id)?.name}
-                </p>
-                <ul className="mt-2 space-y-1">
-                  {recipe.sub_recipe_items.map((item) => {
-                    const ingredient = ingredients.find(i => i.id === item.raw_ingredient_id);
-                    return (
-                      <li key={item.id} className="text-sm">
-                        {item.quantity_required} {ingredient?.unit} of {ingredient?.name}
-                      </li>
-                    );
-                  })}
-                </ul>
+                <div className="text-sm text-muted-foreground mb-2">
+                  <span className="font-medium">Produces:</span>
+                  <ul className="mt-1 space-y-1">
+                    {recipe.outputs.map((output) => {
+                      const ing = ingredients.find(i => i.id === output.processed_ingredient_id);
+                      return (
+                        <li key={output.id}>• {output.quantity_produced} {ing?.unit} of {ing?.name}</li>
+                      );
+                    })}
+                  </ul>
+                </div>
+                <div className="text-sm">
+                  <span className="font-medium text-muted-foreground">Requires:</span>
+                  <ul className="mt-1 space-y-1">
+                    {recipe.sub_recipe_items.map((item) => {
+                      const ingredient = ingredients.find(i => i.id === item.raw_ingredient_id);
+                      return (
+                        <li key={item.id} className="text-muted-foreground">
+                          • {item.quantity_required} {ingredient?.unit} of {ingredient?.name}
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </div>
               </CardContent>
             </Card>
           ))}

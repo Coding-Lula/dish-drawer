@@ -400,8 +400,10 @@ function InventoryContent() {
               subRecipes={subRecipes.map(r => ({
                 id: r.id,
                 name: r.name,
-                processed_ingredient_id: r.processed_ingredient_id,
-                quantity_produced: r.quantity_produced,
+                outputs: r.outputs.map(o => ({
+                  processed_ingredient_id: o.processed_ingredient_id,
+                  quantity_produced: o.quantity_produced
+                })),
                 items: r.sub_recipe_items.map(item => ({
                   raw_ingredient_id: item.raw_ingredient_id,
                   quantity_required: item.quantity_required

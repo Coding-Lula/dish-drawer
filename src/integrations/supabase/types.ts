@@ -260,9 +260,13 @@ export type Database = {
           id: string
           ingredient_id: string | null
           ingredient_quantity: number | null
+          invoice_no: string | null
           is_deducted: boolean | null
+          is_iva_deductible: boolean | null
+          payment_method: string | null
           staff_id: string | null
           store_id: string
+          supplier_id: string | null
         }
         Insert: {
           amount: number
@@ -274,9 +278,13 @@ export type Database = {
           id?: string
           ingredient_id?: string | null
           ingredient_quantity?: number | null
+          invoice_no?: string | null
           is_deducted?: boolean | null
+          is_iva_deductible?: boolean | null
+          payment_method?: string | null
           staff_id?: string | null
           store_id: string
+          supplier_id?: string | null
         }
         Update: {
           amount?: number
@@ -288,9 +296,13 @@ export type Database = {
           id?: string
           ingredient_id?: string | null
           ingredient_quantity?: number | null
+          invoice_no?: string | null
           is_deducted?: boolean | null
+          is_iva_deductible?: boolean | null
+          payment_method?: string | null
           staff_id?: string | null
           store_id?: string
+          supplier_id?: string | null
         }
         Relationships: [
           {
@@ -312,6 +324,13 @@ export type Database = {
             columns: ["store_id"]
             isOneToOne: false
             referencedRelation: "stores"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "expenses_supplier_id_fkey"
+            columns: ["supplier_id"]
+            isOneToOne: false
+            referencedRelation: "suppliers"
             referencedColumns: ["id"]
           },
         ]
@@ -1080,6 +1099,102 @@ export type Database = {
           id?: string
           location?: string | null
           manager_id?: string | null
+          name?: string
+        }
+        Relationships: []
+      }
+      sub_recipe_items: {
+        Row: {
+          created_at: string
+          id: string
+          quantity_required: number
+          raw_ingredient_id: string
+          sub_recipe_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          quantity_required: number
+          raw_ingredient_id: string
+          sub_recipe_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          quantity_required?: number
+          raw_ingredient_id?: string
+          sub_recipe_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sub_recipe_items_raw_ingredient_id_fkey"
+            columns: ["raw_ingredient_id"]
+            isOneToOne: false
+            referencedRelation: "ingredients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sub_recipe_items_sub_recipe_id_fkey"
+            columns: ["sub_recipe_id"]
+            isOneToOne: false
+            referencedRelation: "sub_recipes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      sub_recipe_outputs: {
+        Row: {
+          created_at: string
+          id: string
+          processed_ingredient_id: string
+          quantity_produced: number
+          sub_recipe_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          processed_ingredient_id: string
+          quantity_produced?: number
+          sub_recipe_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          processed_ingredient_id?: string
+          quantity_produced?: number
+          sub_recipe_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sub_recipe_outputs_processed_ingredient_id_fkey"
+            columns: ["processed_ingredient_id"]
+            isOneToOne: false
+            referencedRelation: "ingredients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sub_recipe_outputs_sub_recipe_id_fkey"
+            columns: ["sub_recipe_id"]
+            isOneToOne: false
+            referencedRelation: "sub_recipes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      sub_recipes: {
+        Row: {
+          created_at: string
+          id: string
+          name: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          name: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
           name?: string
         }
         Relationships: []

@@ -21,12 +21,19 @@ export interface Ingredient {
   created_at: string;
 }
 
-export interface SubRecipe {
+export interface SubRecipeOutput {
   id: string;
-  name: string;
+  sub_recipe_id: string;
   processed_ingredient_id: string;
   quantity_produced: number;
   created_at: string;
+}
+
+export interface SubRecipe {
+  id: string;
+  name: string;
+  created_at: string;
+  outputs: SubRecipeOutput[];
   sub_recipe_items: SubRecipeItem[];
 }
 
@@ -136,6 +143,10 @@ export interface Expense {
   staff_id: string | null;
   ingredient_id: string | null;
   ingredient_quantity: number | null;
+  supplier_id: string | null;
+  invoice_no: string | null;
+  is_iva_deductible: boolean;
+  payment_method: string | null;
   created_at: string;
 }
 
@@ -974,7 +985,18 @@ export function useExpenses(storeId: string | null) {
     setLoading(false);
   }, [storeId, toast]);
 
-  const addExpense = async (expense: { amount: number; category?: string; category_id?: string; description?: string; ingredient_id?: string; ingredient_quantity?: number }) => {
+  const addExpense = async (expense: { 
+    amount: number; 
+    category?: string; 
+    category_id?: string; 
+    description?: string; 
+    ingredient_id?: string; 
+    ingredient_quantity?: number;
+    supplier_id?: string;
+    invoice_no?: string;
+    is_iva_deductible?: boolean;
+    payment_method?: string;
+  }) => {
     if (!storeId) return null;
     
     const { data, error } = await supabase
@@ -1582,85 +1604,148 @@ export function useSubRecipes() {
   const fetchSubRecipes = useCallback(async () => {
     setLoading(true);
     
-    // Get all processed ingredients
-    const { data: processedIngredients, error: ingredientsError } = await supabase
-      .from('ingredients')
+    // Fetch from new sub_recipes tables
+    const { data: recipes, error: recipesError } = await supabase
+      .from('sub_recipes')
       .select('*')
-      .eq('is_processed', true);
-
-    if (ingredientsError) {
-      toast({ title: 'Error fetching processed ingredients', description: ingredientsError.message, variant: 'destructive' });
-      setLoading(false);
-      return;
-    }
-
-    // Get all ingredient recipes
-    const { data: recipeItems, error: recipesError } = await supabase
-      .from('ingredient_recipes')
-      .select('*');
+      .order('name');
 
     if (recipesError) {
-      toast({ title: 'Error fetching ingredient recipes', description: recipesError.message, variant: 'destructive' });
+      toast({ title: 'Error fetching sub-recipes', description: recipesError.message, variant: 'destructive' });
       setLoading(false);
       return;
     }
 
-    // Build sub-recipes from processed ingredients and their recipe items
-    const builtSubRecipes: SubRecipe[] = (processedIngredients || []).map(ingredient => ({
-      id: ingredient.id, // Use ingredient ID as sub-recipe ID
-      name: ingredient.name,
-      processed_ingredient_id: ingredient.id,
-      quantity_produced: 1, // Default to 1 unit
-      created_at: ingredient.created_at,
-      sub_recipe_items: (recipeItems || [])
-        .filter(item => item.processed_ingredient_id === ingredient.id)
+    // Fetch outputs
+    const { data: outputs, error: outputsError } = await supabase
+      .from('sub_recipe_outputs')
+      .select('*');
+
+    if (outputsError) {
+      toast({ title: 'Error fetching sub-recipe outputs', description: outputsError.message, variant: 'destructive' });
+      setLoading(false);
+      return;
+    }
+
+    // Fetch items (raw materials)
+    const { data: items, error: itemsError } = await supabase
+      .from('sub_recipe_items')
+      .select('*');
+
+    if (itemsError) {
+      toast({ title: 'Error fetching sub-recipe items', description: itemsError.message, variant: 'destructive' });
+      setLoading(false);
+      return;
+    }
+
+    // Build sub-recipes
+    const builtSubRecipes: SubRecipe[] = (recipes || []).map(recipe => ({
+      id: recipe.id,
+      name: recipe.name,
+      created_at: recipe.created_at,
+      outputs: (outputs || [])
+        .filter(o => o.sub_recipe_id === recipe.id)
+        .map(o => ({
+          id: o.id,
+          sub_recipe_id: o.sub_recipe_id,
+          processed_ingredient_id: o.processed_ingredient_id,
+          quantity_produced: Number(o.quantity_produced),
+          created_at: o.created_at
+        })),
+      sub_recipe_items: (items || [])
+        .filter(item => item.sub_recipe_id === recipe.id)
         .map(item => ({
           id: item.id,
-          sub_recipe_id: ingredient.id,
+          sub_recipe_id: item.sub_recipe_id,
           raw_ingredient_id: item.raw_ingredient_id,
           quantity_required: Number(item.quantity_required),
           created_at: item.created_at
         }))
-    })).filter(r => r.sub_recipe_items.length > 0); // Only include those with recipe items
+    }));
 
     setSubRecipes(builtSubRecipes);
     setLoading(false);
   }, [toast]);
 
   const saveSubRecipe = async (
-    recipe: { id?: string; name: string; processed_ingredient_id: string; quantity_produced: number },
+    recipe: { id?: string; name: string },
+    outputs: { processed_ingredient_id: string; quantity_produced: number }[],
     items: { raw_ingredient_id: string; quantity_required: number }[]
   ) => {
-    // Delete existing recipe items for this processed ingredient
-    await supabase.from('ingredient_recipes').delete().eq('processed_ingredient_id', recipe.processed_ingredient_id);
+    let recipeId = recipe.id;
 
-    // Insert new recipe items
+    if (recipeId) {
+      // Update existing recipe
+      const { error: updateError } = await supabase
+        .from('sub_recipes')
+        .update({ name: recipe.name })
+        .eq('id', recipeId);
+
+      if (updateError) {
+        toast({ title: 'Error updating sub-recipe', description: updateError.message, variant: 'destructive' });
+        return null;
+      }
+
+      // Delete existing outputs and items
+      await supabase.from('sub_recipe_outputs').delete().eq('sub_recipe_id', recipeId);
+      await supabase.from('sub_recipe_items').delete().eq('sub_recipe_id', recipeId);
+    } else {
+      // Create new recipe
+      const { data: newRecipe, error: createError } = await supabase
+        .from('sub_recipes')
+        .insert([{ name: recipe.name }])
+        .select()
+        .single();
+
+      if (createError) {
+        toast({ title: 'Error creating sub-recipe', description: createError.message, variant: 'destructive' });
+        return null;
+      }
+      recipeId = newRecipe.id;
+    }
+
+    // Insert outputs
+    if (outputs.length > 0) {
+      const { error: outputsError } = await supabase.from('sub_recipe_outputs').insert(
+        outputs.map(o => ({
+          sub_recipe_id: recipeId,
+          processed_ingredient_id: o.processed_ingredient_id,
+          quantity_produced: o.quantity_produced,
+        }))
+      );
+
+      if (outputsError) {
+        toast({ title: 'Error saving outputs', description: outputsError.message, variant: 'destructive' });
+        return null;
+      }
+    }
+
+    // Insert items
     if (items.length > 0) {
-      const { error: itemsError } = await supabase.from('ingredient_recipes').insert(
+      const { error: itemsError } = await supabase.from('sub_recipe_items').insert(
         items.map(item => ({
-          processed_ingredient_id: recipe.processed_ingredient_id,
+          sub_recipe_id: recipeId,
           raw_ingredient_id: item.raw_ingredient_id,
           quantity_required: item.quantity_required,
         }))
       );
 
       if (itemsError) {
-        toast({ title: 'Error saving sub-recipe items', description: itemsError.message, variant: 'destructive' });
+        toast({ title: 'Error saving items', description: itemsError.message, variant: 'destructive' });
         return null;
       }
     }
 
     toast({ title: 'Sub-recipe saved successfully' });
     fetchSubRecipes();
-    return { id: recipe.processed_ingredient_id };
+    return { id: recipeId };
   };
 
   const deleteSubRecipe = async (id: string) => {
-    // Delete recipe items for this processed ingredient
     const { error } = await supabase
-      .from('ingredient_recipes')
+      .from('sub_recipes')
       .delete()
-      .eq('processed_ingredient_id', id);
+      .eq('id', id);
     
     if (error) {
       toast({ title: 'Error deleting sub-recipe', description: error.message, variant: 'destructive' });
