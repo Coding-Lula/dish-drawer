@@ -17,7 +17,7 @@ interface Debtor extends Credit {
   items: TransactionItem[];
 }
 
-const DebtorsPage = () => {
+function DebtorsContent() {
   const { currentStore } = useCurrentStore();
   const { credits, loading: creditsLoading } = useCredits(currentStore?.id || null);
   const creditsError = null; // Error handling is done via toast in the hook
@@ -78,59 +78,65 @@ const DebtorsPage = () => {
   }, [credits, creditsLoading, creditsError]);
 
   return (
+    <div className="space-y-6 max-w-4xl mx-auto">
+      <h1 className="text-3xl font-bold text-center">Debtors</h1>
+
+      {loading && (
+        <div className="flex justify-center items-center p-8">
+          <Loader2 className="w-8 h-8 animate-spin text-primary" />
+          <p className="ml-2">Loading debtors...</p>
+        </div>
+      )}
+
+      {error && (
+        <div className="flex justify-center items-center p-8 bg-destructive/10 border border-destructive/30 rounded-lg">
+          <AlertTriangle className="w-8 h-8 text-destructive" />
+          <p className="ml-2 text-destructive font-semibold">{error}</p>
+        </div>
+      )}
+
+      {!loading && !error && debtors.length === 0 && (
+        <div className="text-center p-8 bg-muted/50 rounded-lg">
+          <p>No outstanding debtors found.</p>
+        </div>
+      )}
+
+      {!loading && !error && debtors.map((debtor) => (
+        <Card key={debtor.id}>
+          <CardHeader>
+            <div className="flex justify-between items-center">
+              <CardTitle>{debtor.customer_name}</CardTitle>
+              <span className="text-lg font-bold text-destructive">
+                {Number(debtor.sale_amount).toLocaleString()} MT
+              </span>
+            </div>
+            <p className="text-sm text-muted-foreground">
+              Date: {new Date(debtor.date).toLocaleDateString()}
+            </p>
+          </CardHeader>
+          <CardContent>
+            <h4 className="font-semibold mt-2 mb-2 text-muted-foreground">Itemized List:</h4>
+            <ul className="space-y-1 text-sm">
+              {debtor.items.map((item) => (
+                <li key={item.id} className="flex justify-between border-b pb-1">
+                  <span>{item.dishes?.name || 'Unknown Item'}</span>
+                  <span className="text-muted-foreground">
+                    {item.quantity} x {Number(item.unit_price).toLocaleString()} MT
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </CardContent>
+        </Card>
+      ))}
+    </div>
+  );
+}
+
+const DebtorsPage = () => {
+  return (
     <MainLayout>
-      <div className="space-y-6 max-w-4xl mx-auto">
-        <h1 className="text-3xl font-bold text-center">Debtors</h1>
-
-        {loading && (
-          <div className="flex justify-center items-center p-8">
-            <Loader2 className="w-8 h-8 animate-spin text-primary" />
-            <p className="ml-2">Loading debtors...</p>
-          </div>
-        )}
-
-        {error && (
-          <div className="flex justify-center items-center p-8 bg-destructive/10 border border-destructive/30 rounded-lg">
-            <AlertTriangle className="w-8 h-8 text-destructive" />
-            <p className="ml-2 text-destructive font-semibold">{error}</p>
-          </div>
-        )}
-
-        {!loading && !error && debtors.length === 0 && (
-          <div className="text-center p-8 bg-muted/50 rounded-lg">
-            <p>No outstanding debtors found.</p>
-          </div>
-        )}
-
-        {!loading && !error && debtors.map((debtor) => (
-          <Card key={debtor.id}>
-            <CardHeader>
-              <div className="flex justify-between items-center">
-                <CardTitle>{debtor.customer_name}</CardTitle>
-                <span className="text-lg font-bold text-destructive">
-                  {Number(debtor.sale_amount).toLocaleString()} MT
-                </span>
-              </div>
-              <p className="text-sm text-muted-foreground">
-                Date: {new Date(debtor.date).toLocaleDateString()}
-              </p>
-            </CardHeader>
-            <CardContent>
-              <h4 className="font-semibold mt-2 mb-2 text-muted-foreground">Itemized List:</h4>
-              <ul className="space-y-1 text-sm">
-                {debtor.items.map((item) => (
-                  <li key={item.id} className="flex justify-between border-b pb-1">
-                    <span>{item.dishes?.name || 'Unknown Item'}</span>
-                    <span className="text-muted-foreground">
-                      {item.quantity} x {Number(item.unit_price).toLocaleString()} MT
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
+      <DebtorsContent />
     </MainLayout>
   );
 };
