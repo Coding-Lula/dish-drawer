@@ -7,11 +7,19 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useSubRecipes, Ingredient } from '@/hooks/useSupabaseData';
 import { PlusCircle, Trash2 } from 'lucide-react';
 
-export function SubRecipeModal({ isOpen, onClose, recipe, ingredients }) {
+interface SubRecipeModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  recipe: any;
+  ingredients: Ingredient[];
+}
+
+export function SubRecipeModal({ isOpen, onClose, recipe, ingredients }: SubRecipeModalProps) {
   const { saveSubRecipe } = useSubRecipes();
   const [name, setName] = useState('');
-  const [processedIngredientId, setProcessedIngredientId] = useState('');
-  const [quantityProduced, setQuantityProduced] = useState(1);
+  const [outputs, setOutputs] = useState<{ processed_ingredient_id: string; quantity_produced: number }[]>([
+    { processed_ingredient_id: '', quantity_produced: 1 }
+  ]);
   const [items, setItems] = useState([{ raw_ingredient_id: '', quantity_required: 1 }]);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -20,24 +28,46 @@ export function SubRecipeModal({ isOpen, onClose, recipe, ingredients }) {
 
   useEffect(() => {
     if (recipe) {
-      setName(recipe.name);
-      setProcessedIngredientId(recipe.processed_ingredient_id);
-      setQuantityProduced(recipe.quantity_produced || 1);
-      setItems(recipe.sub_recipe_items.map(item => ({
-        raw_ingredient_id: item.raw_ingredient_id,
-        quantity_required: item.quantity_required,
-      })));
+      setName(recipe.name || '');
+      setOutputs(recipe.outputs?.length > 0 
+        ? recipe.outputs.map((o: any) => ({
+            processed_ingredient_id: o.processed_ingredient_id,
+            quantity_produced: o.quantity_produced,
+          }))
+        : [{ processed_ingredient_id: '', quantity_produced: 1 }]
+      );
+      setItems(recipe.sub_recipe_items?.length > 0 
+        ? recipe.sub_recipe_items.map((item: any) => ({
+            raw_ingredient_id: item.raw_ingredient_id,
+            quantity_required: item.quantity_required,
+          }))
+        : [{ raw_ingredient_id: '', quantity_required: 1 }]
+      );
     } else {
       setName('');
-      setProcessedIngredientId('');
-      setQuantityProduced(1);
+      setOutputs([{ processed_ingredient_id: '', quantity_produced: 1 }]);
       setItems([{ raw_ingredient_id: '', quantity_required: 1 }]);
     }
   }, [recipe, isOpen]);
 
-  const handleItemChange = (index, field, value) => {
+  const handleOutputChange = (index: number, field: string, value: any) => {
+    const newOutputs = [...outputs];
+    (newOutputs[index] as any)[field] = value;
+    setOutputs(newOutputs);
+  };
+
+  const addOutput = () => {
+    setOutputs([...outputs, { processed_ingredient_id: '', quantity_produced: 1 }]);
+  };
+
+  const removeOutput = (index: number) => {
+    const newOutputs = outputs.filter((_, i) => i !== index);
+    setOutputs(newOutputs);
+  };
+
+  const handleItemChange = (index: number, field: string, value: any) => {
     const newItems = [...items];
-    newItems[index][field] = value;
+    (newItems[index] as any)[field] = value;
     setItems(newItems);
   };
 
@@ -45,23 +75,24 @@ export function SubRecipeModal({ isOpen, onClose, recipe, ingredients }) {
     setItems([...items, { raw_ingredient_id: '', quantity_required: 1 }]);
   };
 
-  const removeItem = (index) => {
+  const removeItem = (index: number) => {
     const newItems = items.filter((_, i) => i !== index);
     setItems(newItems);
   };
 
-  const handleSubmit = async (e) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
 
     const recipeData = {
       id: recipe?.id,
       name,
-      processed_ingredient_id: processedIngredientId,
-      quantity_produced: quantityProduced,
     };
 
-    await saveSubRecipe(recipeData, items);
+    const validOutputs = outputs.filter(o => o.processed_ingredient_id);
+    const validItems = items.filter(i => i.raw_ingredient_id);
+
+    await saveSubRecipe(recipeData, validOutputs, validItems);
 
     setIsSubmitting(false);
     onClose();
@@ -69,53 +100,70 @@ export function SubRecipeModal({ isOpen, onClose, recipe, ingredients }) {
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-2xl">
+      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>{recipe ? 'Edit' : 'Create'} Sub-Recipe</DialogTitle>
+          <DialogTitle>{recipe?.id ? 'Edit' : 'Create'} Sub-Recipe</DialogTitle>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-2">
             <Label>Sub-Recipe Name</Label>
             <Input value={name} onChange={(e) => setName(e.target.value)} required />
           </div>
-          <div className="grid grid-cols-2 gap-4">
+
+          {/* Outputs Section */}
+          <div className="space-y-2">
+            <Label>Produced Items</Label>
+            <p className="text-sm text-muted-foreground">What this recipe produces (can produce multiple items)</p>
             <div className="space-y-2">
-              <Label>Produced Ingredient</Label>
-              <Select value={processedIngredientId} onValueChange={setProcessedIngredientId} required>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select an ingredient" />
-                </SelectTrigger>
-                <SelectContent>
-                  {processedIngredients.map(ing => (
-                    <SelectItem key={ing.id} value={ing.id}>{ing.name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              {outputs.map((output, index) => (
+                <div key={index} className="flex items-center gap-2 p-2 border rounded-lg">
+                  <Select
+                    value={output.processed_ingredient_id}
+                    onValueChange={(value) => handleOutputChange(index, 'processed_ingredient_id', value)}
+                  >
+                    <SelectTrigger className="flex-1">
+                      <SelectValue placeholder="Select processed ingredient" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {processedIngredients.map(ing => (
+                        <SelectItem key={ing.id} value={ing.id}>{ing.name} ({ing.unit})</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Input
+                    type="number"
+                    value={output.quantity_produced}
+                    onChange={(e) => handleOutputChange(index, 'quantity_produced', parseFloat(e.target.value) || 1)}
+                    className="w-24"
+                    step="0.01"
+                    min="0.01"
+                    placeholder="Qty"
+                  />
+                  {outputs.length > 1 && (
+                    <Button type="button" variant="ghost" size="icon" onClick={() => removeOutput(index)}>
+                      <Trash2 className="w-4 h-4 text-destructive" />
+                    </Button>
+                  )}
+                </div>
+              ))}
             </div>
-            <div className="space-y-2">
-              <Label>Quantity Produced</Label>
-              <Input
-                type="number"
-                value={quantityProduced}
-                onChange={(e) => setQuantityProduced(parseFloat(e.target.value))}
-                min="1"
-                step="1"
-                required
-              />
-            </div>
+            <Button type="button" variant="outline" size="sm" onClick={addOutput} className="gap-1">
+              <PlusCircle className="w-3 h-3" />
+              Add Output
+            </Button>
           </div>
 
-          <div>
-            <Label>Raw Materials</Label>
+          {/* Raw Materials Section */}
+          <div className="space-y-2">
+            <Label>Raw Materials Required</Label>
             <div className="space-y-2">
               {items.map((item, index) => (
                 <div key={index} className="flex items-center gap-2">
                   <Select
                     value={item.raw_ingredient_id}
                     onValueChange={(value) => handleItemChange(index, 'raw_ingredient_id', value)}
-                    required
                   >
-                    <SelectTrigger>
+                    <SelectTrigger className="flex-1">
                       <SelectValue placeholder="Select raw material" />
                     </SelectTrigger>
                     <SelectContent>
@@ -127,11 +175,10 @@ export function SubRecipeModal({ isOpen, onClose, recipe, ingredients }) {
                   <Input
                     type="number"
                     value={item.quantity_required}
-                    onChange={(e) => handleItemChange(index, 'quantity_required', parseFloat(e.target.value))}
+                    onChange={(e) => handleItemChange(index, 'quantity_required', parseFloat(e.target.value) || 0)}
                     className="w-28"
                     step="0.01"
                     min="0.01"
-                    required
                   />
                   <Button type="button" variant="ghost" size="icon" onClick={() => removeItem(index)}>
                     <Trash2 className="w-4 h-4 text-destructive" />

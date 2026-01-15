@@ -5,13 +5,14 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
+import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
-import { useExpenses, useExpenseCategories, useIngredients, useStoreStock } from '@/hooks/useSupabaseData';
+import { useExpenses, useExpenseCategories, useIngredients, useStoreStock, useSuppliers } from '@/hooks/useSupabaseData';
 import { AddCategoryModal } from '@/components/modals/AddCategoryModal';
 import { DateRangePickerModal } from '@/components/modals/DateRangePickerModal';
 import { exportExpensesToCSV, exportExpensesToPDF } from '@/utils/exportUtils';
-import { Receipt, Plus, Package } from 'lucide-react';
+import { Receipt, Plus, Package, FileText, Building2 } from 'lucide-react';
 
 function ExpensesContent() {
   const { toast } = useToast();
@@ -20,6 +21,7 @@ function ExpensesContent() {
   const { categories, addCategory } = useExpenseCategories();
   const { ingredients } = useIngredients();
   const { addStock } = useStoreStock(currentStore?.id || null);
+  const { suppliers } = useSuppliers();
 
   const [showForm, setShowForm] = useState(false);
   const [amount, setAmount] = useState('');
@@ -27,6 +29,10 @@ function ExpensesContent() {
   const [description, setDescription] = useState('');
   const [ingredientId, setIngredientId] = useState('');
   const [ingredientQty, setIngredientQty] = useState('');
+  const [supplierId, setSupplierId] = useState('');
+  const [invoiceNo, setInvoiceNo] = useState('');
+  const [isIvaDeductible, setIsIvaDeductible] = useState(false);
+  const [paymentMethod, setPaymentMethod] = useState('');
 
   const selectedCategory = categories.find(c => c.id === categoryId);
   const isStockCategory = selectedCategory?.name === 'Stock';
@@ -47,6 +53,10 @@ function ExpensesContent() {
       description: description || `${selectedCategory?.name} expense`,
       ingredient_id: isStockCategory ? ingredientId || undefined : undefined,
       ingredient_quantity: isStockCategory && ingredientQty ? parseFloat(ingredientQty) : undefined,
+      supplier_id: supplierId || undefined,
+      invoice_no: invoiceNo || undefined,
+      is_iva_deductible: isIvaDeductible,
+      payment_method: paymentMethod || undefined,
     };
 
     const result = await addExpense(expense);
@@ -55,10 +65,15 @@ function ExpensesContent() {
       await addStock(ingredientId, parseFloat(ingredientQty), parseFloat(amount));
     }
 
+    // Reset form
     setAmount('');
     setDescription('');
     setIngredientId('');
     setIngredientQty('');
+    setSupplierId('');
+    setInvoiceNo('');
+    setIsIvaDeductible(false);
+    setPaymentMethod('');
     setShowForm(false);
   };
 
@@ -79,6 +94,11 @@ function ExpensesContent() {
     const dateRange = `${startDate.toLocaleDateString()} - ${endDate.toLocaleDateString()}`;
     exportExpensesToPDF(filteredExpenses, currentStore?.name || 'Store', dateRange);
     toast({ title: 'Exported to PDF' });
+  };
+
+  const getSupplierName = (supplierId: string | null) => {
+    if (!supplierId) return null;
+    return suppliers.find(s => s.id === supplierId)?.name;
   };
 
   return (
@@ -146,6 +166,49 @@ function ExpensesContent() {
                 </div>
               </div>
 
+              {/* Supplier and Invoice Row */}
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="space-y-2">
+                  <Label>Supplier</Label>
+                  <Select value={supplierId} onValueChange={setSupplierId}>
+                    <SelectTrigger><SelectValue placeholder="Select supplier (optional)" /></SelectTrigger>
+                    <SelectContent>
+                      {suppliers.map(sup => (<SelectItem key={sup.id} value={sup.id}>{sup.name}</SelectItem>))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label>Invoice Number</Label>
+                  <Input placeholder="INV-001" value={invoiceNo} onChange={(e) => setInvoiceNo(e.target.value)} />
+                </div>
+              </div>
+
+              {/* Payment Method and IVA Row */}
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="space-y-2">
+                  <Label>Payment Method</Label>
+                  <Select value={paymentMethod} onValueChange={setPaymentMethod}>
+                    <SelectTrigger><SelectValue placeholder="Select payment method" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="cash">Cash</SelectItem>
+                      <SelectItem value="pos">POS</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label>IVA Deductible</Label>
+                  <div className="flex items-center gap-3 h-10">
+                    <Switch 
+                      checked={isIvaDeductible} 
+                      onCheckedChange={setIsIvaDeductible} 
+                    />
+                    <span className="text-sm text-muted-foreground">
+                      {isIvaDeductible ? 'Yes' : 'No'}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
               {isStockCategory && (
                 <div className="grid gap-4 md:grid-cols-2 p-3 rounded-lg bg-amber-500/10 border border-amber-500/20">
                   <div className="space-y-2">
@@ -192,10 +255,28 @@ function ExpensesContent() {
                   <div className="p-2 rounded-lg bg-muted"><Receipt className="w-5 h-5" /></div>
                   <div>
                     <p className="font-medium">{expense.description}</p>
-                    <div className="flex items-center gap-2 mt-1">
+                    <div className="flex items-center gap-2 mt-1 flex-wrap">
                       <Badge variant="outline" className="text-xs">{expense.category}</Badge>
                       {expense.category === 'Stock' && !expense.is_deducted && (<Badge variant="secondary" className="text-xs bg-amber-500/20 text-amber-700">Pre-spent</Badge>)}
+                      {expense.is_iva_deductible && (<Badge variant="secondary" className="text-xs bg-green-500/20 text-green-700">IVA</Badge>)}
+                      {expense.payment_method && (<Badge variant="outline" className="text-xs">{expense.payment_method.toUpperCase()}</Badge>)}
                     </div>
+                    {(getSupplierName(expense.supplier_id) || expense.invoice_no) && (
+                      <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground">
+                        {getSupplierName(expense.supplier_id) && (
+                          <span className="flex items-center gap-1">
+                            <Building2 className="w-3 h-3" />
+                            {getSupplierName(expense.supplier_id)}
+                          </span>
+                        )}
+                        {expense.invoice_no && (
+                          <span className="flex items-center gap-1">
+                            <FileText className="w-3 h-3" />
+                            {expense.invoice_no}
+                          </span>
+                        )}
+                      </div>
+                    )}
                   </div>
                 </div>
                 <div className="text-right">

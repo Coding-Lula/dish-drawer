@@ -7,11 +7,15 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Factory } from 'lucide-react';
 import type { Ingredient, StoreStock } from '@/hooks/useSupabaseData';
 
+interface SubRecipeOutput {
+  processed_ingredient_id: string;
+  quantity_produced: number;
+}
+
 interface SubRecipeDisplay {
   id: string;
   name: string;
-  processed_ingredient_id: string;
-  quantity_produced: number;
+  outputs: SubRecipeOutput[];
   items: { raw_ingredient_id: string; quantity_required: number }[];
 }
 
@@ -62,7 +66,13 @@ export function ProcessBatchModal({ ingredients, subRecipes, stocks, onProcess }
     setQuantity(1);
   };
 
-  const processedIngredients = ingredients.filter(i => i.is_processed);
+  // Get output names for display
+  const getOutputsDisplay = (outputs: SubRecipeOutput[]) => {
+    return outputs.map(o => {
+      const ing = ingredients.find(i => i.id === o.processed_ingredient_id);
+      return `${o.quantity_produced} ${ing?.unit || 'units'} ${ing?.name || 'Unknown'}`;
+    }).join(', ');
+  };
 
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
@@ -85,14 +95,11 @@ export function ProcessBatchModal({ ingredients, subRecipes, stocks, onProcess }
                   <SelectValue placeholder="Choose a sub-recipe" />
                 </SelectTrigger>
                 <SelectContent>
-                  {subRecipes.map(r => {
-                    const processed = ingredients.find(i => i.id === r.processed_ingredient_id);
-                    return (
-                      <SelectItem key={r.id} value={r.id}>
-                        {r.name} → {processed?.name}
-                      </SelectItem>
-                    );
-                  })}
+                  {subRecipes.map(r => (
+                    <SelectItem key={r.id} value={r.id}>
+                      {r.name} → {getOutputsDisplay(r.outputs)}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
@@ -110,9 +117,17 @@ export function ProcessBatchModal({ ingredients, subRecipes, stocks, onProcess }
                     step="1"
                     required
                   />
-                  <p className="text-sm text-muted-foreground">
-                    This will produce {quantity * recipe.quantity_produced} units of {ingredients.find(i => i.id === recipe.processed_ingredient_id)?.name}.
-                  </p>
+                  <div className="text-sm text-muted-foreground space-y-1">
+                    <p className="font-medium">This batch will produce:</p>
+                    {recipe.outputs.map(o => {
+                      const ing = ingredients.find(i => i.id === o.processed_ingredient_id);
+                      return (
+                        <p key={o.processed_ingredient_id}>
+                          • {quantity * o.quantity_produced} {ing?.unit} of {ing?.name}
+                        </p>
+                      );
+                    })}
+                  </div>
                 </div>
 
                 <div>

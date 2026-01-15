@@ -1,9 +1,11 @@
 import { MainLayout, useCurrentStore } from '@/components/layout/MainLayout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
 import { useCredits, type Credit } from '@/hooks/useSupabaseData';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { supabase } from '@/integrations/supabase/client';
-import { AlertTriangle, Loader2 } from 'lucide-react';
+import { AlertTriangle, Loader2, User } from 'lucide-react';
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 
 interface TransactionItem {
   id: string;
@@ -13,36 +15,46 @@ interface TransactionItem {
   dishes: { name: string } | null;
 }
 
-interface Debtor extends Credit {
+interface DebtorBill {
+  credit: Credit;
   items: TransactionItem[];
+}
+
+interface GroupedDebtor {
+  customer_name: string;
+  total_owed: number;
+  bills: DebtorBill[];
 }
 
 function DebtorsContent() {
   const { currentStore } = useCurrentStore();
   const { credits, loading: creditsLoading } = useCredits(currentStore?.id || null);
-  const creditsError = null; // Error handling is done via toast in the hook
-  const [debtors, setDebtors] = useState<Debtor[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [transactionItems, setTransactionItems] = useState<TransactionItem[]>([]);
+  const [itemsLoading, setItemsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  // Fetch transaction items for all credits
   useEffect(() => {
-    const fetchDebtorDetails = async () => {
+    const fetchTransactionItems = async () => {
       if (creditsLoading) return;
-      if (creditsError) {
-        setError('Failed to load credits.');
-        setLoading(false);
-        return;
-      }
-
+      
       const unsettledCredits = credits.filter(c => c.status === 'unsettled');
-
+      
       if (unsettledCredits.length === 0) {
-        setDebtors([]);
-        setLoading(false);
+        setTransactionItems([]);
+        setItemsLoading(false);
         return;
       }
 
-      const transactionIds = unsettledCredits.map(c => c.transaction_id);
+      const transactionIds = unsettledCredits
+        .map(c => c.transaction_id)
+        .filter(Boolean) as string[];
+
+      if (transactionIds.length === 0) {
+        setTransactionItems([]);
+        setItemsLoading(false);
+        return;
+      }
 
       const { data: items, error: itemsError } = await supabase
         .from('transaction_items')
@@ -51,35 +63,50 @@ function DebtorsContent() {
 
       if (itemsError) {
         setError('Failed to load transaction details for debtors.');
-        setLoading(false);
         console.error('Error fetching transaction items:', itemsError);
-        return;
+      } else {
+        setTransactionItems(items as TransactionItem[]);
       }
-
-      const itemsByTransactionId = new Map<string, TransactionItem[]>();
-      items.forEach(item => {
-        if (!itemsByTransactionId.has(item.transaction_id)) {
-          itemsByTransactionId.set(item.transaction_id, []);
-        }
-        itemsByTransactionId.get(item.transaction_id)!.push(item as TransactionItem);
-      });
-
-      const debtorDetails: Debtor[] = unsettledCredits.map(credit => ({
-        ...credit,
-        items: itemsByTransactionId.get(credit.transaction_id) || [],
-      }));
-
-      setDebtors(debtorDetails);
-      setLoading(false);
-      setError(null);
+      
+      setItemsLoading(false);
     };
 
-    fetchDebtorDetails();
-  }, [credits, creditsLoading, creditsError]);
+    fetchTransactionItems();
+  }, [credits, creditsLoading]);
+
+  // Group credits by customer name
+  const groupedDebtors = useMemo((): GroupedDebtor[] => {
+    const unsettledCredits = credits.filter(c => c.status === 'unsettled');
+    
+    const grouped = new Map<string, DebtorBill[]>();
+    
+    unsettledCredits.forEach(credit => {
+      const name = credit.customer_name.trim().toLowerCase();
+      const items = transactionItems.filter(item => item.transaction_id === credit.transaction_id);
+      
+      if (!grouped.has(name)) {
+        grouped.set(name, []);
+      }
+      grouped.get(name)!.push({ credit, items });
+    });
+
+    return Array.from(grouped.entries()).map(([_, bills]) => ({
+      customer_name: bills[0].credit.customer_name,
+      total_owed: bills.reduce((sum, bill) => sum + Number(bill.credit.sale_amount), 0),
+      bills: bills.sort((a, b) => new Date(b.credit.date).getTime() - new Date(a.credit.date).getTime())
+    })).sort((a, b) => b.total_owed - a.total_owed);
+  }, [credits, transactionItems]);
+
+  const loading = creditsLoading || itemsLoading;
 
   return (
     <div className="space-y-6 max-w-4xl mx-auto">
-      <h1 className="text-3xl font-bold text-center">Debtors</h1>
+      <div className="text-center">
+        <h1 className="text-3xl font-bold">Debtors</h1>
+        <p className="text-muted-foreground mt-1">
+          {groupedDebtors.length} customer{groupedDebtors.length !== 1 ? 's' : ''} with outstanding balance
+        </p>
+      </div>
 
       {loading && (
         <div className="flex justify-center items-center p-8">
@@ -95,37 +122,77 @@ function DebtorsContent() {
         </div>
       )}
 
-      {!loading && !error && debtors.length === 0 && (
+      {!loading && !error && groupedDebtors.length === 0 && (
         <div className="text-center p-8 bg-muted/50 rounded-lg">
           <p>No outstanding debtors found.</p>
         </div>
       )}
 
-      {!loading && !error && debtors.map((debtor) => (
-        <Card key={debtor.id}>
-          <CardHeader>
+      {!loading && !error && groupedDebtors.map((debtor) => (
+        <Card key={debtor.customer_name}>
+          <CardHeader className="pb-2">
             <div className="flex justify-between items-center">
-              <CardTitle>{debtor.customer_name}</CardTitle>
-              <span className="text-lg font-bold text-destructive">
-                {Number(debtor.sale_amount).toLocaleString()} MT
-              </span>
+              <div className="flex items-center gap-3">
+                <div className="p-2 rounded-full bg-primary/10">
+                  <User className="w-5 h-5 text-primary" />
+                </div>
+                <div>
+                  <CardTitle className="text-xl">{debtor.customer_name}</CardTitle>
+                  <p className="text-sm text-muted-foreground">
+                    {debtor.bills.length} outstanding bill{debtor.bills.length !== 1 ? 's' : ''}
+                  </p>
+                </div>
+              </div>
+              <div className="text-right">
+                <p className="text-2xl font-bold text-destructive">
+                  {debtor.total_owed.toLocaleString()} MT
+                </p>
+                <p className="text-xs text-muted-foreground">Total Owed</p>
+              </div>
             </div>
-            <p className="text-sm text-muted-foreground">
-              Date: {new Date(debtor.date).toLocaleDateString()}
-            </p>
           </CardHeader>
           <CardContent>
-            <h4 className="font-semibold mt-2 mb-2 text-muted-foreground">Itemized List:</h4>
-            <ul className="space-y-1 text-sm">
-              {debtor.items.map((item) => (
-                <li key={item.id} className="flex justify-between border-b pb-1">
-                  <span>{item.dishes?.name || 'Unknown Item'}</span>
-                  <span className="text-muted-foreground">
-                    {item.quantity} x {Number(item.unit_price).toLocaleString()} MT
-                  </span>
-                </li>
+            <Accordion type="single" collapsible className="w-full">
+              {debtor.bills.map((bill, index) => (
+                <AccordionItem key={bill.credit.id} value={bill.credit.id}>
+                  <AccordionTrigger className="hover:no-underline">
+                    <div className="flex items-center justify-between w-full pr-4">
+                      <div className="flex items-center gap-3">
+                        <Badge variant="outline" className="font-mono text-xs">
+                          #{index + 1}
+                        </Badge>
+                        <span className="text-sm text-muted-foreground">
+                          {new Date(bill.credit.date).toLocaleDateString()}
+                        </span>
+                      </div>
+                      <span className="font-semibold text-destructive">
+                        {Number(bill.credit.sale_amount).toLocaleString()} MT
+                      </span>
+                    </div>
+                  </AccordionTrigger>
+                  <AccordionContent>
+                    <div className="pl-4 border-l-2 border-muted ml-2">
+                      {bill.items.length > 0 ? (
+                        <ul className="space-y-2">
+                          {bill.items.map((item) => (
+                            <li key={item.id} className="flex justify-between text-sm">
+                              <span className="text-foreground">
+                                {item.dishes?.name || 'Unknown Item'}
+                              </span>
+                              <span className="text-muted-foreground">
+                                {item.quantity} × {Number(item.unit_price).toLocaleString()} MT
+                              </span>
+                            </li>
+                          ))}
+                        </ul>
+                      ) : (
+                        <p className="text-sm text-muted-foreground italic">No item details available</p>
+                      )}
+                    </div>
+                  </AccordionContent>
+                </AccordionItem>
               ))}
-            </ul>
+            </Accordion>
           </CardContent>
         </Card>
       ))}
