@@ -7,11 +7,13 @@ import { useToast } from '@/hooks/use-toast';
 import { useDishes, useRecipes, useTransactions, useStoreStock, useCredits, useRestaurantTablesManagement } from '@/hooks/useSupabaseData';
 import type { Dish } from '@/hooks/useSupabaseData';
 import { useStoreDishPrices } from '@/hooks/useStoreDishPrices';
+import { useBundles, useStoreBundlePrices } from '@/hooks/useBundles';
 import { ManageTablesModal } from '@/components/modals/ManageTablesModal';
 import { CreditCustomerModal } from '@/components/modals/CreditCustomerModal';
 import { SplitBillModal } from '@/components/modals/SplitBillModal';
 import { TableMapModal } from '@/components/modals/TableMapModal';
-import { Plus, Minus, Trash2, ShoppingBag, CreditCard, Printer, Table, Split, Pencil } from 'lucide-react';
+import { BundleSelectorModal } from '@/components/modals/BundleSelectorModal';
+import { Plus, Minus, Trash2, ShoppingBag, CreditCard, Printer, Table, Split, Pencil, Coffee } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { CartModal } from '@/components/modals/CartModal';
@@ -21,7 +23,11 @@ import { useAuth } from '@/hooks/useAuth';
 interface CartItem {
   dish: Dish;
   quantity: number;
-  unitPrice: number; // Store the effective price at time of adding
+  unitPrice: number;
+  isBundle?: boolean;
+  bundleId?: string;
+  bundleName?: string;
+  selectedDishIds?: string[]; // For bundles: the dishes selected in this bundle
 }
 
 interface SplitBill {
@@ -163,6 +169,8 @@ function POSPage({ currentStore }: { currentStore: any }) {
   const { deductStock } = useStoreStock(currentStore?.id || null);
   const { addCredit } = useCredits(currentStore?.id || null);
   const { getEffectivePrice, hasOverride, setOverridePrice, removeOverridePrice, getOverridePrice } = useStoreDishPrices(currentStore?.id || null);
+  const { bundles } = useBundles();
+  const { getEffectiveBundlePrice } = useStoreBundlePrices(currentStore?.id || null);
   const { isManager } = useAuth();
 
   const [tableCarts, setTableCarts] = useState<Record<string, CartItem[]>>({});
@@ -176,6 +184,8 @@ function POSPage({ currentStore }: { currentStore: any }) {
   const [showCart, setShowCart] = useState(false);
   const [showEditPriceModal, setShowEditPriceModal] = useState(false);
   const [selectedDish, setSelectedDish] = useState<Dish | null>(null);
+  const [showBundleSelector, setShowBundleSelector] = useState(false);
+  const [selectedBundle, setSelectedBundle] = useState<typeof bundles[0] | null>(null);
 
   // Initialize tables if needed
   useEffect(() => {
@@ -221,6 +231,64 @@ function POSPage({ currentStore }: { currentStore: any }) {
         [selectedTable]: [...tableCart, { dish, quantity: 1, unitPrice: effectivePrice }]
       };
     });
+  };
+
+  // Add a bundle to cart
+  const addBundleToCart = (bundle: typeof bundles[0], selectedDishIds: string[]) => {
+    if (!selectedTable) {
+      toast({ 
+        title: 'Select Table First', 
+        description: 'Please select a table before adding items to cart',
+        variant: 'destructive'
+      });
+      setShowTableMap(true);
+      return;
+    }
+    
+    const effectivePrice = getEffectiveBundlePrice(bundle.id, Number(bundle.default_price));
+    
+    // Create a placeholder "dish" for the bundle in cart display
+    const bundleDish: Dish = {
+      id: `bundle-${bundle.id}-${Date.now()}`, // Unique ID for each bundle instance
+      name: bundle.name,
+      category: 'Bundle',
+      selling_price: effectivePrice,
+      image: bundle.image,
+      cost_of_production: bundle.cost_of_production,
+      created_at: new Date().toISOString(),
+    };
+    
+    setTableCarts(prev => {
+      const tableCart = prev[selectedTable] || [];
+      return {
+        ...prev,
+        [selectedTable]: [...tableCart, { 
+          dish: bundleDish, 
+          quantity: 1, 
+          unitPrice: effectivePrice,
+          isBundle: true,
+          bundleId: bundle.id,
+          bundleName: bundle.name,
+          selectedDishIds: selectedDishIds,
+        }]
+      };
+    });
+    
+    toast({ title: `${bundle.name} added`, description: `${selectedDishIds.length} items selected` });
+  };
+
+  const handleBundleClick = (bundle: typeof bundles[0]) => {
+    if (!selectedTable) {
+      toast({ 
+        title: 'Select Table First', 
+        description: 'Please select a table before adding items to cart',
+        variant: 'destructive'
+      });
+      setShowTableMap(true);
+      return;
+    }
+    setSelectedBundle(bundle);
+    setShowBundleSelector(true);
   };
 
   const updateQuantity = (dishId: string, quantity: number) => {
@@ -275,10 +343,22 @@ function POSPage({ currentStore }: { currentStore: any }) {
     
     setIsProcessing(true);
 
+    // Process stock deductions
     for (const cartItem of currentCart) {
-      const dishRecipes = recipes.filter(r => r.dish_id === cartItem.dish.id);
-      for (const recipe of dishRecipes) {
-        await deductStock(recipe.ingredient_id, Number(recipe.quantity_required) * cartItem.quantity);
+      if (cartItem.isBundle && cartItem.selectedDishIds) {
+        // For bundles: deduct ingredients for each selected dish
+        for (const dishId of cartItem.selectedDishIds) {
+          const dishRecipes = recipes.filter(r => r.dish_id === dishId);
+          for (const recipe of dishRecipes) {
+            await deductStock(recipe.ingredient_id, Number(recipe.quantity_required) * cartItem.quantity);
+          }
+        }
+      } else {
+        // Regular dish
+        const dishRecipes = recipes.filter(r => r.dish_id === cartItem.dish.id);
+        for (const recipe of dishRecipes) {
+          await deductStock(recipe.ingredient_id, Number(recipe.quantity_required) * cartItem.quantity);
+        }
       }
     }
 
@@ -286,7 +366,11 @@ function POSPage({ currentStore }: { currentStore: any }) {
       cartTotal,
       selectedPayment,
       selectedTable,
-      currentCart.map(item => ({ dishId: item.dish.id, quantity: item.quantity, unitPrice: Number(item.unitPrice) }))
+      currentCart.map(item => ({ 
+        dishId: item.isBundle ? item.bundleId! : item.dish.id, 
+        quantity: item.quantity, 
+        unitPrice: Number(item.unitPrice) 
+      }))
     );
 
     if (selectedPayment === 'credit' && customerName && transaction) {
@@ -450,6 +534,28 @@ function POSPage({ currentStore }: { currentStore: any }) {
           </div>
         </div>
 
+        {/* Bundle Quick Access Buttons */}
+        {bundles.length > 0 && (
+          <div className="flex gap-2 mb-3 flex-wrap">
+            {bundles.map(bundle => {
+              const bundlePrice = getEffectiveBundlePrice(bundle.id, Number(bundle.default_price));
+              return (
+                <Button 
+                  key={bundle.id} 
+                  variant="outline" 
+                  size="sm" 
+                  className="gap-2 bg-amber-500/10 border-amber-500/30 hover:bg-amber-500/20 text-amber-700 dark:text-amber-400"
+                  onClick={() => handleBundleClick(bundle)}
+                >
+                  <Coffee className="w-4 h-4" />
+                  {bundle.name}
+                  <Badge variant="secondary" className="text-xs ml-1">{bundlePrice.toLocaleString()} MT</Badge>
+                </Button>
+              );
+            })}
+          </div>
+        )}
+
         <div className="flex gap-2 mb-4 flex-wrap">
           <Button variant={selectedCategory === null ? "default" : "outline"} size="sm" onClick={() => setSelectedCategory(null)}>All</Button>
           {categories.map(cat => (
@@ -577,6 +683,17 @@ function POSPage({ currentStore }: { currentStore: any }) {
           defaultPrice={Number(selectedDish.selling_price)}
           onSave={(newPrice) => setOverridePrice(selectedDish.id, newPrice)}
           onRemoveOverride={() => removeOverridePrice(selectedDish.id)}
+        />
+      )}
+
+      {selectedBundle && (
+        <BundleSelectorModal
+          open={showBundleSelector}
+          onOpenChange={setShowBundleSelector}
+          bundle={selectedBundle}
+          dishes={dishes}
+          effectivePrice={getEffectiveBundlePrice(selectedBundle.id, Number(selectedBundle.default_price))}
+          onConfirm={(selectedDishIds) => addBundleToCart(selectedBundle, selectedDishIds)}
         />
       )}
     </div>

@@ -10,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useToast } from '@/hooks/use-toast';
 import { useExpenses, useExpenseCategories, useIngredients, useStoreStock, useSuppliers } from '@/hooks/useSupabaseData';
 import { AddCategoryModal } from '@/components/modals/AddCategoryModal';
+import { AddSupplierModal } from '@/components/modals/AddSupplierModal';
 import { DateRangePickerModal } from '@/components/modals/DateRangePickerModal';
 import { exportExpensesToCSV, exportExpensesToPDF } from '@/utils/exportUtils';
 import { Receipt, Plus, Package, FileText, Building2 } from 'lucide-react';
@@ -21,7 +22,7 @@ function ExpensesContent() {
   const { categories, addCategory } = useExpenseCategories();
   const { ingredients } = useIngredients();
   const { addStock } = useStoreStock(currentStore?.id || null);
-  const { suppliers } = useSuppliers();
+  const { suppliers, addSupplier } = useSuppliers();
 
   const [showForm, setShowForm] = useState(false);
   const [amount, setAmount] = useState('');
@@ -170,12 +171,15 @@ function ExpensesContent() {
               <div className="grid gap-4 md:grid-cols-2">
                 <div className="space-y-2">
                   <Label>Supplier</Label>
-                  <Select value={supplierId} onValueChange={setSupplierId}>
-                    <SelectTrigger><SelectValue placeholder="Select supplier (optional)" /></SelectTrigger>
-                    <SelectContent>
-                      {suppliers.map(sup => (<SelectItem key={sup.id} value={sup.id}>{sup.name}</SelectItem>))}
-                    </SelectContent>
-                  </Select>
+                  <div className="flex gap-2">
+                    <Select value={supplierId} onValueChange={setSupplierId}>
+                      <SelectTrigger className="flex-1"><SelectValue placeholder="Select supplier (optional)" /></SelectTrigger>
+                      <SelectContent>
+                        {suppliers.map(sup => (<SelectItem key={sup.id} value={sup.id}>{sup.name}</SelectItem>))}
+                      </SelectContent>
+                    </Select>
+                    <AddSupplierModal onSubmit={addSupplier} />
+                  </div>
                 </div>
                 <div className="space-y-2">
                   <Label>Invoice Number</Label>
