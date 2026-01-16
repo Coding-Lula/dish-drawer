@@ -13,6 +13,7 @@ import { CreditCustomerModal } from '@/components/modals/CreditCustomerModal';
 import { SplitBillModal } from '@/components/modals/SplitBillModal';
 import { TableMapModal } from '@/components/modals/TableMapModal';
 import { BundleSelectorModal } from '@/components/modals/BundleSelectorModal';
+import { DishSelectionModal } from '@/components/modals/DishSelectionModal';
 import { Plus, Minus, Trash2, ShoppingBag, CreditCard, Printer, Table, Split, Pencil, Coffee } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -74,7 +75,8 @@ function CartContent({
   isProcessing, 
   selectedTable,
   tables,
-  toast
+  toast,
+  dishes
 }: any) {
   const currentTableName = tables.find((t: any) => t.id === selectedTable)?.name || 'No Table';
 
@@ -111,6 +113,11 @@ function CartContent({
                 <div key={item.dish.id} className="flex items-center gap-2 p-2 rounded-lg bg-muted/30 border">
                   <div className="flex-1 min-w-0">
                     <p className="font-medium text-sm truncate">{item.dish.name}</p>
+                    {item.isBundle && item.selectedDishIds && (
+                      <p className="text-[10px] text-muted-foreground truncate leading-tight mb-0.5">
+                        {item.selectedDishIds.map(id => dishes.find((d: any) => d.id === id)?.name).filter(Boolean).join(', ')}
+                      </p>
+                    )}
                     <p className="text-xs text-muted-foreground">{Number(item.unitPrice).toLocaleString()} MT × {item.quantity}</p>
                   </div>
                   <div className="flex items-center gap-1">
@@ -187,6 +194,7 @@ function POSPage({ currentStore }: { currentStore: any }) {
   const [selectedDish, setSelectedDish] = useState<Dish | null>(null);
   const [showBundleSelector, setShowBundleSelector] = useState(false);
   const [selectedBundle, setSelectedBundle] = useState<typeof bundles[0] | null>(null);
+  const [showBreakfastSelector, setShowBreakfastSelector] = useState(false);
 
   // Initialize tables if needed
   useEffect(() => {
@@ -196,6 +204,7 @@ function POSPage({ currentStore }: { currentStore: any }) {
   }, [currentStore?.id, tables.length, initializeTables]);
 
   const currentCart = selectedTable ? tableCarts[selectedTable] || [] : [];
+  const breakfastDish = dishes.find(d => d.name.toLowerCase() === 'breakfast');
   const categories = [...new Set(dishes.map(d => d.category).filter(Boolean))];
   const filteredDishes = selectedCategory ? dishes.filter(d => d.category === selectedCategory) : dishes;
   const cartTotal = currentCart.reduce((sum, item) => sum + (Number(item.unitPrice) * item.quantity), 0);
@@ -208,6 +217,12 @@ function POSPage({ currentStore }: { currentStore: any }) {
         variant: 'destructive'
       });
       setShowTableMap(true);
+      return;
+    }
+
+    if (dish.name.toLowerCase() === 'breakfast') {
+      setSelectedDish(dish);
+      setShowBreakfastSelector(true);
       return;
     }
     
@@ -368,11 +383,26 @@ function POSPage({ currentStore }: { currentStore: any }) {
       cartTotal,
       selectedPayment,
       selectedTable,
-      currentCart.map(item => ({ 
-        dishId: (item.isBundle ? item.bundleDishId : item.dish.id) || item.dish.id,
-        quantity: item.quantity, 
-        unitPrice: Number(item.unitPrice) 
-      }))
+      currentCart.flatMap(item => {
+        const items = [{
+          dishId: (item.isBundle ? item.bundleDishId : item.dish.id) || item.dish.id,
+          quantity: item.quantity,
+          unitPrice: Number(item.unitPrice)
+        }];
+
+        // Add sub-items to transaction with 0 price for bundles
+        if (item.isBundle && item.selectedDishIds) {
+          item.selectedDishIds.forEach(id => {
+            items.push({
+              dishId: id,
+              quantity: item.quantity,
+              unitPrice: 0
+            });
+          });
+        }
+
+        return items;
+      })
     );
 
     if (selectedPayment === 'credit' && customerName && transaction) {
@@ -418,7 +448,25 @@ function POSPage({ currentStore }: { currentStore: any }) {
       billTotal,
       bill.paymentMethod || 'cash',
       selectedTable,
-      bill.items.map(item => ({ dishId: item.dish.id, quantity: item.quantity, unitPrice: Number(item.unitPrice) }))
+      bill.items.flatMap(item => {
+        const items = [{
+          dishId: (item.isBundle ? item.bundleDishId : item.dish.id) || item.dish.id,
+          quantity: item.quantity,
+          unitPrice: Number(item.unitPrice)
+        }];
+
+        if (item.isBundle && item.selectedDishIds) {
+          item.selectedDishIds.forEach(id => {
+            items.push({
+              dishId: id,
+              quantity: item.quantity,
+              unitPrice: 0
+            });
+          });
+        }
+
+        return items;
+      })
     );
 
     // Record credit if payment method is credit
@@ -537,26 +585,38 @@ function POSPage({ currentStore }: { currentStore: any }) {
         </div>
 
         {/* Breakfast Quick Access Buttons */}
-        {bundles.length > 0 && (
-          <div className="flex gap-2 mb-3 flex-wrap">
-            {bundles.map(bundle => {
-              const bundlePrice = getEffectiveBundlePrice(bundle.id, Number(bundle.default_price));
-              return (
-                <Button 
-                  key={bundle.id} 
-                  variant="outline" 
-                  size="default"
-                  className="gap-2 bg-amber-500/15 border-amber-500/40 hover:bg-amber-500/25 text-amber-800 dark:text-amber-300 font-bold shadow-sm"
-                  onClick={() => handleBundleClick(bundle)}
-                >
-                  <Coffee className="w-5 h-5" />
-                  {bundle.name}
-                  <Badge variant="secondary" className="text-sm ml-1 bg-amber-200 dark:bg-amber-900">{bundlePrice.toLocaleString()} MT</Badge>
-                </Button>
-              );
-            })}
-          </div>
-        )}
+        <div className="flex gap-2 mb-3 flex-wrap">
+          {breakfastDish && (
+            <Button
+              variant="outline"
+              size="default"
+              className="gap-2 bg-amber-500/15 border-amber-500/40 hover:bg-amber-500/25 text-amber-800 dark:text-amber-300 font-bold shadow-sm"
+              onClick={() => addToCart(breakfastDish)}
+            >
+              <Coffee className="w-5 h-5" />
+              {breakfastDish.name}
+              <Badge variant="secondary" className="text-sm ml-1 bg-amber-200 dark:bg-amber-900">
+                {getEffectivePrice(breakfastDish.id, Number(breakfastDish.selling_price)).toLocaleString()} MT
+              </Badge>
+            </Button>
+          )}
+          {bundles.map(bundle => {
+            const bundlePrice = getEffectiveBundlePrice(bundle.id, Number(bundle.default_price));
+            return (
+              <Button
+                key={bundle.id}
+                variant="outline"
+                size="default"
+                className="gap-2 bg-amber-500/15 border-amber-500/40 hover:bg-amber-500/25 text-amber-800 dark:text-amber-300 font-bold shadow-sm"
+                onClick={() => handleBundleClick(bundle)}
+              >
+                <Coffee className="w-5 h-5" />
+                {bundle.name}
+                <Badge variant="secondary" className="text-sm ml-1 bg-amber-200 dark:bg-amber-900">{bundlePrice.toLocaleString()} MT</Badge>
+              </Button>
+            );
+          })}
+        </div>
 
         <div className="flex gap-2 mb-4 flex-wrap">
           <Button variant={selectedCategory === null ? "default" : "outline"} size="sm" onClick={() => setSelectedCategory(null)}>All</Button>
@@ -622,6 +682,7 @@ function POSPage({ currentStore }: { currentStore: any }) {
             selectedTable={selectedTable}
             tables={tables}
              toast={toast} 
+             dishes={dishes}
           />
         </Card>
       </div>
@@ -662,6 +723,7 @@ function POSPage({ currentStore }: { currentStore: any }) {
           isProcessing={isProcessing}
           selectedTable={selectedTable}
           tables={tables}
+          dishes={dishes}
         />
       </CartModal>
 
@@ -696,6 +758,36 @@ function POSPage({ currentStore }: { currentStore: any }) {
           dishes={dishes}
           effectivePrice={getEffectiveBundlePrice(selectedBundle.id, Number(selectedBundle.default_price))}
           onConfirm={(selectedDishIds) => addBundleToCart(selectedBundle, selectedDishIds)}
+        />
+      )}
+
+      {selectedDish && (
+        <DishSelectionModal
+          open={showBreakfastSelector}
+          onOpenChange={setShowBreakfastSelector}
+          title={selectedDish.name}
+          dishes={dishes}
+          price={getEffectivePrice(selectedDish.id, Number(selectedDish.selling_price))}
+          onConfirm={(selectedDishIds) => {
+            // Logic to add the custom breakfast bundle to cart
+            if (!selectedTable) return;
+            const effectivePrice = getEffectivePrice(selectedDish.id, Number(selectedDish.selling_price));
+            const bundleDishId = `breakfast-${selectedDish.id}-${Date.now()}`;
+
+            setTableCarts(prev => ({
+              ...prev,
+              [selectedTable]: [...(prev[selectedTable] || []), {
+                dish: { ...selectedDish, id: bundleDishId },
+                quantity: 1,
+                unitPrice: effectivePrice,
+                isBundle: true,
+                bundleDishId: selectedDish.id,
+                bundleName: selectedDish.name,
+                selectedDishIds: selectedDishIds,
+              }]
+            }));
+            toast({ title: 'Breakfast added', description: `${selectedDishIds.length} items selected` });
+          }}
         />
       )}
     </div>
