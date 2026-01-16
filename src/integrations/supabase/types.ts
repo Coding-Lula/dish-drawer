@@ -47,6 +47,48 @@ export type Database = {
         }
         Relationships: []
       }
+      bundle_components: {
+        Row: {
+          bundle_id: string
+          created_at: string
+          dish_id: string
+          id: string
+          is_required: boolean | null
+          max_quantity: number | null
+        }
+        Insert: {
+          bundle_id: string
+          created_at?: string
+          dish_id: string
+          id?: string
+          is_required?: boolean | null
+          max_quantity?: number | null
+        }
+        Update: {
+          bundle_id?: string
+          created_at?: string
+          dish_id?: string
+          id?: string
+          is_required?: boolean | null
+          max_quantity?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "bundle_components_bundle_id_fkey"
+            columns: ["bundle_id"]
+            isOneToOne: false
+            referencedRelation: "dish_bundles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "bundle_components_dish_id_fkey"
+            columns: ["dish_id"]
+            isOneToOne: false
+            referencedRelation: "dishes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       credits: {
         Row: {
           created_at: string
@@ -159,6 +201,42 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      dish_bundles: {
+        Row: {
+          category: string | null
+          cost_of_production: number
+          created_at: string
+          default_price: number
+          description: string | null
+          id: string
+          image: string | null
+          is_active: boolean | null
+          name: string
+        }
+        Insert: {
+          category?: string | null
+          cost_of_production?: number
+          created_at?: string
+          default_price?: number
+          description?: string | null
+          id?: string
+          image?: string | null
+          is_active?: boolean | null
+          name: string
+        }
+        Update: {
+          category?: string | null
+          cost_of_production?: number
+          created_at?: string
+          default_price?: number
+          description?: string | null
+          id?: string
+          image?: string | null
+          is_active?: boolean | null
+          name?: string
+        }
+        Relationships: []
       }
       dishes: {
         Row: {
@@ -991,6 +1069,48 @@ export type Database = {
           tax_percent?: number
         }
         Relationships: []
+      }
+      store_bundle_prices: {
+        Row: {
+          bundle_id: string
+          created_at: string
+          custom_price: number
+          id: string
+          store_id: string
+          updated_at: string
+        }
+        Insert: {
+          bundle_id: string
+          created_at?: string
+          custom_price: number
+          id?: string
+          store_id: string
+          updated_at?: string
+        }
+        Update: {
+          bundle_id?: string
+          created_at?: string
+          custom_price?: number
+          id?: string
+          store_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "store_bundle_prices_bundle_id_fkey"
+            columns: ["bundle_id"]
+            isOneToOne: false
+            referencedRelation: "dish_bundles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "store_bundle_prices_store_id_fkey"
+            columns: ["store_id"]
+            isOneToOne: false
+            referencedRelation: "stores"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       store_dish_prices: {
         Row: {
