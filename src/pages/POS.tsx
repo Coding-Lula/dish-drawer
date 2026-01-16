@@ -26,6 +26,7 @@ interface CartItem {
   unitPrice: number;
   isBundle?: boolean;
   bundleId?: string;
+  bundleDishId?: string;
   bundleName?: string;
   selectedDishIds?: string[]; // For bundles: the dishes selected in this bundle
 }
@@ -251,7 +252,7 @@ function POSPage({ currentStore }: { currentStore: any }) {
     const bundleDish: Dish = {
       id: `bundle-${bundle.id}-${Date.now()}`, // Unique ID for each bundle instance
       name: bundle.name,
-      category: 'Bundle',
+      category: 'Breakfast',
       selling_price: effectivePrice,
       image: bundle.image,
       cost_of_production: bundle.cost_of_production,
@@ -268,6 +269,7 @@ function POSPage({ currentStore }: { currentStore: any }) {
           unitPrice: effectivePrice,
           isBundle: true,
           bundleId: bundle.id,
+          bundleDishId: bundle.dish_id || undefined,
           bundleName: bundle.name,
           selectedDishIds: selectedDishIds,
         }]
@@ -367,7 +369,7 @@ function POSPage({ currentStore }: { currentStore: any }) {
       selectedPayment,
       selectedTable,
       currentCart.map(item => ({ 
-        dishId: item.isBundle ? item.bundleId! : item.dish.id, 
+        dishId: (item.isBundle ? item.bundleDishId : item.dish.id) || item.dish.id,
         quantity: item.quantity, 
         unitPrice: Number(item.unitPrice) 
       }))
@@ -534,7 +536,7 @@ function POSPage({ currentStore }: { currentStore: any }) {
           </div>
         </div>
 
-        {/* Bundle Quick Access Buttons */}
+        {/* Breakfast Quick Access Buttons */}
         {bundles.length > 0 && (
           <div className="flex gap-2 mb-3 flex-wrap">
             {bundles.map(bundle => {
@@ -543,13 +545,13 @@ function POSPage({ currentStore }: { currentStore: any }) {
                 <Button 
                   key={bundle.id} 
                   variant="outline" 
-                  size="sm" 
-                  className="gap-2 bg-amber-500/10 border-amber-500/30 hover:bg-amber-500/20 text-amber-700 dark:text-amber-400"
+                  size="default"
+                  className="gap-2 bg-amber-500/15 border-amber-500/40 hover:bg-amber-500/25 text-amber-800 dark:text-amber-300 font-bold shadow-sm"
                   onClick={() => handleBundleClick(bundle)}
                 >
-                  <Coffee className="w-4 h-4" />
+                  <Coffee className="w-5 h-5" />
                   {bundle.name}
-                  <Badge variant="secondary" className="text-xs ml-1">{bundlePrice.toLocaleString()} MT</Badge>
+                  <Badge variant="secondary" className="text-sm ml-1 bg-amber-200 dark:bg-amber-900">{bundlePrice.toLocaleString()} MT</Badge>
                 </Button>
               );
             })}

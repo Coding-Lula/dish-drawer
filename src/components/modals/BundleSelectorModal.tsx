@@ -85,7 +85,7 @@ export function BundleSelectorModal({
 
         <div className="py-4">
           <div className="flex items-center justify-between mb-4">
-            <span className="text-sm font-medium">Select items to include:</span>
+            <span className="text-sm font-medium">Personalize o seu {bundle.name}:</span>
             <Badge variant="secondary" className="text-lg px-3 py-1">
               {effectivePrice.toLocaleString()} MT
             </Badge>
