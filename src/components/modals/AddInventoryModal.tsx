@@ -48,14 +48,14 @@ export function AddInventoryModal({ onSubmit }: AddInventoryModalProps) {
       <DialogTrigger asChild>
         <Button variant="outline" className="gap-2">
           <Plus className="w-4 h-4" />
-          Addicinoar Item ao Inventário 
+          Adicionar Item ao Inventário 
         </Button>
       </DialogTrigger>
       <DialogContent>
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Package className="w-5 h-5" />
-            Addicinonar Item Novo ao Inventário 
+            Adicionar Item Novo ao Inventário
           </DialogTitle>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">

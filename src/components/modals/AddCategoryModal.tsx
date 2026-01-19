@@ -33,19 +33,19 @@ export function AddCategoryModal({ onSubmit }: AddCategoryModalProps) {
       <DialogTrigger asChild>
         <Button variant="outline" size="sm" className="gap-2">
           <FolderPlus className="w-4 h-4" />
-          Create Category
+          Criar Categoria
         </Button>
       </DialogTrigger>
       <DialogContent>
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <FolderPlus className="w-5 h-5" />
-            Create Expense Category
+            Criar Categoria de Despesa
           </DialogTitle>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-2">
-            <Label>Category Name</Label>
+            <Label>Nome da Categoria</Label>
             <Input
               value={name}
               onChange={(e) => setName(e.target.value)}
@@ -55,7 +55,7 @@ export function AddCategoryModal({ onSubmit }: AddCategoryModalProps) {
           </div>
           <div className="flex justify-end gap-2">
             <Button type="button" variant="outline" onClick={() => setOpen(false)}>
-              Cancel
+              Cancelar
             </Button>
             <Button type="submit" disabled={isSubmitting || !name.trim()}>
               {isSubmitting ? 'Creating...' : 'Create Category'}

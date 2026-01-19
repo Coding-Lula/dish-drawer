@@ -106,13 +106,13 @@ function ExpensesContent() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-foreground">Expenses</h1>
-          <p className="text-muted-foreground">{currentStore?.name} • Expense Management</p>
+          <h1 className="text-3xl font-bold text-foreground">Despesas</h1>
+          <p className="text-muted-foreground">{currentStore?.name} • Gestão de Despesas</p>
         </div>
         <div className="flex gap-2">
           <AddCategoryModal onSubmit={addCategory} />
           <DateRangePickerModal onExportCSV={handleExportCSV} onExportPDF={handleExportPDF} />
-          <Button onClick={() => setShowForm(!showForm)} className="gap-2"><Plus className="w-4 h-4" />Add Expense</Button>
+          <Button onClick={() => setShowForm(!showForm)} className="gap-2"><Plus className="w-4 h-4" />Adicionar Despesas</Button>
         </div>
       </div>
 
@@ -130,7 +130,7 @@ function ExpensesContent() {
           <CardContent className="p-4 flex items-center gap-4">
             <div className="p-3 rounded-lg bg-amber-500/20"><Package className="w-6 h-6 text-amber-600" /></div>
             <div>
-              <p className="text-sm text-muted-foreground">Mercadoria Pre-Spent</p>
+              <p className="text-sm text-muted-foreground">Mercadoria Pre-Gasta</p>
               <p className="text-2xl font-bold text-amber-600">{stockExpenses.toLocaleString()} MT</p>
             </div>
           </CardContent>
@@ -139,7 +139,7 @@ function ExpensesContent() {
           <CardContent className="p-4 flex items-center gap-4">
             <div className="p-3 rounded-lg bg-muted"><Receipt className="w-6 h-6 text-muted-foreground" /></div>
             <div>
-              <p className="text-sm text-muted-foreground">Transactions</p>
+              <p className="text-sm text-muted-foreground">Transações</p>
               <p className="text-2xl font-bold">{expenses.length}</p>
             </div>
           </CardContent>
@@ -148,16 +148,16 @@ function ExpensesContent() {
 
       {showForm && (
         <Card className="border-primary/30">
-          <CardHeader className="pb-3"><CardTitle>Record New Expense</CardTitle></CardHeader>
+          <CardHeader className="pb-3"><CardTitle>Registrar Nova Despesa</CardTitle></CardHeader>
           <CardContent>
             <form onSubmit={handleSubmit} className="space-y-4">
               <div className="grid gap-4 md:grid-cols-2">
                 <div className="space-y-2">
-                  <Label>Amount (MT)</Label>
+                  <Label>Quantia (MT)</Label>
                   <Input type="number" placeholder="" value={amount} onChange={(e) => setAmount(e.target.value)} />
                 </div>
                 <div className="space-y-2">
-                  <Label>Category</Label>
+                  <Label>Categoria</Label>
                   <Select value={categoryId} onValueChange={setCategoryId}>
                     <SelectTrigger><SelectValue placeholder="Select category" /></SelectTrigger>
                     <SelectContent>
@@ -170,7 +170,7 @@ function ExpensesContent() {
               {/* Supplier and Invoice Row */}
               <div className="grid gap-4 md:grid-cols-2">
                 <div className="space-y-2">
-                  <Label>Supplier</Label>
+                  <Label>Fornecedor</Label>
                   <div className="flex gap-2">
                     <Select value={supplierId} onValueChange={setSupplierId}>
                       <SelectTrigger className="flex-1"><SelectValue placeholder="Select supplier (optional)" /></SelectTrigger>
@@ -182,7 +182,7 @@ function ExpensesContent() {
                   </div>
                 </div>
                 <div className="space-y-2">
-                  <Label>Invoice Number</Label>
+                  <Label>Número da Fatura</Label>
                   <Input placeholder="INV-001" value={invoiceNo} onChange={(e) => setInvoiceNo(e.target.value)} />
                 </div>
               </div>
@@ -190,7 +190,7 @@ function ExpensesContent() {
               {/* Payment Method and IVA Row */}
               <div className="grid gap-4 md:grid-cols-2">
                 <div className="space-y-2">
-                  <Label>Payment Method</Label>
+                  <Label>Método de Pagamento</Label>
                   <Select value={paymentMethod} onValueChange={setPaymentMethod}>
                     <SelectTrigger><SelectValue placeholder="Select payment method" /></SelectTrigger>
                     <SelectContent>
@@ -200,7 +200,7 @@ function ExpensesContent() {
                   </Select>
                 </div>
                 <div className="space-y-2">
-                  <Label>IVA Deductible</Label>
+                  <Label>IVA Dedutivel</Label>
                   <div className="flex items-center gap-3 h-10">
                     <Switch 
                       checked={isIvaDeductible} 
@@ -216,7 +216,7 @@ function ExpensesContent() {
               {isStockCategory && (
                 <div className="grid gap-4 md:grid-cols-2 p-3 rounded-lg bg-amber-500/10 border border-amber-500/20">
                   <div className="space-y-2">
-                    <Label>Item Purchased</Label>
+                    <Label>Item Comprado</Label>
                     <Select value={ingredientId} onValueChange={setIngredientId}>
                       <SelectTrigger><SelectValue placeholder="Select item" /></SelectTrigger>
                       <SelectContent>
@@ -225,7 +225,7 @@ function ExpensesContent() {
                     </Select>
                   </div>
                   <div className="space-y-2">
-                    <Label>Quantity</Label>
+                    <Label>Quantia</Label>
                     <Input type="number" placeholder="5" value={ingredientQty} onChange={(e) => setIngredientQty(e.target.value)} />
                   </div>
                 </div>
@@ -238,7 +238,7 @@ function ExpensesContent() {
 
               <div className="flex gap-2 justify-end">
                 <Button type="button" variant="outline" onClick={() => setShowForm(false)}>Cancel</Button>
-                <Button type="submit">Record Expense</Button>
+                <Button type="submit">Registrar Despesa</Button>
               </div>
             </form>
           </CardContent>
@@ -246,9 +246,9 @@ function ExpensesContent() {
       )}
 
       <div className="space-y-3">
-        <h2 className="text-lg font-semibold">Recent Expenses</h2>
+        <h2 className="text-lg font-semibold">Despesas Recentes</h2>
         {loading ? (
-          <Card><CardContent className="py-8 text-center text-muted-foreground">Loading...</CardContent></Card>
+          <Card><CardContent className="py-8 text-center text-muted-foreground">Processando...</CardContent></Card>
         ) : expenses.length === 0 ? (
           <Card><CardContent className="py-12 text-center text-muted-foreground"><Receipt className="w-12 h-12 mx-auto mb-3 opacity-30" /><p>No expenses recorded</p></CardContent></Card>
         ) : (
