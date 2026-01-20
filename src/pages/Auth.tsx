@@ -130,6 +130,7 @@ export default function Auth() {
   }
 
   return (
+    
     <div className="min-h-screen flex items-center justify-center bg-background p-4">
       <Card className="w-full max-w-md">
         <CardHeader className="text-center">
@@ -140,12 +141,13 @@ export default function Auth() {
           </div>
           <CardTitle className="text-2xl">Nexus POS</CardTitle>
           <CardDescription>Sign in to access the system</CardDescription>
+         
         </CardHeader>
         <CardContent>
           <Tabs defaultValue="login">
             <TabsList className="grid w-full grid-cols-2 mb-6">
               <TabsTrigger value="login">Login</TabsTrigger>
-              { <TabsTrigger value="signup">Sign Up</TabsTrigger> }
+              {/* <TabsTrigger value="signup">Sign Up</TabsTrigger> */}
             </TabsList>
             
             <TabsContent value="login">
@@ -247,6 +249,9 @@ export default function Auth() {
           </Tabs>
         </CardContent>
       </Card>
+      
     </div>
+    
   );
+  
 }
