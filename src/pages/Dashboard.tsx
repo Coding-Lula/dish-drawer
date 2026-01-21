@@ -103,6 +103,7 @@ function DashboardContent() {
       </div>
 
       {/* Stats Grid */}
+      {/*
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <StatCard
           title="Today's Income (All Stores)"
@@ -132,9 +133,11 @@ function DashboardContent() {
           icon={Package}
           variant={lowStockCount > 0 ? "danger" : "success"}
         />
+        *}
       </div>
 
       {/* Income by Store */}
+      {/*
       {incomeByStore.length > 0 && (
         <Card>
           <CardHeader className="pb-3">
@@ -161,8 +164,9 @@ function DashboardContent() {
           </CardContent>
         </Card>
       )}
-
+      
       {/* Source Breakdown (Current Store) */}
+      {/*
       {sources.length > 0 && Object.keys(sourceTotals).length > 0 && (
         <Card>
           <CardHeader className="pb-3">
@@ -191,14 +195,11 @@ function DashboardContent() {
           </CardContent>
         </Card>
       )}
-
+      
       {/* Main Content Grid */}
+      
       <div className="grid gap-6 lg:grid-cols-3">
-        {/* Revenue Breakdown */}
-        <div className="lg:col-span-1">
-          <RevenueBreakdown />
-        </div>
-
+       
         {/* Low Stock Alerts */}
         <div className="lg:col-span-1">
           <LowStockAlerts />
