@@ -31,7 +31,7 @@ export default function Auth() {
     // Only redirect if user exists AND has a role assigned
     // This prevents the cycle where Auth redirects to / but ProtectedRoute redirects back
     if (!loading && user && role) {
-      navigate('/');
+      navigate('/pos');
     }
   }, [user, role, loading, navigate]);
 
