@@ -29,14 +29,14 @@ export function CreditCustomerModal({ open, onOpenChange, amount, onConfirm }: C
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <CreditCard className="w-5 h-5 text-amber-600" />
-            Credit Sale - Customer Name Required
+            Venda a Crédito - Nome do Cliente Obrigatório
           </DialogTitle>
         </DialogHeader>
         
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="p-4 rounded-lg bg-amber-500/10 border border-amber-500/20">
             <p className="text-sm text-amber-700">
-              This sale will be recorded as a credit. Please enter the customer's name for debt tracking.
+              Esta venda será registrada como um crédito. Por favor, insira o nome do cliente para o controle da dívida.
             </p>
             <p className="text-2xl font-bold text-amber-700 mt-2">
               {amount.toLocaleString()} MT
@@ -44,7 +44,7 @@ export function CreditCustomerModal({ open, onOpenChange, amount, onConfirm }: C
           </div>
           
           <div className="space-y-2">
-            <Label htmlFor="customerName">Customer Name</Label>
+            <Label htmlFor="customerName">Nomde do Cliente</Label>
             <div className="relative">
               <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
               <Input
@@ -61,10 +61,10 @@ export function CreditCustomerModal({ open, onOpenChange, amount, onConfirm }: C
           
           <div className="flex gap-2 justify-end">
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-              Cancel
+              Cancelar
             </Button>
             <Button type="submit" disabled={!customerName.trim()}>
-              Confirm Credit Sale
+              Confirmar venda a crédito
             </Button>
           </div>
         </form>

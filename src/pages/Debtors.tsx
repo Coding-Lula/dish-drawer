@@ -102,7 +102,7 @@ function DebtorsContent() {
   return (
     <div className="space-y-6 max-w-4xl mx-auto">
       <div className="text-center">
-        <h1 className="text-3xl font-bold">Debtors</h1>
+        <h1 className="text-3xl font-bold">Devedores</h1>
         <p className="text-muted-foreground mt-1">
           {groupedDebtors.length} customer{groupedDebtors.length !== 1 ? 's' : ''} with outstanding balance
         </p>

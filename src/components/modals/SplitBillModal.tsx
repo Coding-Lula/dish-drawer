@@ -203,7 +203,7 @@ export function SplitBillModal({
                       {currentBill.items.length === 0 ? (
                         <div className="text-center py-8 text-muted-foreground">
                           <Split className="w-8 h-8 mx-auto mb-2 opacity-30" />
-                          <p>No items in this bill</p>
+                          <p></p>
                         </div>
                       ) : (
                         currentBill.items.map(item => {
@@ -287,14 +287,14 @@ export function SplitBillModal({
                       <span className="text-xl font-bold">{getBillTotal(currentBill).toLocaleString()} MT</span>
                       <div className="flex gap-2">
                         <Button variant="outline" size="sm" onClick={() => onPrintBill(currentBill, bills.indexOf(currentBill) + 1)}>
-                          <Printer className="w-4 h-4 mr-1" /> Print
+                          <Printer className="w-4 h-4 mr-1" /> Imprimir
                         </Button>
                         <Button 
                           size="sm" 
                           disabled={!currentBill.paymentMethod || isProcessing || (currentBill.paymentMethod === 'credit' && !creditCustomerName[currentBill.id]?.trim())}
                           onClick={() => payBill(currentBill.id)}
                         >
-                          <CreditCard className="w-4 h-4 mr-1" /> Pay Bill
+                          <CreditCard className="w-4 h-4 mr-1" /> Pagar Conta
                         </Button>
                       </div>
                     </div>
