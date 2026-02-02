@@ -2,6 +2,7 @@ import { ReactNode, useState, useEffect, createContext, useContext } from 'react
 import { Sidebar } from './Sidebar';
 import { cn } from '@/lib/utils';
 import { useStores, type Store } from '@/hooks/useSupabaseData';
+import { useAuth } from '@/hooks/useAuth';
 
 interface MainLayoutProps {
   children: ReactNode;
@@ -25,21 +26,33 @@ export function useCurrentStore() {
 export function MainLayout({ children }: MainLayoutProps) {
   const [currentStore, setCurrentStore] = useState<Store | null>(null);
   const { stores } = useStores();
+  const { hasGlobalAccess, accessibleStoreIds } = useAuth();
+
+  // Filter stores based on user access
+  const accessibleStores = hasGlobalAccess 
+    ? stores 
+    : stores.filter(s => accessibleStoreIds.includes(s.id));
 
   useEffect(() => {
-    if (stores.length > 0 && !currentStore) {
+    if (accessibleStores.length > 0 && !currentStore) {
       const storedStoreId = localStorage.getItem('currentStoreId');
       if (storedStoreId) {
-        const storedStore = stores.find(s => s.id === storedStoreId);
+        const storedStore = accessibleStores.find(s => s.id === storedStoreId);
         if (storedStore) {
           setCurrentStore(storedStore);
           return;
         }
       }
-      // Default to first store only if no stored preference
-      setCurrentStore(stores[0]);
+      // Default to first accessible store only if no stored preference
+      setCurrentStore(accessibleStores[0]);
     }
-  }, [stores, currentStore]);
+    // If current store is not in accessible stores, reset
+    if (currentStore && !accessibleStores.find(s => s.id === currentStore.id)) {
+      if (accessibleStores.length > 0) {
+        setCurrentStore(accessibleStores[0]);
+      }
+    }
+  }, [accessibleStores, currentStore]);
 
   useEffect(() => {
     if (currentStore) {

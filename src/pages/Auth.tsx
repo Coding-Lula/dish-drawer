@@ -7,9 +7,11 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Checkbox } from '@/components/ui/checkbox';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2, Store } from 'lucide-react';
 import { z } from 'zod';
+import { useStores } from '@/hooks/useSupabaseData';
 
 const emailSchema = z.string().email('Invalid email address');
 const passwordSchema = z.string().min(6, 'Password must be at least 6 characters');
@@ -17,6 +19,7 @@ const passwordSchema = z.string().min(6, 'Password must be at least 6 characters
 export default function Auth() {
   const navigate = useNavigate();
   const { user, role, loading, signIn, signUp } = useAuth();
+  const { stores, loading: storesLoading } = useStores();
   const { toast } = useToast();
   
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -26,6 +29,8 @@ export default function Auth() {
   const [signupPassword, setSignupPassword] = useState('');
   const [signupName, setSignupName] = useState('');
   const [signupRole, setSignupRole] = useState<AppRole>('cashier');
+  const [selectedStoreIds, setSelectedStoreIds] = useState<string[]>([]);
+  const [globalManagerAccess, setGlobalManagerAccess] = useState(false);
 
   useEffect(() => {
     // Only redirect if user exists AND has a role assigned
@@ -34,6 +39,21 @@ export default function Auth() {
       navigate('/pos');
     }
   }, [user, role, loading, navigate]);
+
+  // Reset store selection when role changes
+  useEffect(() => {
+    if (signupRole === 'cashier') {
+      setGlobalManagerAccess(false);
+    }
+  }, [signupRole]);
+
+  const toggleStoreSelection = (storeId: string) => {
+    setSelectedStoreIds(prev => 
+      prev.includes(storeId) 
+        ? prev.filter(id => id !== storeId)
+        : [...prev, storeId]
+    );
+  };
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -44,7 +64,7 @@ export default function Auth() {
     } catch (err) {
       if (err instanceof z.ZodError) {
         toast({
-          title: 'Validation Error',
+          title: 'Erro de Validação',
           description: err.errors[0].message,
           variant: 'destructive',
         });
@@ -58,16 +78,16 @@ export default function Auth() {
     
     if (error) {
       toast({
-        title: 'Login Failed',
+        title: 'Falha no Login',
         description: error.message === 'Invalid login credentials' 
-          ? 'Invalid email or password' 
+          ? 'Email ou senha inválidos' 
           : error.message,
         variant: 'destructive',
       });
     } else {
       toast({
-        title: 'Welcome back!',
-        description: 'You have successfully logged in.',
+        title: 'Bem-vindo de volta!',
+        description: 'Login realizado com sucesso.',
       });
       // Navigation will happen via useEffect once role is loaded
     }
@@ -79,11 +99,30 @@ export default function Auth() {
     try {
       emailSchema.parse(signupEmail);
       passwordSchema.parse(signupPassword);
-      if (!signupName.trim()) throw new Error('Name is required');
+      if (!signupName.trim()) throw new Error('Nome é obrigatório');
+      
+      // Validate store selection
+      if (signupRole === 'cashier' && selectedStoreIds.length === 0) {
+        toast({
+          title: 'Erro de Validação',
+          description: 'Caixas devem ser atribuídos a pelo menos uma loja',
+          variant: 'destructive',
+        });
+        return;
+      }
+      
+      if (signupRole === 'manager' && !globalManagerAccess && selectedStoreIds.length === 0) {
+        toast({
+          title: 'Erro de Validação',
+          description: 'Selecione lojas ou marque acesso global',
+          variant: 'destructive',
+        });
+        return;
+      }
     } catch (err) {
       if (err instanceof z.ZodError) {
         toast({
-          title: 'Validation Error',
+          title: 'Erro de Validação',
           description: err.errors[0].message,
           variant: 'destructive',
         });
@@ -91,7 +130,7 @@ export default function Auth() {
       }
       if (err instanceof Error) {
         toast({
-          title: 'Validation Error',
+          title: 'Erro de Validação',
           description: err.message,
           variant: 'destructive',
         });
@@ -100,22 +139,28 @@ export default function Auth() {
     }
     
     setIsSubmitting(true);
-    const { error } = await signUp(signupEmail, signupPassword, signupName, signupRole);
+    
+    // Determine store IDs to pass
+    const storeIdsToAssign = (signupRole === 'manager' && globalManagerAccess) 
+      ? undefined // null store_id for global access
+      : selectedStoreIds;
+    
+    const { error } = await signUp(signupEmail, signupPassword, signupName, signupRole, storeIdsToAssign);
     setIsSubmitting(false);
     
     if (error) {
       const message = error.message.includes('already registered')
-        ? 'This email is already registered. Please login instead.'
+        ? 'Este email já está registrado. Por favor, faça login.'
         : error.message;
       toast({
-        title: 'Signup Failed',
+        title: 'Falha no Cadastro',
         description: message,
         variant: 'destructive',
       });
     } else {
       toast({
-        title: 'Account Created!',
-        description: 'You can now access the system.',
+        title: 'Conta Criada!',
+        description: 'Agora você pode acessar o sistema.',
       });
       // Navigation will happen via useEffect once role is loaded
     }
@@ -130,7 +175,6 @@ export default function Auth() {
   }
 
   return (
-    
     <div className="min-h-screen flex items-center justify-center bg-background p-4">
       <Card className="w-full max-w-md">
         <CardHeader className="text-center">
@@ -140,14 +184,13 @@ export default function Auth() {
             </div>
           </div>
           <CardTitle className="text-2xl">Nexus POS</CardTitle>
-          <CardDescription>Sign in to access the system</CardDescription>
-         
+          <CardDescription>Entre para acessar o sistema</CardDescription>
         </CardHeader>
         <CardContent>
           <Tabs defaultValue="login">
             <TabsList className="grid w-full grid-cols-2 mb-6">
               <TabsTrigger value="login">Login</TabsTrigger>
-              {/* <TabsTrigger value="signup">Sign Up</TabsTrigger> */}
+              <TabsTrigger value="signup">Cadastrar</TabsTrigger>
             </TabsList>
             
             <TabsContent value="login">
@@ -157,14 +200,14 @@ export default function Auth() {
                   <Input
                     id="login-email"
                     type="email"
-                    placeholder="you@example.com"
+                    placeholder="seu@email.com"
                     value={loginEmail}
                     onChange={(e) => setLoginEmail(e.target.value)}
                     required
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="login-password">Password</Label>
+                  <Label htmlFor="login-password">Senha</Label>
                   <Input
                     id="login-password"
                     type="password"
@@ -178,10 +221,10 @@ export default function Auth() {
                   {isSubmitting ? (
                     <>
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Signing in...
+                      Entrando...
                     </>
                   ) : (
-                    'Sign In'
+                    'Entrar'
                   )}
                 </Button>
               </form>
@@ -190,11 +233,11 @@ export default function Auth() {
             <TabsContent value="signup">
               <form onSubmit={handleSignup} className="space-y-4">
                 <div className="space-y-2">
-                  <Label htmlFor="signup-name">Display Name</Label>
+                  <Label htmlFor="signup-name">Nome</Label>
                   <Input
                     id="signup-name"
                     type="text"
-                    placeholder="John Doe"
+                    placeholder="João Silva"
                     value={signupName}
                     onChange={(e) => setSignupName(e.target.value)}
                     required
@@ -205,43 +248,104 @@ export default function Auth() {
                   <Input
                     id="signup-email"
                     type="email"
-                    placeholder="you@example.com"
+                    placeholder="seu@email.com"
                     value={signupEmail}
                     onChange={(e) => setSignupEmail(e.target.value)}
                     required
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="signup-password">Password</Label>
+                  <Label htmlFor="signup-password">Senha</Label>
                   <Input
                     id="signup-password"
                     type="password"
-                    placeholder=""
+                    placeholder="Mínimo 6 caracteres"
                     value={signupPassword}
                     onChange={(e) => setSignupPassword(e.target.value)}
                     required
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="signup-role">Role</Label>
+                  <Label htmlFor="signup-role">Função</Label>
                   <Select value={signupRole} onValueChange={(value: AppRole) => setSignupRole(value)}>
                     <SelectTrigger>
-                      <SelectValue placeholder="Select role" />
+                      <SelectValue placeholder="Selecionar função" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="manager">Manager</SelectItem>
-                      <SelectItem value="cashier">Cashier</SelectItem>
+                      <SelectItem value="manager">Gerente</SelectItem>
+                      <SelectItem value="cashier">Caixa</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
+                
+                {/* Store Assignment Section */}
+                <div className="space-y-3">
+                  <Label>Atribuição de Lojas</Label>
+                  
+                  {signupRole === 'manager' && (
+                    <div className="flex items-center space-x-2 p-3 rounded-lg bg-muted/50">
+                      <Checkbox
+                        id="global-access"
+                        checked={globalManagerAccess}
+                        onCheckedChange={(checked) => {
+                          setGlobalManagerAccess(checked === true);
+                          if (checked) setSelectedStoreIds([]);
+                        }}
+                      />
+                      <label
+                        htmlFor="global-access"
+                        className="text-sm font-medium leading-none cursor-pointer"
+                      >
+                        Acesso global (todas as lojas)
+                      </label>
+                    </div>
+                  )}
+                  
+                  {(!globalManagerAccess || signupRole === 'cashier') && (
+                    <div className="space-y-2 max-h-32 overflow-y-auto border rounded-lg p-2">
+                      {storesLoading ? (
+                        <div className="flex items-center justify-center py-4">
+                          <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                        </div>
+                      ) : stores.length === 0 ? (
+                        <p className="text-sm text-muted-foreground text-center py-2">
+                          Nenhuma loja disponível
+                        </p>
+                      ) : (
+                        stores.map(store => (
+                          <div key={store.id} className="flex items-center space-x-2">
+                            <Checkbox
+                              id={`store-${store.id}`}
+                              checked={selectedStoreIds.includes(store.id)}
+                              onCheckedChange={() => toggleStoreSelection(store.id)}
+                            />
+                            <label
+                              htmlFor={`store-${store.id}`}
+                              className="text-sm leading-none cursor-pointer"
+                            >
+                              {store.name}
+                            </label>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  )}
+                  
+                  {signupRole === 'cashier' && (
+                    <p className="text-xs text-muted-foreground">
+                      Caixas devem ser atribuídos a pelo menos uma loja
+                    </p>
+                  )}
+                </div>
+                
                 <Button type="submit" className="w-full" disabled={isSubmitting}>
                   {isSubmitting ? (
                     <>
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Creating account...
+                      Criando conta...
                     </>
                   ) : (
-                    'Create Account'
+                    'Criar Conta'
                   )}
                 </Button>
               </form>
@@ -249,9 +353,6 @@ export default function Auth() {
           </Tabs>
         </CardContent>
       </Card>
-      
     </div>
-    
   );
-  
 }

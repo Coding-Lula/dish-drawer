@@ -284,7 +284,6 @@ function POSPage({ currentStore }: { currentStore: any }) {
           unitPrice: effectivePrice,
           isBundle: true,
           bundleId: bundle.id,
-          bundleDishId: bundle.dish_id || undefined,
           bundleName: bundle.name,
           selectedDishIds: selectedDishIds,
         }]

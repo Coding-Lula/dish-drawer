@@ -11,7 +11,6 @@ export interface DishBundle {
   category: string | null;
   image: string | null;
   is_active: boolean;
-  dish_id: string | null;
   created_at: string;
 }
 
@@ -79,24 +78,6 @@ export function useBundles() {
     cost_of_production?: number;
     category?: string;
   }) => {
-    // 1. Create a placeholder dish for the bundle
-    const { data: dishData, error: dishError } = await supabase
-      .from('dishes')
-      .insert([{
-        name: bundle.name,
-        category: bundle.category || 'Bundle',
-        selling_price: bundle.default_price,
-        cost_of_production: bundle.cost_of_production || 20,
-      }])
-      .select()
-      .single();
-
-    if (dishError) {
-      toast({ title: 'Error creating bundle placeholder', description: dishError.message, variant: 'destructive' });
-      return null;
-    }
-
-    // 2. Create the bundle and link it to the dish
     const { data, error } = await supabase
       .from('dish_bundles')
       .insert([{
@@ -105,15 +86,12 @@ export function useBundles() {
         default_price: bundle.default_price,
         cost_of_production: bundle.cost_of_production || 20,
         category: bundle.category || 'Bundle',
-        dish_id: dishData.id,
       }])
       .select()
       .single();
 
     if (error) {
       toast({ title: 'Error creating bundle', description: error.message, variant: 'destructive' });
-      // Cleanup the dish if bundle creation fails
-      await supabase.from('dishes').delete().eq('id', dishData.id);
       return null;
     }
 
@@ -159,9 +137,6 @@ export function useBundles() {
   };
 
   const deleteBundle = async (bundleId: string) => {
-    // Get bundle to find dish_id
-    const bundleToDelete = bundles.find(b => b.id === bundleId);
-
     const { error } = await supabase
       .from('dish_bundles')
       .delete()
@@ -170,11 +145,6 @@ export function useBundles() {
     if (error) {
       toast({ title: 'Error deleting bundle', description: error.message, variant: 'destructive' });
       return false;
-    }
-
-    // Cleanup the associated dish if it exists
-    if (bundleToDelete?.dish_id) {
-      await supabase.from('dishes').delete().eq('id', bundleToDelete.dish_id);
     }
 
     setBundles(prev => prev.filter(b => b.id !== bundleId));

@@ -66,8 +66,13 @@ export function Sidebar({ currentStore, onStoreChange }: SidebarProps) {
   const location = useLocation();
   const navigate = useNavigate();
   const { stores, loading, addStore, deleteStore, refetch: refetchStores } = useStores();
-  const { user, role, signOut } = useAuth();
+  const { user, role, signOut, hasGlobalAccess, accessibleStoreIds } = useAuth();
   const [storeToDelete, setStoreToDelete] = useState<StoreType | null>(null);
+
+  // Filter stores based on user access
+  const accessibleStores = hasGlobalAccess 
+    ? stores 
+    : stores.filter(s => accessibleStoreIds.includes(s.id));
 
   // Filter nav items based on user role
   const navItems = allNavItems.filter(item => 
@@ -135,15 +140,15 @@ export function Sidebar({ currentStore, onStoreChange }: SidebarProps) {
         <Select 
           value={currentStore?.id || ''} 
           onValueChange={(id) => {
-            const store = stores.find(s => s.id === id);
+            const store = accessibleStores.find(s => s.id === id);
             if (store) onStoreChange(store);
           }}
         >
           <SelectTrigger className="w-full bg-background">
-            <SelectValue placeholder="Select store" />
+            <SelectValue placeholder="Selecionar loja" />
           </SelectTrigger>
           <SelectContent>
-            {stores.map(store => (
+            {accessibleStores.map(store => (
               <SelectItem key={store.id} value={store.id}>
                 {store.name}
               </SelectItem>
@@ -158,7 +163,7 @@ export function Sidebar({ currentStore, onStoreChange }: SidebarProps) {
               <NewStoreModal onSubmit={addStore} />
             </div>
             
-            {stores.length > 1 && currentStore && (
+            {accessibleStores.length > 1 && currentStore && (
               <AlertDialog open={!!storeToDelete} onOpenChange={(open) => !open && setStoreToDelete(null)}>
                 <AlertDialogTrigger asChild>
                   <Button 
