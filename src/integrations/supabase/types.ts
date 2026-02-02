@@ -209,7 +209,6 @@ export type Database = {
           created_at: string
           default_price: number
           description: string | null
-          dish_id: string | null
           id: string
           image: string | null
           is_active: boolean | null
@@ -221,7 +220,6 @@ export type Database = {
           created_at?: string
           default_price?: number
           description?: string | null
-          dish_id?: string | null
           id?: string
           image?: string | null
           is_active?: boolean | null
@@ -233,7 +231,6 @@ export type Database = {
           created_at?: string
           default_price?: number
           description?: string | null
-          dish_id?: string | null
           id?: string
           image?: string | null
           is_active?: boolean | null
