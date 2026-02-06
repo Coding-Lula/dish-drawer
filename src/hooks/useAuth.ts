@@ -31,6 +31,7 @@ export function useAuth() {
       .from('user_roles')
       .select('role')
       .eq('user_id', userId)
+      .limit(1)
       .maybeSingle();
     
     if (error) {
