@@ -33,12 +33,11 @@ export default function Auth() {
   const [globalManagerAccess, setGlobalManagerAccess] = useState(false);
 
   useEffect(() => {
-    // Only redirect if user exists AND has a role assigned
-    // This prevents the cycle where Auth redirects to / but ProtectedRoute redirects back
-    if (!loading && user && role) {
+    // Redirect authenticated users to POS regardless of role
+    if (!loading && user) {
       navigate('/pos');
     }
-  }, [user, role, loading, navigate]);
+  }, [user, loading, navigate]);
 
   // Reset store selection when role changes
   useEffect(() => {

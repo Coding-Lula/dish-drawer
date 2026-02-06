@@ -23,11 +23,8 @@ export function ProtectedRoute({ children, allowedRoles }: ProtectedRouteProps) 
     return <Navigate to="/auth" replace />;
   }
 
-  // If allowedRoles specified and no role exists after loading, redirect to auth
-  if (allowedRoles && !role) {
-    // User is logged in but has no role - redirect to auth
-    return <Navigate to="/auth" replace />;
-  }
+  // If allowedRoles specified and no role exists after loading, allow through
+  // (user is authenticated but may not have a role assigned yet)
 
   // Check role access
   if (allowedRoles && role && !allowedRoles.includes(role)) {
