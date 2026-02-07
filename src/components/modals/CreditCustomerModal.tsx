@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -10,10 +10,27 @@ interface CreditCustomerModalProps {
   onOpenChange: (open: boolean) => void;
   amount: number;
   onConfirm: (customerName: string) => void;
+  existingCustomers?: string[];
 }
 
-export function CreditCustomerModal({ open, onOpenChange, amount, onConfirm }: CreditCustomerModalProps) {
+export function CreditCustomerModal({ open, onOpenChange, amount, onConfirm, existingCustomers = [] }: CreditCustomerModalProps) {
   const [customerName, setCustomerName] = useState('');
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const wrapperRef = useRef<HTMLDivElement>(null);
+
+  const filtered = customerName.trim()
+    ? existingCustomers.filter(c => c.toLowerCase().includes(customerName.toLowerCase())).slice(0, 5)
+    : [];
+
+  useEffect(() => {
+    const handleClick = (e: MouseEvent) => {
+      if (wrapperRef.current && !wrapperRef.current.contains(e.target as Node)) {
+        setShowSuggestions(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, []);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -44,18 +61,34 @@ export function CreditCustomerModal({ open, onOpenChange, amount, onConfirm }: C
           </div>
           
           <div className="space-y-2">
-            <Label htmlFor="customerName">Nomde do Cliente</Label>
-            <div className="relative">
+            <Label htmlFor="customerName">Nome do Cliente</Label>
+            <div className="relative" ref={wrapperRef}>
               <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
               <Input
                 id="customerName"
                 value={customerName}
-                onChange={(e) => setCustomerName(e.target.value)}
+                onChange={(e) => { setCustomerName(e.target.value); setShowSuggestions(true); }}
+                onFocus={() => setShowSuggestions(true)}
                 placeholder="Digite o nome do cliente"
                 className="pl-10"
                 autoFocus
                 required
+                autoComplete="off"
               />
+              {showSuggestions && filtered.length > 0 && (
+                <div className="absolute z-50 w-full mt-1 bg-popover border border-border rounded-md shadow-md max-h-40 overflow-auto">
+                  {filtered.map((name) => (
+                    <button
+                      key={name}
+                      type="button"
+                      className="w-full text-left px-3 py-2 text-sm hover:bg-muted transition-colors"
+                      onClick={() => { setCustomerName(name); setShowSuggestions(false); }}
+                    >
+                      {name}
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
           

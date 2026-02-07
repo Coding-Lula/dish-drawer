@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'; 
 import { Button } from '@/components/ui/button'; 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'; 
@@ -31,7 +31,8 @@ interface SplitBillModalProps {
   onProcessSingleBill: (bill: SplitBill, customerName?: string) => Promise<void>; 
   onPrintBill: (bill: SplitBill, billNumber: number) => void; 
   storeName: string;
-  tableName: string; 
+  tableName: string;
+  existingCustomers?: string[];
 }
 
 export function SplitBillModal({
@@ -42,7 +43,8 @@ export function SplitBillModal({
   onProcessSingleBill,
   onPrintBill,
   storeName,
-  tableName
+  tableName,
+  existingCustomers = []
 }: SplitBillModalProps) {
   const [bills, setBills] = useState<SplitBill[]>([
     { id: 'bill-1', items: [...cart], paymentMethod: null, isPaid: false }
@@ -51,7 +53,9 @@ export function SplitBillModal({
   const [isProcessing, setIsProcessing] = useState(false); 
   const [splitQuantities, setSplitQuantities] = useState<Record<string, Record<string, number>>>({}); 
   const [creditCustomerName, setCreditCustomerName] = useState<Record<string, string>>({}); 
-  const [showCreditInput, setShowCreditInput] = useState<string | null>(null); 
+  const [showCreditInput, setShowCreditInput] = useState<string | null>(null);
+  const [showCreditSuggestions, setShowCreditSuggestions] = useState(false);
+  const creditInputRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (open && cart.length > 0) {
@@ -272,14 +276,35 @@ export function SplitBillModal({
                         <Label htmlFor="customer-name" className="text-xs font-bold text-amber-700 flex items-center gap-2">
                           <User className="w-3 h-3" /> NOME DO CLIENTE (OBRIGATÓRIO)
                         </Label>
-                        <Input
-                          id="customer-name"
-                          value={creditCustomerName[currentBill.id] || ''}
-                          onChange={(e) => setCreditCustomerName(prev => ({ ...prev, [currentBill.id]: e.target.value }))}
-                          placeholder="Insira o nome para o crédito"
-                          className="h-9 border-amber-200"
-                          autoFocus
-                        />
+                        <div className="relative" ref={creditInputRef}>
+                          <Input
+                            id="customer-name"
+                            value={creditCustomerName[currentBill.id] || ''}
+                            onChange={(e) => { setCreditCustomerName(prev => ({ ...prev, [currentBill.id]: e.target.value })); setShowCreditSuggestions(true); }}
+                            onFocus={() => setShowCreditSuggestions(true)}
+                            placeholder="Insira o nome para o crédito"
+                            className="h-9 border-amber-200"
+                            autoFocus
+                            autoComplete="off"
+                          />
+                          {showCreditSuggestions && (creditCustomerName[currentBill.id] || '').trim() && (() => {
+                            const filtered = existingCustomers.filter(c => c.toLowerCase().includes((creditCustomerName[currentBill.id] || '').toLowerCase())).slice(0, 5);
+                            return filtered.length > 0 ? (
+                              <div className="absolute z-50 w-full mt-1 bg-popover border border-border rounded-md shadow-md max-h-32 overflow-auto">
+                                {filtered.map((name) => (
+                                  <button
+                                    key={name}
+                                    type="button"
+                                    className="w-full text-left px-3 py-2 text-sm hover:bg-muted transition-colors"
+                                    onClick={() => { setCreditCustomerName(prev => ({ ...prev, [currentBill.id]: name })); setShowCreditSuggestions(false); }}
+                                  >
+                                    {name}
+                                  </button>
+                                ))}
+                              </div>
+                            ) : null;
+                          })()}
+                        </div>
                       </div>
                     )}
                     

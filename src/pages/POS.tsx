@@ -175,7 +175,7 @@ function POSPage({ currentStore }: { currentStore: any }) {
   const { tables, addTable, deleteTable, initializeTables } = useRestaurantTablesManagement(currentStore?.id || null);
   const { addTransaction } = useTransactions(currentStore?.id || null);
   const { deductStock } = useStoreStock(currentStore?.id || null);
-  const { addCredit } = useCredits(currentStore?.id || null);
+  const { addCredit, credits } = useCredits(currentStore?.id || null);
   const { getEffectivePrice, hasOverride, setOverridePrice, removeOverridePrice, getOverridePrice } = useStoreDishPrices(currentStore?.id || null);
   const { bundles } = useBundles();
   const { getEffectiveBundlePrice } = useStoreBundlePrices(currentStore?.id || null);
@@ -202,6 +202,15 @@ function POSPage({ currentStore }: { currentStore: any }) {
       initializeTables(15);
     }
   }, [currentStore?.id, tables.length, initializeTables]);
+
+  // Default to first table
+  useEffect(() => {
+    if (tables.length > 0 && !selectedTable) {
+      setSelectedTable(tables[0].id);
+    }
+  }, [tables, selectedTable]);
+
+  const existingCustomerNames = [...new Set(credits.filter(c => c.status !== 'settled').map(c => c.customer_name))];
 
   const currentCart = selectedTable ? tableCarts[selectedTable] || [] : [];
   const breakfastDish = dishes.find(d => d.name.toLowerCase() === 'breakfast');
@@ -698,6 +707,7 @@ function POSPage({ currentStore }: { currentStore: any }) {
         onOpenChange={setShowCreditModal}
         amount={cartTotal}
         onConfirm={handleCreditConfirm}
+        existingCustomers={existingCustomerNames}
       />
 
       <TableMapModal
@@ -735,6 +745,7 @@ function POSPage({ currentStore }: { currentStore: any }) {
         onPrintBill={handlePrintBill}
         storeName={currentStore?.name || ''}
         tableName={tables.find(t => t.id === selectedTable)?.name || 'Table'}
+        existingCustomers={existingCustomerNames}
       />
 
       {selectedDish && (
