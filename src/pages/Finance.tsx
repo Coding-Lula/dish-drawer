@@ -155,14 +155,51 @@ function FinanceContent() {
       .reduce((sum, t) => sum + Number(t.total_amount), 0);
   }, [posTransactions, today]);
 
-  // Income by source for the month
+  // Auto-map payment methods to income sources by name
+  const paymentMethodToSourceMap = useMemo(() => {
+    const map: Record<string, string> = {};
+    sources.forEach(source => {
+      const name = source.name.toLowerCase();
+      if (name === 'cash' || name === 'caixa') {
+        map['cash'] = source.id;
+      } else if (name === 'mpesa' || name === 'm-pesa') {
+        map['mpesa'] = source.id;
+      } else if (name === 'pos' || name === 'cartão' || name === 'cartao') {
+        map['cartao'] = source.id;
+        map['paga_facil'] = source.id;
+      } else if (name === 'emola' || name === 'e-mola') {
+        map['emola'] = source.id;
+      }
+    });
+    return map;
+  }, [sources]);
+
+  // Income by source for the month - calculated from POS transactions
   const incomeBySource = useMemo(() => {
-    const totals = getSourceTotals(monthStart, monthEnd);
+    const sourceAmounts: Record<string, number> = {};
+    sources.forEach(s => { sourceAmounts[s.id] = 0; });
+
+    // Map POS transactions to sources via payment method
+    posTransactions
+      .filter(t => {
+        const txDate = t.date?.split('T')[0];
+        return txDate >= monthStart && txDate <= monthEnd &&
+               t.payment_method &&
+               t.payment_method !== 'credit' &&
+               t.payment_method !== 'self_consumption';
+      })
+      .forEach(t => {
+        const sourceId = paymentMethodToSourceMap[t.payment_method];
+        if (sourceId) {
+          sourceAmounts[sourceId] += Number(t.total_amount);
+        }
+      });
+
     return sources.map(source => ({
       source,
-      amount: totals[source.id] || 0,
+      amount: sourceAmounts[source.id] || 0,
     }));
-  }, [sources, getSourceTotals, monthStart, monthEnd]);
+  }, [sources, posTransactions, monthStart, monthEnd, paymentMethodToSourceMap]);
 
   // Revenue breakdown by payment method
   const revenueByPaymentMethod = useMemo(() => {
