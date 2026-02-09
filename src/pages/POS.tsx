@@ -16,7 +16,7 @@ import { SplitBillModal } from '@/components/modals/SplitBillModal';
 import { TableMapModal } from '@/components/modals/TableMapModal';
 import { BundleSelectorModal } from '@/components/modals/BundleSelectorModal';
 import { DishSelectionModal } from '@/components/modals/DishSelectionModal';
-import { Plus, Minus, Trash2, ShoppingBag, CreditCard, Printer, Table, Split, Pencil, Coffee } from 'lucide-react';
+import { Plus, Minus, Trash2, ShoppingBag, CreditCard, Printer, Table, Split, Pencil, Coffee, Search } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { CartModal } from '@/components/modals/CartModal';
@@ -198,6 +198,7 @@ function POSPage({ currentStore }: { currentStore: any }) {
   const [showBundleSelector, setShowBundleSelector] = useState(false);
   const [selectedBundle, setSelectedBundle] = useState<typeof bundles[0] | null>(null);
   const [showBreakfastSelector, setShowBreakfastSelector] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
 
   // Initialize tables if needed
   useEffect(() => {
@@ -229,9 +230,11 @@ function POSPage({ currentStore }: { currentStore: any }) {
     !d.category || displayCategories.includes(d.category)
   );
 
-  const filteredDishes = selectedCategory
-    ? dishesInEnabledCategories.filter(d => d.category === selectedCategory)
-    : dishesInEnabledCategories;
+  const filteredDishes = dishesInEnabledCategories.filter(d => {
+    const matchesCategory = !selectedCategory || d.category === selectedCategory;
+    const matchesSearch = !searchQuery || d.name.toLowerCase().includes(searchQuery.toLowerCase());
+    return matchesCategory && matchesSearch;
+  });
 
   const cartTotal = currentCart.reduce((sum, item) => sum + (Number(item.unitPrice) * item.quantity), 0);
 
@@ -647,6 +650,16 @@ function POSPage({ currentStore }: { currentStore: any }) {
         </div>
 
         <div className="flex gap-2 mb-4 flex-wrap items-center">
+          <div className="relative w-full sm:w-48">
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+            <input
+              type="text"
+              placeholder="Procurar prato..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full pl-8 pr-3 py-1.5 text-sm rounded-md border bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+            />
+          </div>
           <Button variant={selectedCategory === null ? "default" : "outline"} size="sm" onClick={() => setSelectedCategory(null)}>All</Button>
           {[...categories].sort().map(cat => (
             <Button key={cat} variant={selectedCategory === cat ? "default" : "outline"} size="sm" onClick={() => setSelectedCategory(cat)}>{cat}</Button>
