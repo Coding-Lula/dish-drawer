@@ -21,7 +21,7 @@ export function useStoreCategories(storeId: string | null) {
       return;
     }
 
-    const { data, error } = await supabase
+    const { data, error } = await (supabase as any)
       .from('store_enabled_categories')
       .select('category')
       .eq('store_id', storeId);
@@ -29,7 +29,7 @@ export function useStoreCategories(storeId: string | null) {
     if (error) {
       toast({ title: 'Error fetching enabled categories', description: error.message, variant: 'destructive' });
     } else {
-      setEnabledCategories(data?.map(item => item.category) || []);
+      setEnabledCategories(data?.map((item: any) => item.category) || []);
     }
     setLoading(false);
   }, [storeId, toast]);
@@ -38,8 +38,7 @@ export function useStoreCategories(storeId: string | null) {
     if (!storeId) return false;
 
     if (isEnabled) {
-      // Enable category (add to table)
-      const { error } = await supabase
+      const { error } = await (supabase as any)
         .from('store_enabled_categories')
         .insert({ store_id: storeId, category });
 
@@ -49,8 +48,7 @@ export function useStoreCategories(storeId: string | null) {
       }
       setEnabledCategories(prev => [...prev, category]);
     } else {
-      // Disable category (remove from table)
-      const { error } = await supabase
+      const { error } = await (supabase as any)
         .from('store_enabled_categories')
         .delete()
         .eq('store_id', storeId)
@@ -69,11 +67,7 @@ export function useStoreCategories(storeId: string | null) {
   const setCategories = async (categories: string[]) => {
     if (!storeId) return false;
 
-    // This is a bit more complex, we might want to just replace all entries
-    // But for simplicity and RLS, let's just do it individually or with a clever query if possible.
-    // Actually, let's just delete all and insert new ones for this store.
-
-    const { error: deleteError } = await supabase
+    const { error: deleteError } = await (supabase as any)
       .from('store_enabled_categories')
       .delete()
       .eq('store_id', storeId);
@@ -84,7 +78,7 @@ export function useStoreCategories(storeId: string | null) {
     }
 
     if (categories.length > 0) {
-      const { error: insertError } = await supabase
+      const { error: insertError } = await (supabase as any)
         .from('store_enabled_categories')
         .insert(categories.map(category => ({ store_id: storeId, category })));
 

@@ -1154,6 +1154,35 @@ export type Database = {
           },
         ]
       }
+      store_enabled_categories: {
+        Row: {
+          category: string
+          created_at: string
+          id: string
+          store_id: string
+        }
+        Insert: {
+          category: string
+          created_at?: string
+          id?: string
+          store_id: string
+        }
+        Update: {
+          category?: string
+          created_at?: string
+          id?: string
+          store_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "store_enabled_categories_store_id_fkey"
+            columns: ["store_id"]
+            isOneToOne: false
+            referencedRelation: "stores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       store_stock: {
         Row: {
           created_at: string
