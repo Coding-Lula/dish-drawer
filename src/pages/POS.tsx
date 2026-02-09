@@ -7,8 +7,10 @@ import { useToast } from '@/hooks/use-toast';
 import { useDishes, useRecipes, useTransactions, useStoreStock, useCredits, useRestaurantTablesManagement } from '@/hooks/useSupabaseData';
 import type { Dish } from '@/hooks/useSupabaseData';
 import { useStoreDishPrices } from '@/hooks/useStoreDishPrices';
+import { useStoreCategories } from '@/hooks/useStoreCategories';
 import { useBundles, useStoreBundlePrices } from '@/hooks/useBundles';
 import { ManageTablesModal } from '@/components/modals/ManageTablesModal';
+import { CategoryManagerModal } from '@/components/modals/CategoryManagerModal';
 import { CreditCustomerModal } from '@/components/modals/CreditCustomerModal';
 import { SplitBillModal } from '@/components/modals/SplitBillModal';
 import { TableMapModal } from '@/components/modals/TableMapModal';
@@ -177,6 +179,7 @@ function POSPage({ currentStore }: { currentStore: any }) {
   const { deductStock } = useStoreStock(currentStore?.id || null);
   const { addCredit, credits } = useCredits(currentStore?.id || null);
   const { getEffectivePrice, hasOverride, setOverridePrice, removeOverridePrice, getOverridePrice } = useStoreDishPrices(currentStore?.id || null);
+  const { enabledCategories, setCategories: updateEnabledCategories } = useStoreCategories(currentStore?.id || null);
   const { bundles } = useBundles();
   const { getEffectiveBundlePrice } = useStoreBundlePrices(currentStore?.id || null);
   const { isManager } = useAuth();
@@ -214,9 +217,26 @@ function POSPage({ currentStore }: { currentStore: any }) {
 
   const currentCart = selectedTable ? tableCarts[selectedTable] || [] : [];
   const breakfastDish = dishes.find(d => d.name.toLowerCase() === 'breakfast');
-  const categories = [...new Set(dishes.map(d => d.category).filter(Boolean))];
-  const filteredDishes = selectedCategory ? dishes.filter(d => d.category === selectedCategory) : dishes;
+
+  const allCategories = [...new Set(dishes.map(d => d.category).filter(Boolean))] as string[];
+  const displayCategories = enabledCategories.length > 0
+    ? allCategories.filter(cat => enabledCategories.includes(cat))
+    : allCategories;
+
+  const categories = displayCategories;
+
+  const dishesInEnabledCategories = dishes.filter(d =>
+    !d.category || displayCategories.includes(d.category)
+  );
+
+  const filteredDishes = selectedCategory
+    ? dishesInEnabledCategories.filter(d => d.category === selectedCategory)
+    : dishesInEnabledCategories;
+
   const cartTotal = currentCart.reduce((sum, item) => sum + (Number(item.unitPrice) * item.quantity), 0);
+
+  const showBreakfastDish = breakfastDish && (!breakfastDish.category || displayCategories.includes(breakfastDish.category));
+  const filteredBundles = bundles.filter(b => !b.category || displayCategories.includes(b.category));
 
   const addToCart = (dish: Dish) => {
     if (!selectedTable) {
@@ -594,7 +614,7 @@ function POSPage({ currentStore }: { currentStore: any }) {
 
         {/* Breakfast Quick Access Buttons */}
         <div className="flex gap-2 mb-3 flex-wrap">
-          {breakfastDish && (
+          {showBreakfastDish && breakfastDish && (
             <Button
               variant="outline"
               size="default"
@@ -608,7 +628,7 @@ function POSPage({ currentStore }: { currentStore: any }) {
               </Badge>
             </Button>
           )}
-          {bundles.map(bundle => {
+          {filteredBundles.map(bundle => {
             const bundlePrice = getEffectiveBundlePrice(bundle.id, Number(bundle.default_price));
             return (
               <Button
@@ -626,11 +646,20 @@ function POSPage({ currentStore }: { currentStore: any }) {
           })}
         </div>
 
-        <div className="flex gap-2 mb-4 flex-wrap">
+        <div className="flex gap-2 mb-4 flex-wrap items-center">
           <Button variant={selectedCategory === null ? "default" : "outline"} size="sm" onClick={() => setSelectedCategory(null)}>All</Button>
-          {categories.map(cat => (
+          {[...categories].sort().map(cat => (
             <Button key={cat} variant={selectedCategory === cat ? "default" : "outline"} size="sm" onClick={() => setSelectedCategory(cat)}>{cat}</Button>
           ))}
+          {isManager && (
+            <div className="ml-auto">
+              <CategoryManagerModal
+                allCategories={allCategories}
+                enabledCategories={enabledCategories}
+                onSetCategories={updateEnabledCategories}
+              />
+            </div>
+          )}
         </div>
 
         <div className="flex-1 overflow-auto">
