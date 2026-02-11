@@ -1,51 +1,74 @@
 
 
-## Plan: Credit Customer Autocomplete + Default Table 1
+## Bulk Stock Correction via CSV Upload
 
-### 1. Credit Customer Name Autocomplete
+### What it does
+Adds a "Bulk Correct Stock" button (manager-only) to the Inventory page. Users can:
+1. **Download a template** CSV pre-filled with current stock data (ingredient name, unit, current quantity, and a blank "new quantity" column)
+2. **Edit the CSV** in Excel/Google Sheets, filling in correct quantities
+3. **Upload the corrected CSV** back, review changes in a preview table, then apply all corrections at once
 
-**What changes:** When typing a customer name in the Credit Sale modal, a dropdown list of existing debtors (from the `credits` table) will appear, filtered by what the user types. The user can either select an existing name or type a new one.
+### User Flow
 
-**Files to modify:**
-- **`src/components/modals/CreditCustomerModal.tsx`**
-  - Accept a new prop `existingCustomers: string[]` (list of unique debtor names)
-  - Add state for showing/hiding the suggestion dropdown
-  - As the user types, filter `existingCustomers` and display matching names below the input
-  - Clicking a suggestion fills the input field
-  - Also fix the typo "Nomde do Cliente" to "Nome do Cliente"
+```text
+[Download Template] --> Edit in Excel --> [Upload CSV] --> Preview Changes --> [Apply All]
+```
 
-- **`src/pages/POS.tsx`**
-  - Extract unique customer names from the existing `credits` data (already fetched via `useCredits`)
-  - Pass them as `existingCustomers` prop to `CreditCustomerModal`
+### Files to Create/Modify
 
-- **`src/components/modals/SplitBillModal.tsx`**
-  - Same autocomplete logic for the inline credit customer name input in split bill mode
-  - Will need the `existingCustomers` prop passed from POS
+**1. New file: `src/components/modals/BulkStockCorrectionModal.tsx`**
+- Dialog with two tabs/steps:
+  - **Step 1**: "Download Template" button that generates a CSV with columns: `Ingredient`, `Unit`, `Current Qty`, `New Qty`
+  - **Step 2**: File upload input (accepts .csv, .xlsx). On upload:
+    - Parse with `xlsx` library
+    - Match rows to ingredients by name (case-insensitive)
+    - Show a preview table with: Ingredient | Current Qty | New Qty | Difference
+    - Highlight increases in green, decreases in red, unchanged in gray
+    - Show unmatched rows as warnings
+  - **Submit**: Calls `manualAdjustStock` for each changed item
+- Manager-only (already controlled by the page)
 
-### 2. Default to Table 1 on POS Load
-
-**What changes:** When the POS page loads, automatically select the first table instead of requiring manual selection.
-
-**File to modify:**
-- **`src/pages/POS.tsx`**
-  - Add a `useEffect` that sets `selectedTable` to the first table's ID once `tables` data is loaded and no table is currently selected
+**2. Modify: `src/pages/Inventory.tsx`**
+- Import and render `BulkStockCorrectionModal` in the manager actions area
+- Pass required props: `stocks`, `ingredients`, `manualAdjustStock`, `refetchStocks`
 
 ### Technical Details
 
-**Autocomplete component approach:**
-- Simple filtered list rendered as an absolute-positioned div below the input
-- Filter is case-insensitive partial match
-- List shows up to 5 matching names
-- Clicking outside dismisses the list
-- Uses existing `credits` data -- no new database queries needed
-- Deduplicate customer names with `[...new Set(credits.map(c => c.customer_name))]`
-
-**Default table selection:**
+**Template CSV generation:**
 ```typescript
-useEffect(() => {
-  if (tables.length > 0 && !selectedTable) {
-    setSelectedTable(tables[0].id);
-  }
-}, [tables, selectedTable]);
+// Using xlsx library already installed
+import * as XLSX from 'xlsx';
+
+const templateData = stocks.map(stock => {
+  const ing = ingredients.find(i => i.id === stock.ingredient_id);
+  return {
+    'Ingredient': ing?.name || '',
+    'Unit': ing?.unit || '',
+    'Current Qty': stock.current_quantity,
+    'New Qty': '' // user fills this in
+  };
+});
+const ws = XLSX.utils.json_to_sheet(templateData);
+const wb = XLSX.utils.book_new();
+XLSX.utils.book_append_sheet(wb, ws, 'Stock');
+XLSX.writeFile(wb, `stock-correction-${storeName}.xlsx`);
 ```
+
+**CSV parsing and matching:**
+- Parse uploaded file with `XLSX.read()`
+- Match "Ingredient" column to `ingredients` by name (case-insensitive, trimmed)
+- Only process rows where "New Qty" is a valid number and differs from current
+- Each matched row calls `manualAdjustStock(stockId, newQuantity)`
+
+**Preview table columns:**
+- Ingredient name
+- Current quantity
+- New quantity (from CSV)
+- Change (+/- with color coding)
+- Status (Matched / Not Found)
+
+**Error handling:**
+- Skip rows with empty or invalid "New Qty"
+- Warn about ingredient names that don't match any store item
+- Show success/error count after applying
 
