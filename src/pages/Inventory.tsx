@@ -14,6 +14,7 @@ import { ManualAdjustmentModal } from '@/components/modals/ManualAdjustmentModal
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { TransferInventoryModal } from '@/components/modals/TransferInventoryModal';
 import { ProcessBatchModal } from '@/components/modals/ProcessBatchModal';
+import { BulkStockCorrectionModal } from '@/components/modals/BulkStockCorrectionModal';
 import { 
   useStoreStock, 
   useIngredients, 
@@ -411,6 +412,17 @@ function InventoryContent() {
               }))}
               stocks={stocks}
               onProcess={handleProcessBatch}
+            />
+          )}
+          
+          {/* Manager Only: Bulk Stock Correction */}
+          {isManager && (
+            <BulkStockCorrectionModal
+              stocks={stocks}
+              ingredients={ingredients}
+              storeName={currentStore?.name || ''}
+              onAdjust={manualAdjustStock}
+              onComplete={refetchStocks}
             />
           )}
         </div>
