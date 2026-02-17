@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
-import { useDishes, useRecipes, useTransactions, useStoreStock, useCredits, useRestaurantTablesManagement } from '@/hooks/useSupabaseData';
+import { useDishes, useRecipes, useTransactions, useStoreStock, useCredits, useRestaurantTablesManagement, useStores } from '@/hooks/useSupabaseData';
 import type { Dish } from '@/hooks/useSupabaseData';
 import { useStoreDishPrices } from '@/hooks/useStoreDishPrices';
 import { useStoreCategories } from '@/hooks/useStoreCategories';
@@ -183,6 +183,7 @@ function POSPage({ currentStore }: { currentStore: any }) {
   const { bundles } = useBundles();
   const { getEffectiveBundlePrice } = useStoreBundlePrices(currentStore?.id || null);
   const { isManager } = useAuth();
+  const { stores: allStores } = useStores();
 
   const [tableCarts, setTableCarts] = useState<Record<string, CartItem[]>>({});
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
@@ -788,6 +789,8 @@ function POSPage({ currentStore }: { currentStore: any }) {
         storeName={currentStore?.name || ''}
         tableName={tables.find(t => t.id === selectedTable)?.name || 'Table'}
         existingCustomers={existingCustomerNames}
+        stores={allStores.map(s => ({ id: s.id, name: s.name }))}
+        currentStoreId={currentStore?.id}
       />
 
       {selectedDish && (

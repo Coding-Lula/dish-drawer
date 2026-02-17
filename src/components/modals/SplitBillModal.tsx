@@ -6,7 +6,8 @@ import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input'; 
 import { Label } from '@/components/ui/label'; 
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Split, Printer, CreditCard, Check, Plus, Minus, User } from 'lucide-react';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Split, Printer, CreditCard, Check, Plus, Minus, User, UtensilsCrossed } from 'lucide-react';
 import { cn } from '@/lib/utils'; 
 import type { Dish } from '@/hooks/useSupabaseData'; 
 
@@ -21,6 +22,12 @@ interface SplitBill {
   paymentMethod: string | null;
   isPaid: boolean;
   customerName?: string;
+  storeId?: string;
+}
+
+interface StoreOption {
+  id: string;
+  name: string;
 }
 
 interface SplitBillModalProps {
@@ -33,6 +40,8 @@ interface SplitBillModalProps {
   storeName: string;
   tableName: string;
   existingCustomers?: string[];
+  stores?: StoreOption[];
+  currentStoreId?: string;
 }
 
 export function SplitBillModal({
@@ -44,10 +53,12 @@ export function SplitBillModal({
   onPrintBill,
   storeName,
   tableName,
-  existingCustomers = []
+  existingCustomers = [],
+  stores = [],
+  currentStoreId
 }: SplitBillModalProps) {
   const [bills, setBills] = useState<SplitBill[]>([
-    { id: 'bill-1', items: [...cart], paymentMethod: null, isPaid: false }
+    { id: 'bill-1', items: [...cart], paymentMethod: null, isPaid: false, storeId: currentStoreId }
   ]); 
   const [selectedBill, setSelectedBill] = useState<string>('bill-1'); 
   const [isProcessing, setIsProcessing] = useState(false); 
@@ -59,13 +70,13 @@ export function SplitBillModal({
 
   useEffect(() => {
     if (open && cart.length > 0) {
-      setBills([{ id: 'bill-1', items: [...cart], paymentMethod: null, isPaid: false }]);
+      setBills([{ id: 'bill-1', items: [...cart], paymentMethod: null, isPaid: false, storeId: currentStoreId }]);
       setSelectedBill('bill-1');
       setSplitQuantities({});
       setCreditCustomerName({});
       setShowCreditInput(null);
     }
-  }, [open, cart]);
+  }, [open, cart, currentStoreId]);
 
   const currentBill = bills.find(b => b.id === selectedBill);
   
@@ -74,11 +85,17 @@ export function SplitBillModal({
       id: `bill-${bills.length + 1}`,
       items: [],
       paymentMethod: null,
-      isPaid: false
+      isPaid: false,
+      storeId: currentStoreId
     };
     setBills(prev => [...prev, newBill]); 
     setSelectedBill(newBill.id); 
   };
+
+  const setBillStore = (billId: string, storeId: string) => {
+    setBills(prev => prev.map(b => b.id === billId ? { ...b, storeId } : b));
+  };
+
   const splitItemQuantity = (item: CartItem, fromBillId: string, toBillId: string, quantity: number) => {
     if (quantity <= 0 || quantity > item.quantity) return; 
     setBills(prev => prev.map(bill => {
@@ -146,6 +163,11 @@ export function SplitBillModal({
     setSplitQuantities(prev => ({ ...prev, [billId]: { ...(prev[billId] || {}), [dishId]: clampedQty } })); 
   };
 
+  const getStoreName = (storeId?: string) => {
+    if (!storeId) return storeName;
+    return stores.find(s => s.id === storeId)?.name || storeName;
+  };
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-5xl h-[90vh] flex flex-col">
@@ -176,12 +198,54 @@ export function SplitBillModal({
                     )}
                   >
                     <div className="flex items-center justify-between">
-                      <span className="font-medium">Conta {idx + 1}</span>
+                      <div className="flex items-center gap-1.5">
+                        <span className="font-medium">Conta {idx + 1}</span>
+                        {stores.length > 1 && (
+                          <Popover>
+                            <PopoverTrigger asChild onClick={(e) => e.stopPropagation()}>
+                              <button
+                                className={cn(
+                                  "inline-flex items-center justify-center rounded-md p-1 transition-colors",
+                                  selectedBill === bill.id
+                                    ? "hover:bg-primary-foreground/20 text-primary-foreground"
+                                    : "hover:bg-muted text-muted-foreground"
+                                )}
+                                title={`Loja: ${getStoreName(bill.storeId)}`}
+                              >
+                                <UtensilsCrossed className="w-3.5 h-3.5" />
+                              </button>
+                            </PopoverTrigger>
+                            <PopoverContent className="w-48 p-1" align="start" onClick={(e) => e.stopPropagation()}>
+                              <div className="space-y-0.5">
+                                <p className="px-2 py-1 text-xs font-medium text-muted-foreground">Selecionar Loja</p>
+                                {stores.map(store => (
+                                  <button
+                                    key={store.id}
+                                    className={cn(
+                                      "w-full text-left px-2 py-1.5 text-sm rounded-sm transition-colors",
+                                      bill.storeId === store.id ? "bg-primary text-primary-foreground" : "hover:bg-muted"
+                                    )}
+                                    onClick={() => setBillStore(bill.id, store.id)}
+                                  >
+                                    {store.name}
+                                  </button>
+                                ))}
+                              </div>
+                            </PopoverContent>
+                          </Popover>
+                        )}
+                      </div>
                       {bill.isPaid && <Check className="w-4 h-4 text-green-600" />}
                     </div>
                     <div className={cn("text-sm", selectedBill === bill.id ? "text-primary-foreground/80" : "text-muted-foreground")}>
                       {bill.items.length} items • {getBillTotal(bill).toLocaleString()} MT
                     </div>
+                    {stores.length > 1 && bill.storeId && bill.storeId !== currentStoreId && (
+                      <div className={cn("text-[10px] mt-0.5 flex items-center gap-1", selectedBill === bill.id ? "text-primary-foreground/70" : "text-muted-foreground/70")}>
+                        <UtensilsCrossed className="w-2.5 h-2.5" />
+                        {getStoreName(bill.storeId)}
+                      </div>
+                    )}
                   </button>
                 ))}
               </div>
@@ -201,7 +265,6 @@ export function SplitBillModal({
                       </Badge>
                     </CardTitle>
                   </CardHeader>
-                  {/* Items Scrollable Area [cite: 236] */}
                   <ScrollArea className="flex-1">
                     <CardContent className="p-4 space-y-3">
                       {currentBill.items.length === 0 ? (
@@ -252,10 +315,9 @@ export function SplitBillModal({
                   </ScrollArea>
                 </Card>
 
-                {/* Payment Section - Always Visible [cite: 262] */}
+                {/* Payment Section */}
                 {!currentBill.isPaid && currentBill.items.length > 0 && (
                   <div className="mt-4 p-4 border rounded-lg bg-background shadow-sm space-y-3">
-                    {/* Shrinking grid if Credit is selected [cite: 263, 267] */}
                     <div className={cn("grid gap-1.5 transition-all", showCreditInput ? "grid-cols-7" : "grid-cols-4")}>
                       {paymentMethods.slice(0, 7).map(method => (
                         <Button
