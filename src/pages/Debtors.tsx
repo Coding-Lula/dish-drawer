@@ -4,8 +4,10 @@ import { Badge } from '@/components/ui/badge';
 import { useCredits, type Credit } from '@/hooks/useSupabaseData';
 import { useEffect, useState, useMemo } from 'react';
 import { supabase } from '@/integrations/supabase/client';
-import { AlertTriangle, Loader2, User } from 'lucide-react';
+import { AlertTriangle, Download, Loader2, User } from 'lucide-react';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
+import * as XLSX from 'xlsx';
+import { Button } from '@/components/ui/button';
 
 interface TransactionItem {
   id: string;
@@ -99,19 +101,76 @@ function DebtorsContent() {
 
   const loading = creditsLoading || itemsLoading;
 
+  const handleDownload = () => {
+    // Sheet 1: Summary (one row per debtor)
+    const summaryData = groupedDebtors.map(debtor => ({
+      'Nome do Devedor': debtor.customer_name,
+      'Total em Dívida (MT)': debtor.total_owed
+    }));
+
+    // Sheet 2: Detailed breakdown
+    const detailData = groupedDebtors.flatMap(debtor =>
+      debtor.bills.flatMap(bill => {
+        if (bill.items.length === 0) {
+          return [{
+            'Data': new Date(bill.credit.date).toLocaleDateString(),
+            'Devedor': debtor.customer_name,
+            'Item': 'Sem detalhes de itens',
+            'Quantidade': 0,
+            'Preço Unitário (MT)': 0,
+            'Total (MT)': Number(bill.credit.sale_amount)
+          }];
+        }
+        return bill.items.map(item => ({
+          'Data': new Date(bill.credit.date).toLocaleDateString(),
+          'Devedor': debtor.customer_name,
+          'Item': item.dishes?.name || 'Item Desconhecido',
+          'Quantidade': item.quantity,
+          'Preço Unitário (MT)': item.unit_price,
+          'Total (MT)': item.quantity * item.unit_price
+        }));
+      })
+    );
+
+    const wb = XLSX.utils.book_new();
+    const ws1 = XLSX.utils.json_to_sheet(summaryData);
+    const ws2 = XLSX.utils.json_to_sheet(detailData);
+
+    // Set column widths
+    ws1['!cols'] = [{ wch: 30 }, { wch: 20 }];
+    ws2['!cols'] = [{ wch: 15 }, { wch: 30 }, { wch: 30 }, { wch: 12 }, { wch: 18 }, { wch: 15 }];
+
+    XLSX.utils.book_append_sheet(wb, ws1, 'Resumo');
+    XLSX.utils.book_append_sheet(wb, ws2, 'Detalhes');
+
+    const date = new Date().toISOString().split('T')[0];
+    XLSX.writeFile(wb, `Relatorio_Devedores_${date}.xlsx`);
+  };
+
   return (
-    <div className="space-y-6 max-w-4xl mx-auto">
+    <div className="space-y-6 max-w-4xl mx-auto relative">
       <div className="text-center">
+        <div className="absolute right-0 top-0">
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={handleDownload}
+            disabled={groupedDebtors.length === 0}
+            title="Descarregar Lista"
+          >
+            <Download className="h-5 w-5" />
+          </Button>
+        </div>
         <h1 className="text-3xl font-bold">Devedores</h1>
         <p className="text-muted-foreground mt-1">
-          {groupedDebtors.length} customer{groupedDebtors.length !== 1 ? 's' : ''} with outstanding balance
+          {groupedDebtors.length} {groupedDebtors.length === 1 ? 'cliente' : 'clientes'} com saldo devedor
         </p>
       </div>
 
       {loading && (
         <div className="flex justify-center items-center p-8">
           <Loader2 className="w-8 h-8 animate-spin text-primary" />
-          <p className="ml-2">Loading debtors...</p>
+          <p className="ml-2">A carregar devedores...</p>
         </div>
       )}
 
@@ -124,7 +183,7 @@ function DebtorsContent() {
 
       {!loading && !error && groupedDebtors.length === 0 && (
         <div className="text-center p-8 bg-muted/50 rounded-lg">
-          <p>No outstanding debtors found.</p>
+          <p>Nenhum devedor encontrado.</p>
         </div>
       )}
 
@@ -139,7 +198,7 @@ function DebtorsContent() {
                 <div>
                   <CardTitle className="text-xl">{debtor.customer_name}</CardTitle>
                   <p className="text-sm text-muted-foreground">
-                    {debtor.bills.length} outstanding bill{debtor.bills.length !== 1 ? 's' : ''}
+                    {debtor.bills.length} {debtor.bills.length === 1 ? 'fatura pendente' : 'faturas pendentes'}
                   </p>
                 </div>
               </div>
@@ -147,7 +206,7 @@ function DebtorsContent() {
                 <p className="text-2xl font-bold text-destructive">
                   {debtor.total_owed.toLocaleString()} MT
                 </p>
-                <p className="text-xs text-muted-foreground">Total Owed</p>
+                <p className="text-xs text-muted-foreground">Total em Dívida</p>
               </div>
             </div>
           </CardHeader>
@@ -177,7 +236,7 @@ function DebtorsContent() {
                           {bill.items.map((item) => (
                             <li key={item.id} className="flex justify-between text-sm">
                               <span className="text-foreground">
-                                {item.dishes?.name || 'Unknown Item'}
+                                {item.dishes?.name || 'Item Desconhecido'}
                               </span>
                               <span className="text-muted-foreground">
                                 {item.quantity} × {Number(item.unit_price).toLocaleString()} MT
@@ -186,7 +245,7 @@ function DebtorsContent() {
                           ))}
                         </ul>
                       ) : (
-                        <p className="text-sm text-muted-foreground italic">No item details available</p>
+                        <p className="text-sm text-muted-foreground italic">Detalhes de itens indisponíveis</p>
                       )}
                     </div>
                   </AccordionContent>
