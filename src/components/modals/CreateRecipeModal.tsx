@@ -132,42 +132,54 @@ export function CreateRecipeModal({ dish, ingredients, existingRecipes, onSave }
               <Label className="mb-2">Recipe Ingredients ({selectedIngredients.length})</Label>
               <ScrollArea className="h-[300px] border rounded-lg p-2">
             <div className="space-y-2">
-            {selectedIngredients.map(({ ingredient, quantity }) => (
-    
-            <div key={ingredient.id} className="flex items-center gap-2 p-2 rounded-md bg-muted/20 border">
-              <Package className="w-4 h-4 text-muted-foreground shrink-0" />
-      
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2 mb-1">
-                <p className="font-medium text-sm truncate flex-1">{ingredient.name}</p>
-                <div className="flex items-center gap-1 shrink-0">
-                  <Input
-                    type="number"
-                    value={quantity || ''}
-                    onChange={(e) => updateQuantity(ingredient.id, parseFloat(e.target.value))}
-                    className="w-20 h-8 text-sm"
-                    step="any"
-                    min="0"
-                  />
-                  <span className="text-xs text-muted-foreground w-8">{ingredient.unit}</span>
+              {selectedIngredients.map(({ ingredient, quantity }) => (
+                <div key={ingredient.id} className="flex items-center gap-2 p-2 rounded-md bg-muted/20 border">
+                  <Package className="w-4 h-4 text-muted-foreground shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <p className="font-medium text-sm truncate">{ingredient.name}</p>
+                    <p className="text-xs text-muted-foreground">
+                      Cost: {(quantity * Number(ingredient.average_cost)).toFixed(2)} MT
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-1 shrink-0">
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      className="h-7 w-7"
+                      onClick={() => updateQuantity(ingredient.id, quantity - 0.5)}
+                      disabled={quantity <= 0.5}
+                    >
+                      <span className="text-sm font-bold">−</span>
+                    </Button>
+                    <Input
+                      type="number"
+                      value={quantity || ''}
+                      onChange={(e) => updateQuantity(ingredient.id, parseFloat(e.target.value))}
+                      className="w-16 h-7 text-sm text-center px-1"
+                      step="any"
+                      min="0"
+                    />
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      className="h-7 w-7"
+                      onClick={() => updateQuantity(ingredient.id, quantity + 0.5)}
+                    >
+                      <span className="text-sm font-bold">+</span>
+                    </Button>
+                    <span className="text-xs text-muted-foreground w-8">{ingredient.unit}</span>
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="shrink-0 h-7 w-7 text-destructive"
+                    onClick={() => toggleIngredient(ingredient)}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
                 </div>
-              </div>
-              <p className="text-xs text-muted-foreground">
-                Cost: {(quantity * Number(ingredient.average_cost)).toFixed(2)} MT
-              </p>
+              ))}
             </div>
-
-            <Button 
-              variant="ghost" 
-              size="icon" 
-              className="shrink-0 h-8 w-8 text-destructive"
-              onClick={() => toggleIngredient(ingredient)}
-            >
-            <Trash2 className="h-4 w-4" />
-            </Button>
-          </div>
-  ))}
-</div>
               </ScrollArea>
             </div>
           </div>
