@@ -44,7 +44,7 @@ export function CreateRecipeModal({ dish, ingredients, existingRecipes, onSave }
 
   const updateQuantity = (ingredientId: string, quantity: number) => {
     setSelectedIngredients(prev => 
-      prev.map(s => s.ingredient.id === ingredientId ? { ...s, quantity: Math.max(0.01, quantity) } : s)
+      prev.map(s => s.ingredient.id === ingredientId ? { ...s, quantity: isNaN(quantity) ? 0 : Math.max(0, quantity) } : s)
     );
   };
 
@@ -137,15 +137,26 @@ export function CreateRecipeModal({ dish, ingredients, existingRecipes, onSave }
             <div key={ingredient.id} className="flex items-center gap-2 p-2 rounded-md bg-muted/20 border">
               <Package className="w-4 h-4 text-muted-foreground shrink-0" />
       
-            {/* 'min-w-0' is crucial for 'truncate' to work inside a flex container */}
             <div className="flex-1 min-w-0">
-              <p className="font-medium text-sm truncate">{ingredient.name}</p>
+              <div className="flex items-center gap-2 mb-1">
+                <p className="font-medium text-sm truncate flex-1">{ingredient.name}</p>
+                <div className="flex items-center gap-1 shrink-0">
+                  <Input
+                    type="number"
+                    value={quantity || ''}
+                    onChange={(e) => updateQuantity(ingredient.id, parseFloat(e.target.value))}
+                    className="w-20 h-8 text-sm"
+                    step="any"
+                    min="0"
+                  />
+                  <span className="text-xs text-muted-foreground w-8">{ingredient.unit}</span>
+                </div>
+              </div>
               <p className="text-xs text-muted-foreground">
-              Cost: {(quantity * Number(ingredient.average_cost)).toFixed(2)} MT
+                Cost: {(quantity * Number(ingredient.average_cost)).toFixed(2)} MT
               </p>
             </div>
 
-            {/* Ensure the delete button has 'shrink-0' so it doesn't squash */}
             <Button 
               variant="ghost" 
               size="icon" 
