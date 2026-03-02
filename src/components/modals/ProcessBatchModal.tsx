@@ -24,9 +24,10 @@ interface ProcessBatchModalProps {
   subRecipes: SubRecipeDisplay[];
   stocks: StoreStock[];
   onProcess: (subRecipeId: string, quantity: number) => Promise<any>;
+  trigger?: React.ReactNode;
 }
 
-export function ProcessBatchModal({ ingredients, subRecipes, stocks, onProcess }: ProcessBatchModalProps) {
+export function ProcessBatchModal({ ingredients, subRecipes, stocks, onProcess, trigger }: ProcessBatchModalProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [selectedRecipe, setSelectedRecipe] = useState<string | null>(null);
   const [quantity, setQuantity] = useState(1);
@@ -77,10 +78,12 @@ export function ProcessBatchModal({ ingredients, subRecipes, stocks, onProcess }
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
       <DialogTrigger asChild>
-        <Button variant="outline" className="gap-2">
-          <Factory className="w-4 h-4" />
-          Process Batch
-        </Button>
+        {trigger || (
+          <Button variant="outline" className="gap-2">
+            <Factory className="w-4 h-4" />
+            Process Batch
+          </Button>
+        )}
       </DialogTrigger>
       <DialogContent>
         <DialogHeader>

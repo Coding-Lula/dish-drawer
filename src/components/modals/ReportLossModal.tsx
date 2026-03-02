@@ -12,9 +12,10 @@ interface ReportLossModalProps {
   ingredients: Ingredient[];
   stocks: StoreStock[];
   onReportLoss: (ingredientId: string, quantity: number) => Promise<boolean>;
+  trigger?: React.ReactNode;
 }
 
-export function ReportLossModal({ ingredients, stocks, onReportLoss }: ReportLossModalProps) {
+export function ReportLossModal({ ingredients, stocks, onReportLoss, trigger }: ReportLossModalProps) {
   const [open, setOpen] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [selectedIngredientId, setSelectedIngredientId] = useState('');
@@ -60,10 +61,12 @@ export function ReportLossModal({ ingredients, stocks, onReportLoss }: ReportLos
     <>
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogTrigger asChild>
-          <Button variant="outline" className="gap-2 text-destructive border-destructive/50 hover:bg-destructive/10">
-            <Trash2 className="w-4 h-4" />
-            Reportar Perda
-          </Button>
+          {trigger || (
+            <Button variant="outline" className="gap-2 text-destructive border-destructive/50 hover:bg-destructive/10">
+              <Trash2 className="w-4 h-4" />
+              Reportar Perda
+            </Button>
+          )}
         </DialogTrigger>
         <DialogContent className="max-w-md">
           <DialogHeader>

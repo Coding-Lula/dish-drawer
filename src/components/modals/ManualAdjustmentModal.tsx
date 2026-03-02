@@ -14,9 +14,10 @@ interface ManualAdjustmentModalProps {
   ingredients: Ingredient[];
   stocks: StoreStock[];
   onAdjust: (stockId: string, newQuantity: number) => Promise<boolean>;
+  trigger?: React.ReactNode;
 }
 
-export function ManualAdjustmentModal({ ingredients, stocks, onAdjust }: ManualAdjustmentModalProps) {
+export function ManualAdjustmentModal({ ingredients, stocks, onAdjust, trigger }: ManualAdjustmentModalProps) {
   const [open, setOpen] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [comboboxOpen, setComboboxOpen] = useState(false);
@@ -70,10 +71,12 @@ export function ManualAdjustmentModal({ ingredients, stocks, onAdjust }: ManualA
     <>
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogTrigger asChild>
-          <Button variant="outline" className="gap-2">
-            <Edit2 className="w-4 h-4" />
-            Ajuste Manual
-          </Button>
+          {trigger || (
+            <Button variant="outline" className="gap-2">
+              <Edit2 className="w-4 h-4" />
+              Ajuste Manual
+            </Button>
+          )}
         </DialogTrigger>
         <DialogContent className="max-w-md">
           <DialogHeader>

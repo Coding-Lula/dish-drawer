@@ -25,7 +25,7 @@ import {
   useProductionLogs
 } from '@/hooks/useSupabaseData';
 import { useAuth } from '@/hooks/useAuth';
-import { Package, AlertTriangle, TrendingDown, Flame, Edit2, Check, X, Trash2, Factory, ChevronDown, Shield, MoreHorizontal, History, Settings2, Download, RefreshCw, Layers, PlusCircle, Search } from 'lucide-react';
+import { Package, AlertTriangle, TrendingDown, Flame, Edit2, Check, X, Trash2, Factory, ChevronDown, Shield, MoreHorizontal, History, Settings2, Download, RefreshCw, Layers, PlusCircle, Search, Plus } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
