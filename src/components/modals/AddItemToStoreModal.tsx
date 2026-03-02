@@ -11,9 +11,10 @@ interface AddItemToStoreModalProps {
   ingredients: Ingredient[];
   existingIngredientIds: string[];
   onAddItem: (ingredientId: string) => Promise<any>;
+  trigger?: React.ReactNode;
 }
 
-export function AddItemToStoreModal({ ingredients, existingIngredientIds, onAddItem }: AddItemToStoreModalProps) {
+export function AddItemToStoreModal({ ingredients, existingIngredientIds, onAddItem, trigger }: AddItemToStoreModalProps) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState('');
   const [adding, setAdding] = useState<string | null>(null);
@@ -33,10 +34,12 @@ export function AddItemToStoreModal({ ingredients, existingIngredientIds, onAddI
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button variant="outline" className="gap-2">
-          <Plus className="w-4 h-4" />
-          Adicionar Item à Loja
-        </Button>
+        {trigger || (
+          <Button variant="outline" className="gap-2">
+            <Plus className="w-4 h-4" />
+            Adicionar Item à Loja
+          </Button>
+        )}
       </DialogTrigger>
       <DialogContent className="max-w-md">
         <DialogHeader>
