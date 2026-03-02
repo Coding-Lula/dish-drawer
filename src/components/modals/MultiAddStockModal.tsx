@@ -11,9 +11,10 @@ import type { Ingredient } from '@/hooks/useSupabaseData';
 interface MultiAddStockModalProps {
   ingredients: Ingredient[];
   onSubmit: (items: { ingredientId: string; quantity: number; totalCost: number }[]) => Promise<any>;
+  trigger?: React.ReactNode;
 }
 
-export function MultiAddStockModal({ ingredients, onSubmit }: MultiAddStockModalProps) {
+export function MultiAddStockModal({ ingredients, onSubmit, trigger }: MultiAddStockModalProps) {
   const [open, setOpen] = useState(false);
   const [items, setItems] = useState([{ ingredientId: '', quantity: '', totalCost: '' }]);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -59,10 +60,12 @@ export function MultiAddStockModal({ ingredients, onSubmit }: MultiAddStockModal
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button className="gap-2">
-          <Plus className="w-4 h-4" />
-          Repor Stock
-        </Button>
+        {trigger || (
+          <Button className="gap-2">
+            <Plus className="w-4 h-4" />
+            Repor Stock
+          </Button>
+        )}
       </DialogTrigger>
       <DialogContent className="max-w-3xl">
         <DialogHeader>

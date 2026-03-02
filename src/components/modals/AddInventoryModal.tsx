@@ -8,6 +8,7 @@ import { Plus, Package } from 'lucide-react';
 
 interface AddInventoryModalProps {
   onSubmit: (ingredient: { name: string; unit: string; category: string; average_cost: number }) => Promise<any>;
+  trigger?: React.ReactNode;
 }
 
 const units = ['kg', 'grama', 'litros', 'units'];
@@ -46,10 +47,12 @@ export function AddInventoryModal({ onSubmit }: AddInventoryModalProps) {
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button variant="outline" className="gap-2">
-          <Plus className="w-4 h-4" />
-          Adicionar Item ao Inventário 
-        </Button>
+        {trigger || (
+          <Button variant="outline" className="gap-2">
+            <Plus className="w-4 h-4" />
+            Adicionar Item ao Inventário
+          </Button>
+        )}
       </DialogTrigger>
       <DialogContent>
         <DialogHeader>
