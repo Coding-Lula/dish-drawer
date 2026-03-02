@@ -29,9 +29,10 @@ interface BulkStockCorrectionModalProps {
   storeName: string;
   onAdjust: (stockId: string, newQuantity: number) => Promise<boolean>;
   onComplete: () => void;
+  trigger?: React.ReactNode;
 }
 
-export function BulkStockCorrectionModal({ stocks, ingredients, storeName, onAdjust, onComplete }: BulkStockCorrectionModalProps) {
+export function BulkStockCorrectionModal({ stocks, ingredients, storeName, onAdjust, onComplete, trigger }: BulkStockCorrectionModalProps) {
   const { toast } = useToast();
   const [open, setOpen] = useState(false);
   const [corrections, setCorrections] = useState<CorrectionRow[]>([]);
@@ -150,10 +151,12 @@ export function BulkStockCorrectionModal({ stocks, ingredients, storeName, onAdj
   return (
     <Dialog open={open} onOpenChange={(v) => { setOpen(v); if (!v) handleReset(); }}>
       <DialogTrigger asChild>
-        <Button variant="outline" className="gap-2">
-          <FileSpreadsheet className="w-4 h-4" />
-          Correcção em Massa
-        </Button>
+        {trigger || (
+          <Button variant="outline" className="gap-2">
+            <FileSpreadsheet className="w-4 h-4" />
+            Correcção em Massa
+          </Button>
+        )}
       </DialogTrigger>
       <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto">
         <DialogHeader>

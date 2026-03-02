@@ -47,12 +47,10 @@ export function AddInventoryModal({ onSubmit }: AddInventoryModalProps) {
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        {trigger || (
-          <Button variant="outline" className="gap-2">
-            <Plus className="w-4 h-4" />
-            Adicionar Item ao Inventário
-          </Button>
-        )}
+        <Button variant="outline" className="gap-2">
+          <Plus className="w-4 h-4" />
+          Adicionar Item ao Inventário
+        </Button>
       </DialogTrigger>
       <DialogContent>
         <DialogHeader>

@@ -14,6 +14,7 @@ interface TransferInventoryModalProps {
   currentStoreId: string;
   stocks: StoreStock[];
   onTransfer: (fromStoreId: string, toStoreId: string, items: { ingredientId: string; quantity: number }[], notes?: string) => Promise<any>;
+  trigger?: React.ReactNode;
 }
 
 export function TransferInventoryModal({ 
@@ -21,7 +22,8 @@ export function TransferInventoryModal({
   ingredients, 
   currentStoreId, 
   stocks,
-  onTransfer 
+  onTransfer,
+  trigger 
 }: TransferInventoryModalProps) {
   const [open, setOpen] = useState(false);
   const [fromStoreId, setFromStoreId] = useState(currentStoreId);
@@ -91,10 +93,12 @@ export function TransferInventoryModal({
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button variant="outline" className="gap-2">
-          <ArrowRightLeft className="w-4 h-4" />
-          Transferir Stock
-        </Button>
+        {trigger || (
+          <Button variant="outline" className="gap-2">
+            <ArrowRightLeft className="w-4 h-4" />
+            Transferir Stock
+          </Button>
+        )}
       </DialogTrigger>
       <DialogContent className="max-w-3xl">
         <DialogHeader>
