@@ -27,7 +27,6 @@ import {
 import { useAuth } from '@/hooks/useAuth';
 import { Package, AlertTriangle, TrendingDown, Flame, Edit2, Check, X, Trash2, Factory, ChevronDown, Shield, MoreHorizontal, History, Settings2, Download, RefreshCw, Layers, PlusCircle, Search, Plus } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -62,7 +61,6 @@ function InventoryContent() {
   const { ingredients, addIngredient, deleteIngredient, updateIngredient, loading: ingredientsLoading, refetch: refetchIngredients } = useIngredients();
   const { getLastUnitCost, loading: logsLoading } = useInventoryLogs(currentStore?.id || null);
   const { createTransfer } = useInventoryTransfers();
-  console.log('useInventoryTransfers hook:', { createTransfer: typeof createTransfer });
   const { subRecipes, refetch: refetchSubRecipes } = useSubRecipes();
   const { processBatch, refetch: refetchProduction } = useProductionLogs(currentStore?.id || null);
 
@@ -163,48 +161,26 @@ function InventoryContent() {
   };
 
   const handleTransfer = async (fromStoreId: string, toStoreId: string, items: { ingredientId: string; quantity: number }[], notes?: string) => {
-  console.log('=== TRANSFER DEBUG ===');
-  console.log('1. handleTransfer called with:', { fromStoreId, toStoreId, items, notes });
-  console.log('2. createTransfer function exists?', typeof createTransfer);
-  console.log('3. currentStore:', currentStore?.id, currentStore?.name);
-  
-  if (!createTransfer) {
-    console.error('ERROR: createTransfer is undefined!');
-    toast({ title: 'Transfer function not available', variant: 'destructive' });
-    return false;
-  }
-  
-  try {
-    console.log('4. Calling createTransfer...');
-    const result = await createTransfer(fromStoreId, toStoreId, items, notes);
-    console.log('5. Transfer result:', result);
-    
-    if (result) {
-      console.log('6. Transfer successful, refetching stocks...');
-      refetchStocks();
-    } else {
-      console.log('6. Transfer returned false/undefined');
+    if (!createTransfer) {
+      toast({ title: 'Transfer function not available', variant: 'destructive' });
+      return false;
     }
-    return result;
-  } catch (error) {
-    console.error('7. Transfer error details:');
-    console.error('Error message:', error.message);
-    console.error('Error stack:', error.stack);
-    console.error('Full error object:', error);
     
-    // Check for Supabase specific error
-    if (error.details) console.error('Supabase details:', error.details);
-    if (error.hint) console.error('Supabase hint:', error.hint);
-    if (error.code) console.error('Supabase error code:', error.code);
-    
-    toast({ 
-      title: 'Transfer failed', 
-      description: error.message || 'Unknown error occurred',
-      variant: 'destructive' 
-    });
-    return false;
-  }
-};
+    try {
+      const result = await createTransfer(fromStoreId, toStoreId, items, notes);
+      if (result) {
+        refetchStocks();
+      }
+      return result;
+    } catch (error) {
+      toast({
+        title: 'Transfer failed',
+        description: error.message || 'Unknown error occurred',
+        variant: 'destructive'
+      });
+      return false;
+    }
+  };
 
   const handleProcessBatch = async (subRecipeId: string, quantity: number) => {
     const result = await processBatch(subRecipeId, quantity, ingredients, stocks);
@@ -268,11 +244,6 @@ function InventoryContent() {
     refetchStocks();
   };
 
-  const handleDeleteIngredient = async (ingredientId: string) => {
-    await deleteIngredient(ingredientId);
-    refetchStocks();
-  };
-
   const handleEditThreshold = (stockId: string, currentValue: number) => {
     setEditingThreshold(stockId);
     setThresholdValue(currentValue.toString());
@@ -322,8 +293,17 @@ function InventoryContent() {
     <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <h1 className="text-3xl font-bold tracking-tight text-slate-900">Inventário</h1>
+        <div>
+          <h1 className="text-3xl font-bold text-foreground">Inventário</h1>
+          <p className="text-muted-foreground">
+            {currentStore?.name} • Nível de Stock
+            {isManager && (
+              <Badge variant="secondary" className="ml-2 gap-1">
+                <Shield className="w-3 h-3" />
+                Manager
+              </Badge>
+            )}
+          </p>
         </div>
 
         <div className="flex items-center gap-2">
@@ -455,267 +435,253 @@ function InventoryContent() {
         </div>
       </div>
 
-      {/* KPI Cards */}
+      {/* Summary Cards */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <Card className="border-none shadow-sm bg-white overflow-hidden group hover:shadow-md transition-shadow duration-300">
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1">Itens na Loja</p>
-                <p className="text-3xl font-bold text-slate-900">{inventoryItems.length}</p>
-              </div>
-              <div className="p-3 rounded-2xl bg-blue-50 group-hover:bg-blue-100 transition-colors duration-300">
-                <Package className="w-6 h-6 text-blue-500" />
-              </div>
+        <Card>
+          <CardContent className="p-4 flex items-center gap-4">
+            <div className="p-3 rounded-lg bg-primary/20">
+              <Package className="w-6 h-6 text-primary" />
+            </div>
+            <div>
+              <p className="text-sm text-muted-foreground">Itens na Loja</p>
+              <p className="text-2xl font-bold text-foreground">{inventoryItems.length}</p>
             </div>
           </CardContent>
         </Card>
-
-        <Card className="border-none shadow-sm bg-white overflow-hidden group hover:shadow-md transition-shadow duration-300">
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1">Stock Baixo</p>
-                <p className={cn("text-3xl font-bold", lowStockCount > 0 ? "text-rose-500" : "text-slate-900")}>
-                  {lowStockCount}
-                </p>
-              </div>
-              <div className={cn("p-3 rounded-2xl transition-colors duration-300", lowStockCount > 0 ? "bg-rose-50 group-hover:bg-rose-100" : "bg-slate-50 group-hover:bg-slate-100")}>
-                <AlertTriangle className={cn("w-6 h-6", lowStockCount > 0 ? "text-rose-500" : "text-slate-400")} />
-              </div>
+        <Card className={lowStockCount > 0 ? "border-destructive/50" : ""}>
+          <CardContent className="p-4 flex items-center gap-4">
+            <div className={cn("p-3 rounded-lg", lowStockCount > 0 ? "bg-destructive/20" : "bg-primary/20")}>
+              <AlertTriangle className={cn("w-6 h-6", lowStockCount > 0 ? "text-destructive" : "text-primary")} />
+            </div>
+            <div>
+              <p className="text-sm text-muted-foreground">Itens com Stock Baixo</p>
+              <p className={cn("text-2xl font-bold", lowStockCount > 0 ? "text-destructive" : "text-foreground")}>{lowStockCount}</p>
             </div>
           </CardContent>
         </Card>
-
-        <Card className="border-none shadow-sm bg-white overflow-hidden group hover:shadow-md transition-shadow duration-300">
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1">Restock</p>
-                <p className="text-3xl font-bold text-slate-900">
-                  {inventoryItems.filter(s => s.amountToBuy > 0).length}
-                </p>
-              </div>
-              <div className="p-3 rounded-2xl bg-amber-50 group-hover:bg-amber-100 transition-colors duration-300">
-                <TrendingDown className="w-6 h-6 text-amber-500" />
-              </div>
+        <Card>
+          <CardContent className="p-4 flex items-center gap-4">
+            <div className="p-3 rounded-lg bg-amber-500/20">
+              <TrendingDown className="w-6 h-6 text-amber-600" />
+            </div>
+            <div>
+              <p className="text-sm text-muted-foreground">Itens para Restock</p>
+              <p className="text-2xl font-bold text-foreground">{inventoryItems.filter(s => s.amountToBuy > 0).length}</p>
             </div>
           </CardContent>
         </Card>
-
-        <Card className="border-none shadow-sm bg-white overflow-hidden group hover:shadow-md transition-shadow duration-300">
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1">Processados</p>
-                <p className="text-3xl font-bold text-slate-900">{processedCount}</p>
-              </div>
-              <div className="p-3 rounded-2xl bg-purple-50 group-hover:bg-purple-100 transition-colors duration-300">
-                <Factory className="w-6 h-6 text-purple-500" />
-              </div>
+        <Card>
+          <CardContent className="p-4 flex items-center gap-4">
+            <div className="p-3 rounded-lg bg-primary/20">
+              <Factory className="w-6 h-6 text-primary" />
+            </div>
+            <div>
+              <p className="text-sm text-muted-foreground">Processados</p>
+              <p className="text-2xl font-bold text-foreground">{processedCount}</p>
             </div>
           </CardContent>
         </Card>
       </div>
 
-      {/* Filter and Search */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <Tabs value={filter} onValueChange={(v) => setFilter(v as any)} className="w-fit">
-          <TabsList className="bg-slate-100 p-1 h-11 rounded-lg">
-            <TabsTrigger value="all" className="rounded-md px-6 data-[state=active]:bg-white data-[state=active]:shadow-sm">
-              Todos ({inventoryItems.length})
-            </TabsTrigger>
-            <TabsTrigger value="low" className="rounded-md px-6 data-[state=active]:bg-white data-[state=active]:shadow-sm">
-              Em Falta ({lowStockCount})
-            </TabsTrigger>
-            <TabsTrigger value="ok" className="rounded-md px-6 data-[state=active]:bg-white data-[state=active]:shadow-sm">
-              OK ({inventoryItems.length - lowStockCount - processedCount})
-            </TabsTrigger>
-            <TabsTrigger value="processed" className="rounded-md px-6 data-[state=active]:bg-white data-[state=active]:shadow-sm">
-              Processados ({processedCount})
-            </TabsTrigger>
-          </TabsList>
-        </Tabs>
-
-        <div className="relative w-full md:w-80">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-          <Input
-            placeholder="Pesquisar itens..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="pl-10 h-11 bg-slate-100 border-none rounded-lg focus-visible:ring-1 focus-visible:ring-slate-200"
-          />
-        </div>
+      {/* Filter Buttons */}
+      <div className="flex gap-2 flex-wrap">
+        <Button variant={filter === 'all' ? "default" : "outline"} size="sm" onClick={() => setFilter('all')}>
+          Todos Itens ({inventoryItems.length})
+        </Button>
+        <Button
+          variant={filter === 'low' ? "default" : "outline"} size="sm" onClick={() => setFilter('low')}
+          className={filter === 'low' ? "bg-destructive hover:bg-destructive/90" : ""}
+        >
+          Stock Baixo ({lowStockCount})
+        </Button>
+        <Button variant={filter === 'ok' ? "default" : "outline"} size="sm" onClick={() => setFilter('ok')}>
+          OK ({inventoryItems.length - lowStockCount - processedCount})
+        </Button>
+        <Button variant={filter === 'processed' ? "default" : "outline"} size="sm" onClick={() => setFilter('processed')}>
+          <Factory className="w-3 h-3 mr-1" /> Processados ({processedCount})
+        </Button>
       </div>
+
+      {/* Search Bar */}
+      <Input
+        placeholder="Pesquisar item..."
+        value={searchTerm}
+        onChange={(e) => setSearchTerm(e.target.value)}
+        className="mb-4 max-w-sm"
+      />
+
       {/* Stock List */}
-      <div className="grid gap-4">
+      <div className="grid gap-3">
         {filteredItems.length === 0 ? (
-          <Card className="border-none shadow-sm bg-slate-50">
-            <CardContent className="py-20 text-center text-slate-400">
-              <Package className="w-16 h-16 mx-auto mb-4 opacity-20" />
-              <p className="text-lg font-medium">Nenhum item encontrado.</p>
-              <p className="text-sm">Adicione ingredientes para começar a gerir o seu stock.</p>
+          <Card>
+            <CardContent className="py-12 text-center text-muted-foreground">
+              <Package className="w-12 h-12 mx-auto mb-3 opacity-30" />
+              <p>Nenhum item de inventário encontrado. Adicione ingredientes para começar.</p>
             </CardContent>
           </Card>
         ) : (
           filteredItems.map(item => (
-            <Card key={item.id} className={cn("border-none shadow-sm bg-white hover:shadow-md transition-all duration-300 rounded-lg overflow-hidden", item.isLow && "ring-1 ring-rose-100")}>
-              <CardContent className="p-6">
-                <div className="flex flex-col md:flex-row md:items-center gap-6">
-                  <div className="flex-1 min-w-0 space-y-4">
-                    <div className="flex items-start justify-between">
-                      <div className="space-y-1">
-                        <div className="flex items-center gap-2">
-                          <h3 className="text-lg font-bold text-slate-900 tracking-tight">{item.ingredient?.name}</h3>
-                          {item.ingredient?.is_processed && (
-                            <Badge className="bg-purple-50 text-purple-600 border-none px-2 py-0.5 text-[10px] uppercase font-bold tracking-tight">
-                              Processado
-                            </Badge>
-                          )}
-                          {item.isLow && (
-                            <Badge className="bg-rose-50 text-rose-600 border-none px-2 py-0.5 text-[10px] uppercase font-bold tracking-tight flex items-center gap-1">
-                              <Flame className="w-2.5 h-2.5" /> Stock Baixo
-                            </Badge>
-                          )}
-                        </div>
-                        <p className="text-sm text-slate-500 font-medium">{item.ingredient?.category}</p>
-                      </div>
-
-                      {/* Delete Button - Manager Only */}
-                      {isManager && (
-                        <AlertDialog>
-                          <AlertDialogTrigger asChild>
-                            <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-300 hover:text-rose-500 hover:bg-rose-50 rounded-lg transition-colors">
-                              <Trash2 className="w-4 h-4" />
-                            </Button>
-                          </AlertDialogTrigger>
-                          <AlertDialogContent className="rounded-2xl border-none">
-                            <AlertDialogHeader>
-                              <AlertDialogTitle className="text-xl font-bold text-slate-900">Eliminar Item</AlertDialogTitle>
-                              <AlertDialogDescription className="text-slate-500">
-                                Tem certeza que deseja eliminar "{item.ingredient?.name}"? Esta ação não pode ser desfeita e irá remover todo o histórico de stock associado.
-                              </AlertDialogDescription>
-                            </AlertDialogHeader>
-                            <AlertDialogFooter>
-                              <AlertDialogCancel className="rounded-xl border-slate-200">Cancelar</AlertDialogCancel>
-                             <AlertDialogAction onClick={() => handleDeleteFromStore(item.id)} className="bg-rose-500 hover:bg-rose-600 text-white rounded-xl border-none">
-                              Eliminar
-                            </AlertDialogAction>
-                            </AlertDialogFooter>
-                          </AlertDialogContent>
-                        </AlertDialog>
+            <Card key={item.id} className={cn("transition-all", item.isLow && "border-destructive/50 bg-destructive/5")}>
+              <CardContent className="p-4">
+                <div className="flex items-center gap-4">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-1 flex-wrap">
+                      <h3 className="font-semibold text-foreground">{item.ingredient?.name}</h3>
+                      <Badge variant="outline" className="text-xs">{item.ingredient?.category}</Badge>
+                      {item.ingredient?.is_processed && (
+                        <Badge className="gap-1 bg-primary/20 text-primary border-primary/30">
+                          <Factory className="w-3 h-3" />Processado
+                        </Badge>
+                      )}
+                      {item.isLow && (
+                        <Badge variant="destructive" className="gap-1"><Flame className="w-3 h-3" />Stock Baixo</Badge>
                       )}
                     </div>
-
-                    {/* Progress and Toggle Section */}
-                    <div className="space-y-3">
-                      <div className="flex items-center gap-4">
-                        <div className="flex-1">
-                          <div className="flex justify-between text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1.5">
-                            <span>Nível de Stock</span>
-                            <span>{Math.round(item.percentageOfTarget)}%</span>
-                          </div>
-                          <Progress value={Math.min(100, item.percentageOfTarget)} className={cn("h-2 rounded-full bg-slate-100", item.isLow ? "[&>div]:bg-rose-500" : "[&>div]:bg-emerald-500")} />
+                    {/* Toggle for Processed Ingredient - Manager Only */}
+                    {isManager && (
+                      <div className="flex items-center gap-4 mt-1 mb-2">
+                        <div className="flex items-center gap-2">
+                          <Switch
+                            id={`processed-${item.id}`}
+                            checked={item.ingredient?.is_processed || false}
+                            onCheckedChange={(checked) => handleToggleProcessed(item.ingredient_id, checked)}
+                          />
+                          <Label htmlFor={`processed-${item.id}`} className="text-xs text-muted-foreground cursor-pointer">
+                            Ingrediente Processado
+                          </Label>
                         </div>
-                        {isManager && (
-                          <div className="flex flex-col items-center gap-1.5 pt-4">
-                            <Switch
-                              id={`processed-${item.id}`}
-                              checked={item.ingredient?.is_processed || false}
-                              onCheckedChange={(checked) => handleToggleProcessed(item.ingredient_id, checked)}
-                              className="data-[state=checked]:bg-purple-500"
-                            />
-                            <Label htmlFor={`processed-${item.id}`} className="text-[10px] font-bold text-slate-400 uppercase cursor-pointer">
-                              Processado
-                            </Label>
-                          </div>
-                        )}
                       </div>
+                    )}
+                    <div className="flex items-center gap-3">
+                      <Progress value={Math.min(100, item.percentageOfTarget)} className={cn("h-2 flex-1", item.isLow && "[&>div]:bg-destructive")} />
+                      <span className="text-sm text-muted-foreground w-12 text-right">{Math.round(item.percentageOfTarget)}%</span>
                     </div>
                   </div>
 
-                  {/* Stock Metrics Grid */}
-                  <div className="grid grid-cols-2 md:grid-cols-1 gap-x-8 gap-y-4 md:w-48 md:border-l border-slate-100 md:pl-8">
-                    <div className="space-y-1">
-                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Atual</p>
-                      <div className="flex items-baseline gap-1">
-                        <span className={cn("text-2xl font-black tracking-tight", item.isLow ? "text-rose-500" : "text-slate-900")}>
-                          {item.current_quantity}
-                        </span>
-                        <span className="text-xs font-bold text-slate-400 uppercase">{item.ingredient?.unit}</span>
-                      </div>
+                  {/* Stock Numbers */}
+                  <div className="text-right space-y-2">
+                    <div className="flex items-baseline gap-1 justify-end">
+                      <span className={cn("text-2xl font-bold", item.isLow ? "text-destructive" : "text-foreground")}>{item.current_quantity}</span>
+                      <span className="text-sm text-muted-foreground">
+                        / {item.target_stock} {item.ingredient?.unit}
+                      </span>
                     </div>
 
-                    <div className="space-y-1">
-                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Meta / Mín</p>
-                      <div className="flex items-center gap-2 group/metrics">
-                        {isManager ? (
+                    {/* Target Stock Editing - Manager Only */}
+                    {item.hasStock && isManager && (
+                      <div className="flex items-center gap-1 justify-end">
+                        <span className="text-xs text-muted-foreground">Meta:</span>
+                        {editingTarget === item.id ? (
                           <div className="flex items-center gap-1">
-                            {editingTarget === item.id ? (
-                              <div className="flex items-center gap-1 bg-slate-50 p-1 rounded-lg">
-                                <Input
-                                  type="number"
-                                  value={targetValue}
-                                  onChange={(e) => setTargetValue(e.target.value)}
-                                  className="w-14 h-7 text-xs font-bold border-none bg-transparent p-0 focus-visible:ring-0"
-                                  min="0"
-                                  step="0.1"
-                                  autoFocus
-                                />
-                                <button onClick={() => handleSaveTarget(item.id)} className="text-emerald-500"><Check className="w-3.5 h-3.5" /></button>
-                              </div>
-                            ) : (
-                              <button onClick={() => handleEditTarget(item.id, item.target_stock)} className="text-sm font-bold text-slate-700 hover:text-blue-600 transition-colors">
-                                {item.target_stock}
-                              </button>
-                            )}
-                            <span className="text-slate-300 text-xs">/</span>
-                            {editingThreshold === item.id ? (
-                              <div className="flex items-center gap-1 bg-slate-50 p-1 rounded-lg">
-                                <Input
-                                  type="number"
-                                  value={thresholdValue}
-                                  onChange={(e) => setThresholdValue(e.target.value)}
-                                  className="w-14 h-7 text-xs font-bold border-none bg-transparent p-0 focus-visible:ring-0"
-                                  min="0"
-                                  step="0.1"
-                                  autoFocus
-                                />
-                                <button onClick={() => handleSaveThreshold(item.id)} className="text-emerald-500"><Check className="w-3.5 h-3.5" /></button>
-                              </div>
-                            ) : (
-                              <button onClick={() => handleEditThreshold(item.id, item.min_threshold)} className="text-sm font-bold text-slate-700 hover:text-rose-600 transition-colors">
-                                {item.min_threshold}
-                              </button>
-                            )}
+                            <Input
+                              type="number"
+                              value={targetValue}
+                              onChange={(e) => setTargetValue(e.target.value)}
+                              className="w-16 h-6 text-xs p-1"
+                              min="0"
+                              step="0.1"
+                            />
+                            <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => handleSaveTarget(item.id)}>
+                              <Check className="w-3 h-3 text-primary" />
+                            </Button>
+                            <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => setEditingTarget(null)}>
+                              <X className="w-3 h-3 text-destructive" />
+                            </Button>
                           </div>
                         ) : (
-                          <div className="text-sm font-bold text-slate-700">
-                            {item.target_stock} / {item.min_threshold}
-                          </div>
+                          <button
+                            onClick={() => handleEditTarget(item.id, item.target_stock)}
+                            className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
+                          >
+                            {item.target_stock} {item.ingredient?.unit}
+                            <Edit2 className="w-3 h-3" />
+                          </button>
                         )}
                       </div>
-                    </div>
+                    )}
 
-                    <div className="col-span-2 md:col-span-1 border-t border-slate-50 pt-3 md:pt-0 md:border-none">
-                      <div className="flex flex-wrap gap-x-4 gap-y-1">
-                        <div className="flex items-center gap-1">
-                          <span className="text-[10px] font-bold text-slate-400 uppercase">Custo:</span>
-                          <span className="text-xs font-bold text-slate-700">
-                            {item.lastUnitCost ? `${item.lastUnitCost.toFixed(0)} MT` : '--'}
-                          </span>
-                        </div>
-                        {item.amountToBuy > 0 && (
+                    {/* Min Threshold Editing - Manager Only */}
+                    {item.hasStock && isManager && (
+                      <div className="flex items-center gap-1 justify-end">
+                        <span className="text-xs text-muted-foreground">Mín:</span>
+                        {editingThreshold === item.id ? (
                           <div className="flex items-center gap-1">
-                            <span className="text-[10px] font-bold text-amber-500 uppercase">Falta:</span>
-                            <span className="text-xs font-bold text-amber-600">
-                              +{item.amountToBuy} {item.ingredient?.unit}
-                            </span>
+                            <Input
+                              type="number"
+                              value={thresholdValue}
+                              onChange={(e) => setThresholdValue(e.target.value)}
+                              className="w-16 h-6 text-xs p-1"
+                              min="0"
+                              step="0.1"
+                            />
+                            <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => handleSaveThreshold(item.id)}>
+                              <Check className="w-3 h-3 text-primary" />
+                            </Button>
+                            <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => setEditingThreshold(null)}>
+                              <X className="w-3 h-3 text-destructive" />
+                            </Button>
                           </div>
+                        ) : (
+                          <button
+                            onClick={() => handleEditThreshold(item.id, item.min_threshold)}
+                            className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
+                          >
+                            {item.min_threshold} {item.ingredient?.unit}
+                            <Edit2 className="w-3 h-3" />
+                          </button>
                         )}
                       </div>
-                    </div>
+                    )}
+
+                    {/* Show read-only values for Cashiers */}
+                    {item.hasStock && !isManager && (
+                      <>
+                        <div className="flex items-center gap-1 justify-end">
+                          <span className="text-xs text-muted-foreground">Meta:</span>
+                          <span className="text-xs text-foreground">{item.target_stock} {item.ingredient?.unit}</span>
+                        </div>
+                        <div className="flex items-center gap-1 justify-end">
+                          <span className="text-xs text-muted-foreground">Mín:</span>
+                          <span className="text-xs text-foreground">{item.min_threshold} {item.ingredient?.unit}</span>
+                        </div>
+                      </>
+                    )}
+
+                    {item.amountToBuy > 0 && (
+                      <p className="text-xs font-medium text-amber-600">
+                        Necessário: +{item.amountToBuy} {item.ingredient?.unit}
+                        {item.estimatedCost && <span className="ml-1">(~{item.estimatedCost.toFixed(0)} MT)</span>}
+                      </p>
+                    )}
+                    <p className="text-xs text-muted-foreground">
+                      Último Custo: {item.lastUnitCost ? `${item.lastUnitCost.toFixed(2)} MT/${item.ingredient?.unit}` : 'N/A'}
+                    </p>
                   </div>
+
+                  {/* Delete Button - Manager Only */}
+                  {isManager && (
+                    <AlertDialog>
+                      <AlertDialogTrigger asChild>
+                        <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-destructive">
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
+                      </AlertDialogTrigger>
+                      <AlertDialogContent>
+                        <AlertDialogHeader>
+                          <AlertDialogTitle>Eliminar Item</AlertDialogTitle>
+                          <AlertDialogDescription>
+                            Tem certeza que deseja eliminar "{item.ingredient?.name}"? Esta ação não pode ser desfeita e irá remover todo o histórico de stock associado.
+                          </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                          <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                         <AlertDialogAction onClick={() => handleDeleteFromStore(item.id)} className="bg-destructive hover:bg-destructive/90">
+                          Eliminar
+                        </AlertDialogAction>
+                        </AlertDialogFooter>
+                      </AlertDialogContent>
+                    </AlertDialog>
+                  )}
                 </div>
               </CardContent>
             </Card>
