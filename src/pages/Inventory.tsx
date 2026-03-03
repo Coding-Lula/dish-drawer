@@ -312,7 +312,7 @@ function InventoryContent() {
             ingredients={ingredients.filter(i => existingIngredientIds.includes(i.id))}
             onSubmit={handleAddMultipleStock}
             trigger={
-              <Button className="bg-emerald-600 hover:bg-emerald-700 text-white font-medium px-5 h-10 rounded-lg transition-all shadow-sm gap-2">
+              <Button className="font-medium px-5 h-10 rounded-lg transition-all shadow-sm gap-2">
                 <Plus className="w-4 h-4" />
                 Repor Stock
               </Button>
@@ -327,22 +327,22 @@ function InventoryContent() {
                 existingIngredientIds={existingIngredientIds}
                 onAddItem={addItemToStore}
                 trigger={
-                  <Button variant="outline" className="rounded-r-none border-r-0 h-10 px-4 font-medium text-slate-700 border-slate-200 hover:bg-slate-50">
+                  <Button variant="outline" className="rounded-r-none border-r-0 h-10 px-4 font-medium">
                     Novo Item
                   </Button>
                 }
               />
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button variant="outline" className="rounded-l-none h-10 px-2 border-slate-200 hover:bg-slate-50">
-                    <ChevronDown className="w-4 h-4 text-slate-500" />
+                  <Button variant="outline" className="rounded-l-none h-10 px-2">
+                    <ChevronDown className="w-4 h-4 text-muted-foreground" />
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-48">
                   <AddInventoryModal
                     onSubmit={handleAddIngredient}
                     trigger={
-                      <button className="w-full text-left px-2 py-1.5 text-sm hover:bg-slate-100 rounded-sm flex items-center gap-2">
+                      <button className="w-full text-left px-2 py-1.5 text-sm hover:bg-accent rounded-sm flex items-center gap-2">
                         <PlusCircle className="w-4 h-4" /> Criar Novo Ingrediente
                       </button>
                     }
@@ -355,7 +355,7 @@ function InventoryContent() {
           {/* More Actions Utility Menu */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon" className="h-10 w-10 text-slate-500 hover:bg-slate-100 rounded-lg">
+              <Button variant="ghost" size="icon" className="h-10 w-10 text-muted-foreground rounded-lg">
                 <MoreHorizontal className="w-5 h-5" />
               </Button>
             </DropdownMenuTrigger>
@@ -378,7 +378,7 @@ function InventoryContent() {
                       trigger={<button className="w-full text-left px-2 py-1.5 text-sm flex items-center gap-2"><TrendingDown className="w-4 h-4" /> Reportar Perda</button>}
                     />
                   </DropdownMenuItem>
-                  <div className="h-px bg-slate-100 my-1" />
+                  <div className="h-px bg-border my-1" />
                   {stores.length > 1 && (
                     <DropdownMenuItem asChild>
                       <TransferInventoryModal
@@ -421,7 +421,7 @@ function InventoryContent() {
                       trigger={<button className="w-full text-left px-2 py-1.5 text-sm flex items-center gap-2"><History className="w-4 h-4" /> Correção em Massa</button>}
                     />
                   </DropdownMenuItem>
-                  <div className="h-px bg-slate-100 my-1" />
+                  <div className="h-px bg-border my-1" />
                 </>
               )}
               <DropdownMenuItem onClick={() => handleDownloadList('entire')} className="gap-2">
@@ -461,8 +461,8 @@ function InventoryContent() {
         </Card>
         <Card>
           <CardContent className="p-4 flex items-center gap-4">
-            <div className="p-3 rounded-lg bg-amber-500/20">
-              <TrendingDown className="w-6 h-6 text-amber-600" />
+            <div className="p-3 rounded-lg bg-orange-500/20">
+              <TrendingDown className="w-6 h-6 text-orange-600" />
             </div>
             <div>
               <p className="text-sm text-muted-foreground">Itens para Restock</p>
@@ -648,7 +648,7 @@ function InventoryContent() {
                     )}
 
                     {item.amountToBuy > 0 && (
-                      <p className="text-xs font-medium text-amber-600">
+                      <p className="text-xs font-medium text-orange-600">
                         Necessário: +{item.amountToBuy} {item.ingredient?.unit}
                         {item.estimatedCost && <span className="ml-1">(~{item.estimatedCost.toFixed(0)} MT)</span>}
                       </p>
