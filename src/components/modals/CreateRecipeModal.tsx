@@ -1,11 +1,10 @@
 import { useState } from 'react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Checkbox } from '@/components/ui/checkbox';
-import { Plus, Package, Trash2, UtensilsCrossed, Check } from 'lucide-react';
+import { Package, Trash2, UtensilsCrossed, Check } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { Ingredient, Dish } from '@/hooks/useSupabaseData';
 
@@ -19,10 +18,11 @@ interface CreateRecipeModalProps {
   ingredients: Ingredient[];
   existingRecipes: { ingredient_id: string; quantity_required: number }[];
   onSave: (recipes: { ingredient_id: string; quantity_required: number }[]) => Promise<void>;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
 }
 
-export function CreateRecipeModal({ dish, ingredients, existingRecipes, onSave }: CreateRecipeModalProps) {
-  const [open, setOpen] = useState(false);
+export function CreateRecipeModal({ dish, ingredients, existingRecipes, onSave, open, onOpenChange }: CreateRecipeModalProps) {
   const [selectedIngredients, setSelectedIngredients] = useState<SelectedIngredient[]>(() => 
     existingRecipes.map(r => {
       const ingredient = ingredients.find(i => i.id === r.ingredient_id);
@@ -31,7 +31,7 @@ export function CreateRecipeModal({ dish, ingredients, existingRecipes, onSave }
   );
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const FIXED_PRODUCTION_COST = 20;
+  const FIXED_PRODUCTION_COST = dish.cost_of_production ?? 20;
 
   const toggleIngredient = (ingredient: Ingredient) => {
     setSelectedIngredients(prev => {
@@ -66,17 +66,11 @@ export function CreateRecipeModal({ dish, ingredients, existingRecipes, onSave }
       }))
     );
     setIsSubmitting(false);
-    setOpen(false);
+    onOpenChange(false);
   };
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <Button variant="outline" size="sm" className="gap-2">
-          <Plus className="w-4 h-4" />
-          Edit Recipe
-        </Button>
-      </DialogTrigger>
+    <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-hidden flex flex-col">
         <DialogHeader className="pb-4 border-b">
           <DialogTitle className="flex items-center gap-2 text-xl font-bold tracking-tight text-slate-900">
@@ -205,7 +199,7 @@ export function CreateRecipeModal({ dish, ingredients, existingRecipes, onSave }
         </div>
 
         <div className="flex justify-end gap-3 pt-4 border-t">
-          <Button variant="ghost" onClick={() => setOpen(false)} className="rounded-lg font-bold text-slate-500 hover:bg-slate-100">
+          <Button variant="ghost" onClick={() => onOpenChange(false)} className="rounded-lg font-bold text-slate-500 hover:bg-slate-100">
             Cancelar
           </Button>
           <Button onClick={handleSave} disabled={isSubmitting} className="bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-lg px-8 shadow-sm transition-all">

@@ -785,15 +785,37 @@ export function useDishes() {
       return null;
     }
     setDishes(prev => [...prev, data]);
-    toast({ title: 'Dish added successfully' });
+    toast({ title: 'Item criado com sucesso' });
     return data;
+  };
+
+  const updateDish = async (id: string, updates: Partial<Dish>) => {
+    const { data, error } = await supabase.from('dishes').update(updates).eq('id', id).select().single();
+    if (error) {
+      toast({ title: 'Erro ao atualizar prato', description: error.message, variant: 'destructive' });
+      return null;
+    }
+    setDishes(prev => prev.map(d => d.id === id ? data : d));
+    toast({ title: 'Prato atualizado com sucesso' });
+    return data;
+  };
+
+  const deleteDish = async (id: string) => {
+    const { error } = await supabase.from('dishes').delete().eq('id', id);
+    if (error) {
+      toast({ title: 'Erro ao eliminar prato', description: error.message, variant: 'destructive' });
+      return false;
+    }
+    setDishes(prev => prev.filter(d => d.id !== id));
+    toast({ title: 'Prato eliminado com sucesso' });
+    return true;
   };
 
   useEffect(() => {
     fetchDishes();
   }, [fetchDishes]);
 
-  return { dishes, loading, addDish, refetch: fetchDishes };
+  return { dishes, loading, addDish, updateDish, deleteDish, refetch: fetchDishes };
 }
 
 export function useRecipes() {
