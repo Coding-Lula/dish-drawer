@@ -474,11 +474,17 @@ function POSPage({ currentStore }: { currentStore: any }) {
     
     const billTotal = bill.items.reduce((sum, item) => sum + (Number(item.unitPrice) * item.quantity), 0);
 
+    // Aggregate deductions to avoid stale-state overwrites
+    const billDeductionMap = new Map<string, number>();
     for (const cartItem of bill.items) {
       const dishRecipes = recipes.filter(r => r.dish_id === cartItem.dish.id);
       for (const recipe of dishRecipes) {
-        await deductStock(recipe.ingredient_id, Number(recipe.quantity_required) * cartItem.quantity);
+        const key = recipe.ingredient_id;
+        billDeductionMap.set(key, (billDeductionMap.get(key) || 0) + Number(recipe.quantity_required) * cartItem.quantity);
       }
+    }
+    for (const [ingredientId, totalAmount] of billDeductionMap) {
+      await deductStock(ingredientId, totalAmount);
     }
 
     const transaction = await addTransaction(
