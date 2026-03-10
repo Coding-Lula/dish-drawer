@@ -1,58 +1,59 @@
-import { useState } from 'react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { useState, useEffect } from 'react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Plus, UtensilsCrossed } from 'lucide-react';
+import { UtensilsCrossed } from 'lucide-react';
+import type { Dish } from '@/hooks/useSupabaseData';
 
-interface AddDishModalProps {
+interface EditDishModalProps {
+  dish: Dish;
   categories: string[];
-  onSubmit: (dish: { name: string; category: string; selling_price: number; cost_of_production: number }) => Promise<any>;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  onSubmit: (id: string, updates: Partial<Dish>) => Promise<any>;
 }
 
-export function AddDishModal({ categories, onSubmit }: AddDishModalProps) {
-  const [open, setOpen] = useState(false);
-  const [name, setName] = useState('');
-  const [category, setCategory] = useState(categories[0] || 'Main');
-  const [sellingPrice, setSellingPrice] = useState('');
-  const [costOfProduction, setCostOfProduction] = useState('20');
+export function EditDishModal({ dish, categories, open, onOpenChange, onSubmit }: EditDishModalProps) {
+  const [name, setName] = useState(dish.name);
+  const [category, setCategory] = useState(dish.category || '');
+  const [sellingPrice, setSellingPrice] = useState(dish.selling_price.toString());
+  const [costOfProduction, setCostOfProduction] = useState(dish.cost_of_production.toString());
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  useEffect(() => {
+    setName(dish.name);
+    setCategory(dish.category || '');
+    setSellingPrice(dish.selling_price.toString());
+    setCostOfProduction(dish.cost_of_production.toString());
+  }, [dish]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim() || !sellingPrice) return;
-    
+
     setIsSubmitting(true);
-    const result = await onSubmit({
+    const result = await onSubmit(dish.id, {
       name,
       category,
       selling_price: parseFloat(sellingPrice),
       cost_of_production: costOfProduction === '' ? 20 : parseFloat(costOfProduction)
     });
     setIsSubmitting(false);
-    
+
     if (result) {
-      setName('');
-      setSellingPrice('');
-      setCostOfProduction('20');
-      setOpen(false);
+      onOpenChange(false);
     }
   };
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <Button className="gap-2">
-          <Plus className="w-4 h-4" />
-          Criar Prato
-        </Button>
-      </DialogTrigger>
+    <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <UtensilsCrossed className="w-5 h-5" />
-            Adicionar Novo Item de Menu
+            Editar Prato
           </DialogTitle>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
@@ -108,15 +109,15 @@ export function AddDishModal({ categories, onSubmit }: AddDishModalProps) {
               placeholder=""
             />
             <p className="text-xs text-muted-foreground">
-              Virtual cost added to every dish (default: 20 MT)
+              Custo virtual adicionado a cada prato (padrão: 20 MT)
             </p>
           </div>
           <div className="flex justify-end gap-2">
-            <Button type="button" variant="outline" onClick={() => setOpen(false)}>
+            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
               Cancelar
             </Button>
             <Button type="submit" disabled={isSubmitting || !name.trim() || !sellingPrice}>
-              {isSubmitting ? 'A criar...' : 'Criar Prato'}
+              {isSubmitting ? 'A guardar...' : 'Guardar Alterações'}
             </Button>
           </div>
         </form>
