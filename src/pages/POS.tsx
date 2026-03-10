@@ -392,23 +392,28 @@ function POSPage({ currentStore }: { currentStore: any }) {
     
     setIsProcessing(true);
 
-    // Process stock deductions
+    // Aggregate all ingredient deductions first to avoid stale-state overwrites
+    const deductionMap = new Map<string, number>();
     for (const cartItem of currentCart) {
       if (cartItem.isBundle && cartItem.selectedDishIds) {
-        // For bundles: deduct ingredients for each selected dish
         for (const dishId of cartItem.selectedDishIds) {
           const dishRecipes = recipes.filter(r => r.dish_id === dishId);
           for (const recipe of dishRecipes) {
-            await deductStock(recipe.ingredient_id, Number(recipe.quantity_required) * cartItem.quantity);
+            const key = recipe.ingredient_id;
+            deductionMap.set(key, (deductionMap.get(key) || 0) + Number(recipe.quantity_required) * cartItem.quantity);
           }
         }
       } else {
-        // Regular dish
         const dishRecipes = recipes.filter(r => r.dish_id === cartItem.dish.id);
         for (const recipe of dishRecipes) {
-          await deductStock(recipe.ingredient_id, Number(recipe.quantity_required) * cartItem.quantity);
+          const key = recipe.ingredient_id;
+          deductionMap.set(key, (deductionMap.get(key) || 0) + Number(recipe.quantity_required) * cartItem.quantity);
         }
       }
+    }
+    // Apply aggregated deductions
+    for (const [ingredientId, totalAmount] of deductionMap) {
+      await deductStock(ingredientId, totalAmount);
     }
 
     const transaction = await addTransaction(
