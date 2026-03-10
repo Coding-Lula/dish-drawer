@@ -564,19 +564,19 @@ if (ingredientCostUpdates.length > 0) {
   };
 
   const deductStock = async (ingredientId: string, amount: number) => {
-    const stock = stocks.find(s => s.ingredient_id === ingredientId);
-    if (!stock) return false;
+    if (!storeId) return false;
     
-    const newQuantity = Math.max(0, stock.current_quantity - amount);
-    const { error } = await supabase
-      .from('store_stock')
-      .update({ current_quantity: newQuantity })
-      .eq('id', stock.id);
+    const { data: newQty, error } = await supabase
+      .rpc('deduct_stock', {
+        p_store_id: storeId,
+        p_ingredient_id: ingredientId,
+        p_amount: amount
+      });
     
-    if (error) return false;
+    if (error || newQty === -1) return false;
     
     setStocks(prev => prev.map(s => 
-      s.id === stock.id ? { ...s, current_quantity: newQuantity } : s
+      s.ingredient_id === ingredientId ? { ...s, current_quantity: newQty } : s
     ));
     
     return true;

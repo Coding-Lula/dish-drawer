@@ -1496,6 +1496,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      deduct_stock: {
+        Args: { p_amount: number; p_ingredient_id: string; p_store_id: string }
+        Returns: number
+      }
       get_user_role: {
         Args: { _user_id: string }
         Returns: Database["public"]["Enums"]["app_role"]
