@@ -877,27 +877,38 @@ export function useRestaurantTables(storeId: string | null) {
   return { tables, loading, refetch: fetchTables };
 }
 
-export function useTransactions(storeId: string | null) {
+export function useTransactions(storeId: string | null, startDate?: string, endDate?: string) {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(true);
   const { toast } = useToast();
 
   const fetchTransactions = useCallback(async () => {
-    if (!storeId) return;
-    const today = new Date().toISOString().split('T')[0];
-    const { data, error } = await supabase
-      .from('transactions')
-      .select('*')
-      .eq('store_id', storeId)
-      .gte('date', today)
-      .order('date', { ascending: false });
+    let query = supabase.from('transactions').select('*');
+
+    if (storeId) {
+      query = query.eq('store_id', storeId);
+    }
+
+    if (startDate) {
+      query = query.gte('date', startDate);
+    } else {
+      const today = new Date().toISOString().split('T')[0];
+      query = query.gte('date', today);
+    }
+
+    if (endDate) {
+      query = query.lte('date', endDate);
+    }
+
+    const { data, error } = await query.order('date', { ascending: false });
+
     if (error) {
       toast({ title: 'Error fetching transactions', description: error.message, variant: 'destructive' });
     } else {
       setTransactions(data || []);
     }
     setLoading(false);
-  }, [storeId, toast]);
+  }, [storeId, startDate, endDate, toast]);
 
   const addTransaction = async (
     totalAmount: number,
@@ -987,25 +998,35 @@ export function useExpenseCategories() {
   return { categories, loading, addCategory, refetch: fetchCategories };
 }
 
-export function useExpenses(storeId: string | null) {
+export function useExpenses(storeId: string | null, startDate?: string, endDate?: string) {
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [loading, setLoading] = useState(true);
   const { toast } = useToast();
 
   const fetchExpenses = useCallback(async () => {
-    if (!storeId) return;
-    const { data, error } = await supabase
-      .from('expenses')
-      .select('*')
-      .eq('store_id', storeId)
-      .order('date', { ascending: false });
+    let query = supabase.from('expenses').select('*');
+
+    if (storeId) {
+      query = query.eq('store_id', storeId);
+    }
+
+    if (startDate) {
+      query = query.gte('date', startDate);
+    }
+
+    if (endDate) {
+      query = query.lte('date', endDate);
+    }
+
+    const { data, error } = await query.order('date', { ascending: false });
+
     if (error) {
       toast({ title: 'Error fetching expenses', description: error.message, variant: 'destructive' });
     } else {
       setExpenses(data || []);
     }
     setLoading(false);
-  }, [storeId, toast]);
+  }, [storeId, startDate, endDate, toast]);
 
   const addExpense = async (expense: { 
     amount: number; 
