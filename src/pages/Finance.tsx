@@ -84,6 +84,9 @@ function FinanceContent() {
   });
   const [newSourceName, setNewSourceName] = useState('');
   const [editingAllocations, setEditingAllocations] = useState<Record<string, number>>({});
+  const [showAddEnvelopeModal, setShowAddEnvelopeModal] = useState(false);
+  const [newEnvelope, setNewEnvelope] = useState({ name: '', percent: 0, color: '#3b82f6' });
+  const [marginThreshold, setMarginThreshold] = useState(10);
 
   // Calculated values
   const monthStart = dateRange?.from ? format(dateRange.from, 'yyyy-MM-dd') : format(startOfMonth(new Date()), 'yyyy-MM-dd');
@@ -95,11 +98,15 @@ function FinanceContent() {
   const { sources, addSource, updateSource, deleteSource } = useIncomeSources();
   const { parentCategories, addParentCategory, deleteParentCategory } = useExpenseParentCategories();
   const { categories, addCategory, updateCategory, deleteCategory } = useExpenseCategoriesWithParent();
-  const { categories: allocationCategories, updateCategory: updateAllocationCategory } = useAllocationCategories();
+  const {
+    categories: allocationCategories,
+    addCategory: addAllocationCategory,
+    updateCategory: updateAllocationCategory
+  } = useAllocationCategories();
   const { locks, lockMonth, isMonthLocked } = useMonthLocks(currentStore?.id || null);
   const { budgets, setBudget, getBudget } = useMonthlyBudgets(currentStore?.id || null);
   const { allocations, addBatchAllocations, getSourceTotals } = useIncomeAllocations(currentStore?.id || null);
-  const { 
+  const {
     deleteTransaction,
     getExpensesByCategory,
     getExpensesBySource 
@@ -111,6 +118,8 @@ function FinanceContent() {
   const { transactions: allFinancialTransactions, addTransaction } = useFinancialTransactions(null, monthStart, monthEnd);
   const { items: allTransactionItems } = useTransactionItems(null, monthStart, monthEnd);
   const { dishes: allDishes } = useDishes();
+  const { recipes } = useRecipes();
+  const { ingredients } = useIngredients();
 
   // Derived Current Store Data
   const posTransactions = useMemo(() =>
@@ -364,7 +373,7 @@ function FinanceContent() {
       });
 
       const topItems = Object.values(itemPerformance)
-        .sort((a, b) => b.revenue - a.revenue)
+        .sort((a, b) => b.quantity - a.quantity)
         .slice(0, 5);
 
       const topCategories = Object.entries(categoryPerformance)
@@ -380,6 +389,29 @@ function FinanceContent() {
       };
     });
   }, [stores, allTransactions, allTransactionItems, allDishes, monthStart, monthEnd]);
+
+  // Low Margin Items
+  const lowMarginItems = useMemo(() => {
+    const threshold = marginThreshold / 100;
+    return allDishes
+      .map(dish => {
+        // Calculate ingredient costs
+        const dishRecipes = recipes.filter(r => r.dish_id === dish.id);
+        const ingredientCost = dishRecipes.reduce((sum, r) => {
+          const ingredient = ingredients.find(i => i.id === r.ingredient_id);
+          return sum + (Number(ingredient?.average_cost || 0) * Number(r.quantity_required));
+        }, 0);
+
+        const fixedCost = Number(dish.cost_of_production) || 0;
+        const totalCost = ingredientCost + fixedCost;
+        const price = Number(dish.selling_price) || 0;
+        const margin = price > 0 ? (price - totalCost) / price : 0;
+
+        return { ...dish, margin, totalCost };
+      })
+      .filter(item => item.margin <= threshold)
+      .sort((a, b) => a.margin - b.margin);
+  }, [allDishes, recipes, ingredients, marginThreshold]);
 
   // Global Balance (using store revenue, not allocated income)
   const globalBalance = storeRevenue - totalExpenses;
@@ -438,6 +470,13 @@ function FinanceContent() {
     }
     toast({ title: 'Success', description: 'Allocation percentages updated' });
     setEditingAllocations({});
+  };
+
+  const handleAddEnvelope = async () => {
+    if (!newEnvelope.name) return;
+    await addAllocationCategory(newEnvelope);
+    setShowAddEnvelopeModal(false);
+    setNewEnvelope({ name: '', percent: 0, color: '#3b82f6' });
   };
 
   const handleTransfer = async () => {
@@ -635,72 +674,6 @@ function FinanceContent() {
             </Dialog>
           </div>
 
-          {/* Income Overview */}
-          <div className="grid md:grid-cols-5 gap-4">
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium text-muted-foreground">Today's POS Revenue</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold text-primary">{todaysRevenue.toLocaleString()} MT</div>
-              </CardContent>
-            </Card>
-            
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium text-muted-foreground">Period POS Revenue</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">{storeRevenue.toLocaleString()} MT</div>
-              </CardContent>
-            </Card>
-            
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium text-muted-foreground">Total Expenses (Period)</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold text-destructive">{totalExpenses.toLocaleString()} MT</div>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-1">
-                  <TrendingUp className="w-3 h-3" />
-                  Today's Income (All Stores)
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold text-green-600">{todaysIncomeAllStores.toLocaleString()} MT</div>
-                <p className="text-xs text-muted-foreground mt-1">
-                  {currentStore?.name}: {todaysRevenue.toLocaleString()} MT
-                </p>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-1">
-                  <TrendingUp className="w-3 h-3" />
-                  Period Income (All Stores)
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold text-green-600">{mtdIncomeAllStores.toLocaleString()} MT</div>
-                <p className="text-xs text-muted-foreground mt-1">
-                  {currentStore?.name}: {storeRevenue.toLocaleString()} MT
-                </p>
-                <p className="text-xs text-muted-foreground mt-1">
-                  {storeRevenue > 0 && mtdIncomeAllStores > 0 
-                    ? `${((storeRevenue / mtdIncomeAllStores) * 100).toFixed(1)}% of total`
-                    : 'No data'
-                  }
-                </p>
-              </CardContent>
-            </Card>
-          </div>
-
           {/* Dual-Column Cash Flow Card */}
           <div className="grid md:grid-cols-2 gap-6">
             {/* Column A: Income */}
@@ -772,14 +745,59 @@ function FinanceContent() {
 
           {/* Revenue Allocation Card */}
           <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Settings className="w-5 h-5 text-primary" />
-                Revenue Allocation Envelopes
-              </CardTitle>
-              <CardDescription>
-                Define how period revenue is distributed into virtual envelopes.
-              </CardDescription>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <div>
+                <CardTitle className="flex items-center gap-2">
+                  <Settings className="w-5 h-5 text-primary" />
+                  Revenue Allocation Envelopes
+                </CardTitle>
+                <CardDescription>
+                  Define how period revenue is distributed into virtual envelopes.
+                </CardDescription>
+              </div>
+              <Dialog open={showAddEnvelopeModal} onOpenChange={setShowAddEnvelopeModal}>
+                <DialogTrigger asChild>
+                  <Button size="sm">
+                    <Plus className="w-4 h-4 mr-2" /> Add Envelope
+                  </Button>
+                </DialogTrigger>
+                <DialogContent>
+                  <DialogHeader>
+                    <DialogTitle>Add New Envelope</DialogTitle>
+                  </DialogHeader>
+                  <div className="space-y-4 py-4">
+                    <div className="space-y-2">
+                      <Label>Envelope Name</Label>
+                      <Input
+                        placeholder="e.g. Savings"
+                        value={newEnvelope.name}
+                        onChange={(e) => setNewEnvelope(prev => ({ ...prev, name: e.target.value }))}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Default Percentage (%)</Label>
+                      <Input
+                        type="number"
+                        value={newEnvelope.percent}
+                        onChange={(e) => setNewEnvelope(prev => ({ ...prev, percent: Number(e.target.value) }))}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Color</Label>
+                      <Input
+                        type="color"
+                        className="h-10 p-1"
+                        value={newEnvelope.color}
+                        onChange={(e) => setNewEnvelope(prev => ({ ...prev, color: e.target.value }))}
+                      />
+                    </div>
+                  </div>
+                  <DialogFooter>
+                    <Button variant="outline" onClick={() => setShowAddEnvelopeModal(false)}>Cancel</Button>
+                    <Button onClick={handleAddEnvelope}>Add Envelope</Button>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
             </CardHeader>
             <CardContent>
               <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
@@ -813,50 +831,6 @@ function FinanceContent() {
                   <Button onClick={handleSaveAllocations}>Save Changes</Button>
                 </div>
               )}
-            </CardContent>
-          </Card>
-
-          {/* Performance Analytics Card */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <TrendingUp className="w-5 h-5 text-primary" />
-                Performance Analytics
-              </CardTitle>
-              <CardDescription>
-                Top selling categories and items per store (Period)
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="grid lg:grid-cols-2 gap-8">
-                {performanceAnalytics.map(perf => (
-                  <div key={perf.storeId} className="space-y-6">
-                    <h3 className="text-lg font-bold border-b pb-2">{perf.storeName}</h3>
-                    <div className="grid sm:grid-cols-2 gap-4">
-                      <div className="space-y-3">
-                        <h4 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">Top Categories</h4>
-                        {perf.topCategories.map(cat => (
-                          <div key={cat.name} className="flex justify-between items-center text-sm">
-                            <span className="truncate pr-2">{cat.name}</span>
-                            <span className="font-medium whitespace-nowrap">{cat.revenue.toLocaleString()} MT</span>
-                          </div>
-                        ))}
-                        {perf.topCategories.length === 0 && <p className="text-xs text-muted-foreground">No data</p>}
-                      </div>
-                      <div className="space-y-3">
-                        <h4 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">Top Items</h4>
-                        {perf.topItems.map(item => (
-                          <div key={item.name} className="flex justify-between items-center text-sm">
-                            <span className="truncate pr-2">{item.name}</span>
-                            <span className="font-medium whitespace-nowrap">{item.revenue.toLocaleString()} MT</span>
-                          </div>
-                        ))}
-                        {perf.topItems.length === 0 && <p className="text-xs text-muted-foreground">No data</p>}
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
             </CardContent>
           </Card>
 
@@ -911,51 +885,101 @@ function FinanceContent() {
             </CardContent>
           </Card>
 
-          {/* Budget Overview */}
+          {/* Low Profit Margin Items Card */}
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <div>
+                <CardTitle className="flex items-center gap-2 text-destructive">
+                  <AlertTriangle className="w-5 h-5" />
+                  Low Profit Margin Items (≤ {marginThreshold}%)
+                </CardTitle>
+                <CardDescription>
+                  Menu items that may need price adjustments or cost reductions.
+                </CardDescription>
+              </div>
+              <div className="flex items-center gap-2">
+                <Label htmlFor="threshold" className="text-xs">Threshold %</Label>
+                <Input
+                  id="threshold"
+                  type="number"
+                  className="w-16 h-8 text-right"
+                  value={marginThreshold}
+                  onChange={(e) => setMarginThreshold(Number(e.target.value))}
+                />
+              </div>
+            </CardHeader>
+            <CardContent>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Item Name</TableHead>
+                    <TableHead className="text-right">Price</TableHead>
+                    <TableHead className="text-right">Cost</TableHead>
+                    <TableHead className="text-right">Margin</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {lowMarginItems.map(item => (
+                    <TableRow key={item.id}>
+                      <TableCell className="font-medium">{item.name}</TableCell>
+                      <TableCell className="text-right">{item.selling_price.toLocaleString()} MT</TableCell>
+                      <TableCell className="text-right">{item.totalCost.toFixed(2)} MT</TableCell>
+                      <TableCell className={cn(
+                        "text-right font-bold",
+                        item.margin < 0 ? "text-destructive" : "text-amber-600"
+                      )}>
+                        {(item.margin * 100).toFixed(1)}%
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                  {lowMarginItems.length === 0 && (
+                    <TableRow><TableCell colSpan={4} className="text-center text-muted-foreground italic">All items have healthy margins</TableCell></TableRow>
+                  )}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
+
+          {/* Performance Analytics Card */}
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
-                <AlertTriangle className="w-5 h-5 text-primary" />
-                Budget vs Actual (Period)
+                <TrendingUp className="w-5 h-5 text-primary" />
+                Performance Analytics (Most Sold)
               </CardTitle>
+              <CardDescription>
+                Top selling categories by revenue and items by quantity per store (Period)
+              </CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="space-y-6">
-                {parentCategories.map(parent => {
-                  const parentCats = categories.filter(c => c.parent_id === parent.id);
-                  if (parentCats.length === 0) return null;
-
-                  return (
-                    <div key={parent.id} className="space-y-3">
-                      <h3 className="text-sm font-bold uppercase text-muted-foreground">{parent.name}</h3>
-                      <div className="grid md:grid-cols-2 gap-4">
-                        {parentCats.map(cat => {
-                          const spent = expensesByCategory[cat.id] || 0;
-                          // Fallback to average monthly budget if specific month budget not found
-                          const budget = dateRange?.from
-                            ? getBudget(cat.id, dateRange.from.getFullYear(), dateRange.from.getMonth() + 1) || cat.monthly_budget
-                            : cat.monthly_budget;
-                          const percent = budget > 0 ? Math.min((spent / budget) * 100, 100) : 0;
-
-                          return (
-                            <div key={cat.id} className="space-y-2 p-3 border rounded-lg">
-                              <div className="flex justify-between text-sm">
-                                <span className="font-medium">{cat.name}</span>
-                                <span className={spent > budget && budget > 0 ? "text-destructive font-bold" : ""}>
-                                  {spent.toLocaleString()} / {budget.toLocaleString()} MT
-                                </span>
-                              </div>
-                              <Progress
-                                value={percent}
-                                className={cn("h-2", spent > budget && budget > 0 ? "bg-destructive/20" : "")}
-                              />
-                            </div>
-                          );
-                        })}
+              <div className="grid lg:grid-cols-2 gap-8">
+                {performanceAnalytics.map(perf => (
+                  <div key={perf.storeId} className="space-y-6">
+                    <h3 className="text-lg font-bold border-b pb-2">{perf.storeName}</h3>
+                    <div className="grid sm:grid-cols-2 gap-4">
+                      <div className="space-y-3">
+                        <h4 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">Top Categories</h4>
+                        {perf.topCategories.map(cat => (
+                          <div key={cat.name} className="flex justify-between items-center text-sm">
+                            <span className="truncate pr-2">{cat.name}</span>
+                            <span className="font-medium whitespace-nowrap">{cat.revenue.toLocaleString()} MT</span>
+                          </div>
+                        ))}
+                        {perf.topCategories.length === 0 && <p className="text-xs text-muted-foreground">No data</p>}
+                      </div>
+                      <div className="space-y-3">
+                        <h4 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">Top Items (Quantity)</h4>
+                        {perf.topItems.map(item => (
+                          <div key={item.name} className="flex justify-between items-center text-sm">
+                            <span className="truncate pr-2">{item.name}</span>
+                            <span className="font-medium whitespace-nowrap">{item.quantity} sold</span>
+                          </div>
+                        ))}
+                        {perf.topItems.length === 0 && <p className="text-xs text-muted-foreground">No data</p>}
                       </div>
                     </div>
-                  );
-                })}
+                  </div>
+                ))}
               </div>
             </CardContent>
           </Card>
@@ -1053,7 +1077,40 @@ function FinanceContent() {
         </TabsContent>
 
 
-        {/* Other tabs remain the same */}
+        <TabsContent value="month-end" className="space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Lock className="w-5 h-5 text-primary" />
+                Period Locking & Finalization
+              </CardTitle>
+              <CardDescription>
+                Lock the current period to prevent further changes to transactions and expenses.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="flex items-center justify-between p-4 bg-muted/50 rounded-lg border">
+                <div>
+                  <h3 className="font-bold">Period: {monthStart} to {monthEnd}</h3>
+                  <p className="text-sm text-muted-foreground">
+                    Status: {isCurrentMonthLocked ? 'Locked' : 'Active'}
+                  </p>
+                </div>
+                <Button
+                  variant={isCurrentMonthLocked ? "outline" : "default"}
+                  onClick={() => {
+                    if (dateRange?.from) {
+                      lockMonth(dateRange.from.getFullYear(), dateRange.from.getMonth() + 1, 'Manager', 'Monthly closeout');
+                    }
+                  }}
+                  disabled={isCurrentMonthLocked || !dateRange?.from}
+                >
+                  {isCurrentMonthLocked ? 'Period is Locked' : 'Lock Period'}
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
       </Tabs>
     </div>
   );
@@ -1061,7 +1118,7 @@ function FinanceContent() {
 
 export default function Finance() {
   return (
-    <MainLayout>
+    <MainLayout hideSidebar>
       <FinanceContent />
     </MainLayout>
   );
