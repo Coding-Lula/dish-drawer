@@ -6,6 +6,7 @@ import { useAuth } from '@/hooks/useAuth';
 
 interface MainLayoutProps {
   children: ReactNode;
+  hideSidebar?: boolean;
 }
 
 interface StoreContextType {
@@ -23,7 +24,7 @@ export function useCurrentStore() {
   return context;
 }
 
-export function MainLayout({ children }: MainLayoutProps) {
+export function MainLayout({ children, hideSidebar = false }: MainLayoutProps) {
   const [currentStore, setCurrentStore] = useState<Store | null>(null);
   const { stores } = useStores();
   const { hasGlobalAccess, accessibleStoreIds } = useAuth();
@@ -63,8 +64,11 @@ export function MainLayout({ children }: MainLayoutProps) {
   return (
     <CurrentStoreContext.Provider value={{ currentStore, setCurrentStore }}>
       <div className="min-h-screen bg-background">
-        <Sidebar currentStore={currentStore} onStoreChange={setCurrentStore} />
-        <main className={cn("min-h-screen transition-all duration-300 ml-64 p-6")}>
+        {!hideSidebar && <Sidebar currentStore={currentStore} onStoreChange={setCurrentStore} />}
+        <main className={cn(
+          "min-h-screen transition-all duration-300 p-6",
+          !hideSidebar && "ml-64"
+        )}>
           {children}
         </main>
       </div>

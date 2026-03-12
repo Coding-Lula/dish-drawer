@@ -61,6 +61,7 @@ export interface FinancialTransaction {
   source_id: string | null;
   expense_category_id: string | null;
   transfer_to_source_id: string | null;
+  transfer_to_store_id: string | null;
   is_recurring: boolean;
   is_locked: boolean;
   locked_at: string | null;
@@ -75,6 +76,17 @@ export interface MonthLock {
   locked_at: string;
   locked_by: string | null;
   notes: string | null;
+  created_at: string;
+}
+
+export interface AllocationCategory {
+  id: string;
+  name: string;
+  percent: number;
+  icon: string;
+  color: string;
+  display_order: number;
+  is_system: boolean;
   created_at: string;
 }
 
@@ -388,25 +400,35 @@ export function useExpenseCategoriesWithParent() {
 }
 
 // Financial Transactions Hook
-export function useFinancialTransactions(storeId: string | null) {
+export function useFinancialTransactions(storeId: string | null, startDate?: string, endDate?: string) {
   const [transactions, setTransactions] = useState<FinancialTransaction[]>([]);
   const [loading, setLoading] = useState(true);
   const { toast } = useToast();
 
   const fetchTransactions = useCallback(async () => {
-    if (!storeId) return;
-    const { data, error } = await supabase
-      .from('financial_transactions')
-      .select('*')
-      .eq('store_id', storeId)
-      .order('date', { ascending: false });
+    let query = supabase.from('financial_transactions').select('*');
+
+    if (storeId) {
+      query = query.eq('store_id', storeId);
+    }
+
+    if (startDate) {
+      query = query.gte('date', startDate);
+    }
+
+    if (endDate) {
+      query = query.lte('date', endDate);
+    }
+
+    const { data, error } = await query.order('date', { ascending: false });
+
     if (error) {
       toast({ title: 'Error fetching transactions', description: error.message, variant: 'destructive' });
     } else {
       setTransactions((data as FinancialTransaction[]) || []);
     }
     setLoading(false);
-  }, [storeId, toast]);
+  }, [storeId, startDate, endDate, toast]);
 
   const addTransaction = async (transaction: {
     date?: string;
@@ -418,12 +440,15 @@ export function useFinancialTransactions(storeId: string | null) {
     source_id?: string;
     expense_category_id?: string;
     transfer_to_source_id?: string;
+    transfer_to_store_id?: string;
     is_recurring?: boolean;
+    store_id?: string;
   }) => {
-    if (!storeId) return null;
+    const finalStoreId = transaction.store_id || storeId;
+    if (!finalStoreId) return null;
     const { data, error } = await supabase
       .from('financial_transactions')
-      .insert([{ ...transaction, store_id: storeId }])
+      .insert([{ ...transaction, store_id: finalStoreId }])
       .select()
       .single();
     
@@ -638,6 +663,81 @@ export function useMonthlyBudgets(storeId: string | null) {
   }, [fetchBudgets]);
 
   return { budgets, loading, setBudget, getBudget, refetch: fetchBudgets };
+}
+
+// Allocation Categories hook
+export function useAllocationCategories() {
+  const [categories, setCategories] = useState<AllocationCategory[]>([]);
+  const [loading, setLoading] = useState(true);
+  const { toast } = useToast();
+
+  const fetchCategories = useCallback(async () => {
+    const { data, error } = await supabase
+      .from('allocation_categories')
+      .select('*')
+      .order('display_order');
+    if (error) {
+      toast({ title: 'Error fetching allocation categories', description: error.message, variant: 'destructive' });
+    } else {
+      setCategories((data as AllocationCategory[]) || []);
+    }
+    setLoading(false);
+  }, [toast]);
+
+  const addCategory = async (category: { name: string; percent?: number; color?: string }) => {
+    const maxOrder = categories.reduce((max, c) => Math.max(max, c.display_order), 0);
+    const { data, error } = await supabase
+      .from('allocation_categories')
+      .insert([{ ...category, display_order: maxOrder + 1, is_system: false }])
+      .select()
+      .single();
+
+    if (error) {
+      toast({ title: 'Error creating category', description: error.message, variant: 'destructive' });
+      return null;
+    }
+
+    setCategories(prev => [...prev, data as AllocationCategory].sort((a, b) => a.display_order - b.display_order));
+    toast({ title: 'Category created' });
+    return data;
+  };
+
+  const updateCategory = async (id: string, updates: Partial<AllocationCategory>) => {
+    const { error } = await supabase
+      .from('allocation_categories')
+      .update(updates)
+      .eq('id', id);
+
+    if (error) {
+      toast({ title: 'Error updating category', description: error.message, variant: 'destructive' });
+      return false;
+    }
+
+    setCategories(prev => prev.map(c => c.id === id ? { ...c, ...updates } : c));
+    return true;
+  };
+
+  const deleteCategory = async (id: string) => {
+    const { error } = await supabase
+      .from('allocation_categories')
+      .delete()
+      .eq('id', id);
+
+    if (error) {
+      toast({ title: 'Error deleting category', description: error.message, variant: 'destructive' });
+      return false;
+    }
+
+    setCategories(prev => prev.filter(c => c.id !== id));
+    toast({ title: 'Category deleted' });
+    return true;
+  };
+
+  useEffect(() => {
+    fetchCategories();
+  }, [fetchCategories]);
+
+  return { categories, loading, addCategory, updateCategory, deleteCategory, refetch: fetchCategories };
 }
 
 // Helper function

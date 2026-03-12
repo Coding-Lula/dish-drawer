@@ -20,26 +20,30 @@ export interface TableSalesBreakdown {
   total: number;
 }
 
-export function useTransactionItems(storeId: string | null) {
+export function useTransactionItems(storeId: string | null, startDate?: string, endDate?: string) {
   const [items, setItems] = useState<TransactionItemWithDetails[]>([]);
   const [loading, setLoading] = useState(true);
   const { toast } = useToast();
 
   const fetchItems = useCallback(async () => {
-    if (!storeId) {
-      setItems([]);
-      setLoading(false);
-      return;
+    let txQuery = supabase.from('transactions').select('id, table_id');
+
+    if (storeId) {
+      txQuery = txQuery.eq('store_id', storeId);
     }
 
-    const today = new Date().toISOString().split('T')[0];
+    if (startDate) {
+      txQuery = txQuery.gte('date', startDate);
+    } else {
+      const today = new Date().toISOString().split('T')[0];
+      txQuery = txQuery.gte('date', today);
+    }
 
-    // First get today's transactions for this store
-    const { data: transactions, error: txError } = await supabase
-      .from('transactions')
-      .select('id, table_id')
-      .eq('store_id', storeId)
-      .gte('date', today);
+    if (endDate) {
+      txQuery = txQuery.lte('date', endDate);
+    }
+
+    const { data: transactions, error: txError } = await txQuery;
 
     if (txError) {
       toast({ title: 'Error fetching transactions', description: txError.message, variant: 'destructive' });
@@ -94,7 +98,7 @@ export function useTransactionItems(storeId: string | null) {
 
     setItems(enrichedItems);
     setLoading(false);
-  }, [storeId, toast]);
+  }, [storeId, startDate, endDate, toast]);
 
   const getItemsByTransaction = useCallback((transactionId: string) => {
     return items.filter(i => i.transaction_id === transactionId);
