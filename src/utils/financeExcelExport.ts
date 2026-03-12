@@ -16,14 +16,6 @@ interface ExportData {
   incomeBySource: { source: IncomeSource; amount: number }[];
   expensesByParentCategory: { parent: ExpenseParentCategory; amount: number }[];
   transactions: FinancialTransaction[];
-  budgetVsActual: {
-    category: ExpenseCategoryWithParent;
-    parentName: string;
-    budget: number;
-    actual: number;
-    variance: number;
-    percent: number;
-  }[];
   storeName: string;
 }
 
@@ -76,21 +68,6 @@ export function exportFinancialReport(data: ExportData) {
   ];
   XLSX.utils.book_append_sheet(wb, transactionsSheet, 'Transactions');
 
-  // Sheet 3: Budget vs Actual
-  const budgetData = [
-    ['Category', 'Budget (MT)', 'Actual (MT)', 'Variance (MT)', '%'],
-    ...data.budgetVsActual.map(item => [
-      `${item.parentName} → ${item.category.name}`,
-      item.budget,
-      item.actual,
-      item.variance,
-      `${item.percent.toFixed(0)}%`
-    ])
-  ];
-  
-  const budgetSheet = XLSX.utils.aoa_to_sheet(budgetData);
-  budgetSheet['!cols'] = [{ wch: 30 }, { wch: 15 }, { wch: 15 }, { wch: 15 }, { wch: 10 }];
-  XLSX.utils.book_append_sheet(wb, budgetSheet, 'Budget vs Actual');
 
   // Download
   const fileName = `Financial_Report_${monthName}_${data.year}.xlsx`;
