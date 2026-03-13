@@ -74,6 +74,7 @@ function FinanceContent() {
   const [showAddEnvelopeModal, setShowAddEnvelopeModal] = useState(false);
   const [newEnvelope, setNewEnvelope] = useState({ name: '', percent: 0, color: '#3b82f6' });
   const [marginThreshold, setMarginThreshold] = useState(10);
+  const [showAllLowMargin, setShowAllLowMargin] = useState(false);
 
   // Calculated values
   const monthStart = dateRange?.from ? format(dateRange.from, 'yyyy-MM-dd') : format(startOfMonth(new Date()), 'yyyy-MM-dd');
@@ -886,7 +887,7 @@ function FinanceContent() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {lowMarginItems.map(item => (
+              {(showAllLowMargin ? lowMarginItems : lowMarginItems.slice(0, 10)).map(item => (
                 <TableRow key={item.id}>
                   <TableCell className="font-medium">{item.name}</TableCell>
                   <TableCell className="text-right">{item.selling_price.toLocaleString()} MT</TableCell>
@@ -904,6 +905,17 @@ function FinanceContent() {
               )}
             </TableBody>
           </Table>
+
+          {lowMarginItems.length > 10 && (
+            <div className="flex justify-center mt-4">
+              <Button
+                variant="outline"
+                onClick={() => setShowAllLowMargin(!showAllLowMargin)}
+              >
+                {showAllLowMargin ? "Show Less" : `View All (${lowMarginItems.length} Items)`}
+              </Button>
+            </div>
+          )}
         </CardContent>
       </Card>
 
@@ -946,7 +958,7 @@ function FinanceContent() {
 
 export default function Finance() {
   return (
-    <MainLayout hideSidebar>
+    <MainLayout>
       <FinanceContent />
     </MainLayout>
   );
