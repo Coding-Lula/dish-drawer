@@ -97,9 +97,15 @@ function SalesReportContent() {
     a.click();
   };
 
-  const grandTotal = salesData.reduce((sum, s) => sum + s.total, 0);
+  // Exclude self-consumption from Total Sales entirely (it's not a sale)
+  const selfConsumptionTotal = salesData
+    .filter(s => s.payment_method === 'self')
+    .reduce((sum, s) => sum + s.total, 0);
+  const grandTotal = salesData
+    .filter(s => s.payment_method !== 'self')
+    .reduce((sum, s) => sum + s.total, 0);
   const nonRevenueTotal = salesData
-    .filter(s => NON_REVENUE_METHODS.includes(s.payment_method))
+    .filter(s => s.payment_method === 'credit')
     .reduce((sum, s) => sum + s.total, 0);
   const expensesTotal = (expenses || []).reduce((sum: number, e: any) => sum + Number(e.amount || 0), 0);
   const netRevenue = grandTotal - nonRevenueTotal - expensesTotal;
