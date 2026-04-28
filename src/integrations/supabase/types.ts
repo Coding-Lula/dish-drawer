@@ -429,7 +429,6 @@ export type Database = {
           store_id: string
           supplier: string | null
           transfer_to_source_id: string | null
-          transfer_to_store_id: string | null
           type: string
         }
         Insert: {
@@ -447,7 +446,6 @@ export type Database = {
           store_id: string
           supplier?: string | null
           transfer_to_source_id?: string | null
-          transfer_to_store_id?: string | null
           type: string
         }
         Update: {
@@ -465,7 +463,6 @@ export type Database = {
           store_id?: string
           supplier?: string | null
           transfer_to_source_id?: string | null
-          transfer_to_store_id?: string | null
           type?: string
         }
         Relationships: [
@@ -495,13 +492,6 @@ export type Database = {
             columns: ["transfer_to_source_id"]
             isOneToOne: false
             referencedRelation: "income_sources"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "financial_transactions_transfer_to_store_id_fkey"
-            columns: ["transfer_to_store_id"]
-            isOneToOne: false
-            referencedRelation: "stores"
             referencedColumns: ["id"]
           },
         ]

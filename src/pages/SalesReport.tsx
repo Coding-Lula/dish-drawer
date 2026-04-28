@@ -6,10 +6,13 @@ import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { format } from 'date-fns';
-import { CalendarIcon, Download } from 'lucide-react';
+import { CalendarIcon, Download, DollarSign } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
+import { useExpenses } from '@/hooks/useSupabaseData';
+
+const NON_REVENUE_METHODS = ['credit', 'self'];
 
 interface SalesItem {
   id: string;
@@ -29,6 +32,10 @@ function SalesReportContent() {
   const [endDate, setEndDate] = useState<Date | undefined>(new Date());
   const [salesData, setSalesData] = useState<SalesItem[]>([]);
   const [loading, setLoading] = useState(false);
+
+  const startStr = startDate ? format(startDate, 'yyyy-MM-dd') : undefined;
+  const endStr = endDate ? format(endDate, 'yyyy-MM-dd') : undefined;
+  const { expenses } = useExpenses(currentStore?.id || null, startStr, endStr);
 
   const fetchSalesData = async () => {
     if (!currentStore?.id || !startDate || !endDate) return;
@@ -91,6 +98,11 @@ function SalesReportContent() {
   };
 
   const grandTotal = salesData.reduce((sum, s) => sum + s.total, 0);
+  const nonRevenueTotal = salesData
+    .filter(s => NON_REVENUE_METHODS.includes(s.payment_method))
+    .reduce((sum, s) => sum + s.total, 0);
+  const expensesTotal = (expenses || []).reduce((sum: number, e: any) => sum + Number(e.amount || 0), 0);
+  const netRevenue = grandTotal - nonRevenueTotal - expensesTotal;
 
   return (
     <div className="space-y-6">
@@ -136,6 +148,36 @@ function SalesReportContent() {
           )}
         </CardContent>
       </Card>
+
+      {salesData.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <DollarSign className="w-5 h-5 text-primary" />
+              Revenue Breakdown
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <div className="flex items-baseline justify-between">
+              <span className="text-sm text-muted-foreground">Total Sales</span>
+              <span className="text-lg font-bold text-foreground">{grandTotal.toLocaleString()} MT</span>
+            </div>
+            <div className="flex items-baseline justify-between">
+              <span className="text-sm text-orange-600">Less: Non-Revenue</span>
+              <span className="text-sm font-medium text-destructive">- {nonRevenueTotal.toLocaleString()} MT</span>
+            </div>
+            <div className="flex items-baseline justify-between">
+              <span className="text-sm text-orange-600">Less: Expenses</span>
+              <span className="text-sm font-medium text-destructive">- {expensesTotal.toLocaleString()} MT</span>
+            </div>
+            <div className="h-px bg-border" />
+            <div className="flex items-baseline justify-between pt-1">
+              <span className="text-base font-semibold text-primary">Net Revenue</span>
+              <span className="text-xl font-bold text-primary">{netRevenue.toLocaleString()} MT</span>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {salesData.length > 0 && (
         <Card>
