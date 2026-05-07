@@ -9,16 +9,19 @@ import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
 import { useExpenses, useExpenseCategories, useIngredients, useStoreStock, useSuppliers } from '@/hooks/useSupabaseData';
+import { useFinancialTransactions } from '@/hooks/useFinanceData';
 import { AddCategoryModal } from '@/components/modals/AddCategoryModal';
 import { AddSupplierModal } from '@/components/modals/AddSupplierModal';
 import { DateRangePickerModal } from '@/components/modals/DateRangePickerModal';
 import { exportExpensesToCSV, exportExpensesToPDF } from '@/utils/exportUtils';
 import { Receipt, Plus, Package, FileText, Building2 } from 'lucide-react';
+import { cn } from '@/lib/utils';
 
 function ExpensesContent() {
   const { toast } = useToast();
   const { currentStore } = useCurrentStore();
-  const { expenses, addExpense, loading } = useExpenses(currentStore?.id || null);
+  const { expenses: rawExpenses, addExpense, loading: expensesLoading } = useExpenses(currentStore?.id || null);
+  const { transactions: financialTransactions, loading: financialLoading } = useFinancialTransactions(currentStore?.id || null);
   const { categories, addCategory } = useExpenseCategories();
   const { ingredients } = useIngredients();
   const { addStock } = useStoreStock(currentStore?.id || null);
@@ -37,8 +40,34 @@ function ExpensesContent() {
 
   const selectedCategory = categories.find(c => c.id === categoryId);
   const isStockCategory = selectedCategory?.name === 'Stock';
-  const totalExpenses = expenses.reduce((sum, e) => sum + Number(e.amount), 0);
-  const stockExpenses = expenses.filter(e => e.category === 'Stock').reduce((sum, e) => sum + Number(e.amount), 0);
+
+  const operationalExpensesTotal = (rawExpenses || []).reduce((sum, e) => sum + Number(e.amount), 0);
+  const financialExpensesTotal = (financialTransactions || [])
+    .filter(t => t.type === 'expense')
+    .reduce((sum, t) => sum + Number(t.amount), 0);
+  const totalExpenses = operationalExpensesTotal + financialExpensesTotal;
+
+  const stockExpenses = rawExpenses.filter(e => e.category === 'Stock').reduce((sum, e) => sum + Number(e.amount), 0);
+
+  const combinedExpenses = [
+    ...rawExpenses.map(e => ({ ...e, source: 'operational' })),
+    ...financialTransactions
+      .filter(t => t.type === 'expense')
+      .map(t => ({
+        id: t.id,
+        description: t.description || 'Financial Expense',
+        amount: t.amount,
+        date: t.date,
+        category: 'Finance',
+        payment_method: 'N/A',
+        is_iva_deductible: false,
+        supplier_id: null,
+        invoice_no: t.invoice_no,
+        source: 'financial'
+      }))
+  ].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
+  const loading = expensesLoading || financialLoading;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -140,7 +169,7 @@ function ExpensesContent() {
             <div className="p-3 rounded-lg bg-muted"><Receipt className="w-6 h-6 text-muted-foreground" /></div>
             <div>
               <p className="text-sm text-muted-foreground">Transações</p>
-              <p className="text-2xl font-bold">{expenses.length}</p>
+              <p className="text-2xl font-bold">{combinedExpenses.length}</p>
             </div>
           </CardContent>
         </Card>
@@ -249,28 +278,31 @@ function ExpensesContent() {
         <h2 className="text-lg font-semibold">Despesas Recentes</h2>
         {loading ? (
           <Card><CardContent className="py-8 text-center text-muted-foreground">Processando...</CardContent></Card>
-        ) : expenses.length === 0 ? (
+        ) : combinedExpenses.length === 0 ? (
           <Card><CardContent className="py-12 text-center text-muted-foreground"><Receipt className="w-12 h-12 mx-auto mb-3 opacity-30" /><p>No expenses recorded</p></CardContent></Card>
         ) : (
-          expenses.slice(0, 20).map(expense => (
+          combinedExpenses.slice(0, 20).map(expense => (
             <Card key={expense.id}>
               <CardContent className="p-4 flex items-center justify-between">
                 <div className="flex items-center gap-4">
-                  <div className="p-2 rounded-lg bg-muted"><Receipt className="w-5 h-5" /></div>
+                  <div className="p-2 rounded-lg bg-muted">
+                    <Receipt className={cn("w-5 h-5", expense.source === 'financial' && "text-primary")} />
+                  </div>
                   <div>
                     <p className="font-medium">{expense.description}</p>
                     <div className="flex items-center gap-2 mt-1 flex-wrap">
                       <Badge variant="outline" className="text-xs">{expense.category}</Badge>
-                      {expense.category === 'Stock' && !expense.is_deducted && (<Badge variant="secondary" className="text-xs bg-amber-500/20 text-amber-700">Pre-spent</Badge>)}
+                      {expense.category === 'Stock' && !(expense as any).is_deducted && (<Badge variant="secondary" className="text-xs bg-amber-500/20 text-amber-700">Pre-spent</Badge>)}
                       {expense.is_iva_deductible && (<Badge variant="secondary" className="text-xs bg-green-500/20 text-green-700">IVA</Badge>)}
-                      {expense.payment_method && (<Badge variant="outline" className="text-xs">{expense.payment_method.toUpperCase()}</Badge>)}
+                      {expense.payment_method && expense.payment_method !== 'N/A' && (<Badge variant="outline" className="text-xs">{expense.payment_method.toUpperCase()}</Badge>)}
+                      {expense.source === 'financial' && (<Badge variant="secondary" className="text-xs">Finance</Badge>)}
                     </div>
-                    {(getSupplierName(expense.supplier_id) || expense.invoice_no) && (
+                    {((expense as any).supplier_id || expense.invoice_no) && (
                       <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground">
-                        {getSupplierName(expense.supplier_id) && (
+                        {getSupplierName((expense as any).supplier_id) && (
                           <span className="flex items-center gap-1">
                             <Building2 className="w-3 h-3" />
-                            {getSupplierName(expense.supplier_id)}
+                            {getSupplierName((expense as any).supplier_id)}
                           </span>
                         )}
                         {expense.invoice_no && (

@@ -890,14 +890,16 @@ export function useTransactions(storeId: string | null, startDate?: string, endD
     }
 
     if (startDate) {
-      query = query.gte('date', startDate);
+      const start = startDate.includes('T') ? startDate : `${startDate}T00:00:00`;
+      query = query.gte('date', start);
     } else {
       const today = new Date().toISOString().split('T')[0];
-      query = query.gte('date', today);
+      query = query.gte('date', `${today}T00:00:00`);
     }
 
     if (endDate) {
-      query = query.lte('date', endDate);
+      const end = endDate.includes('T') ? endDate : `${endDate}T23:59:59`;
+      query = query.lte('date', end);
     }
 
     const { data, error } = await query.order('date', { ascending: false });
@@ -1011,11 +1013,13 @@ export function useExpenses(storeId: string | null, startDate?: string, endDate?
     }
 
     if (startDate) {
-      query = query.gte('date', startDate);
+      const start = startDate.includes('T') ? startDate : `${startDate}T00:00:00`;
+      query = query.gte('date', start);
     }
 
     if (endDate) {
-      query = query.lte('date', endDate);
+      const end = endDate.includes('T') ? endDate : `${endDate}T23:59:59`;
+      query = query.lte('date', end);
     }
 
     const { data, error } = await query.order('date', { ascending: false });
@@ -1282,91 +1286,6 @@ export function useCredits(storeId: string | null) {
   return { credits, loading, addCredit, settleCredit, refetch: fetchCredits };
 }
 
-// Allocation Categories hook
-export interface AllocationCategory {
-  id: string;
-  name: string;
-  percent: number;
-  icon: string;
-  color: string;
-  display_order: number;
-  is_system: boolean;
-  created_at: string;
-}
-
-export function useAllocationCategories() {
-  const [categories, setCategories] = useState<AllocationCategory[]>([]);
-  const [loading, setLoading] = useState(true);
-  const { toast } = useToast();
-
-  const fetchCategories = useCallback(async () => {
-    const { data, error } = await supabase
-      .from('allocation_categories')
-      .select('*')
-      .order('display_order');
-    if (error) {
-      toast({ title: 'Error fetching allocation categories', description: error.message, variant: 'destructive' });
-    } else {
-      setCategories((data as AllocationCategory[]) || []);
-    }
-    setLoading(false);
-  }, [toast]);
-
-  const addCategory = async (category: { name: string; percent?: number; color?: string }) => {
-    const maxOrder = categories.reduce((max, c) => Math.max(max, c.display_order), 0);
-    const { data, error } = await supabase
-      .from('allocation_categories')
-      .insert([{ ...category, display_order: maxOrder + 1, is_system: false }])
-      .select()
-      .single();
-    
-    if (error) {
-      toast({ title: 'Error creating category', description: error.message, variant: 'destructive' });
-      return null;
-    }
-    
-    setCategories(prev => [...prev, data as AllocationCategory].sort((a, b) => a.display_order - b.display_order));
-    toast({ title: 'Category created' });
-    return data;
-  };
-
-  const updateCategory = async (id: string, updates: Partial<AllocationCategory>) => {
-    const { error } = await supabase
-      .from('allocation_categories')
-      .update(updates)
-      .eq('id', id);
-    
-    if (error) {
-      toast({ title: 'Error updating category', description: error.message, variant: 'destructive' });
-      return false;
-    }
-    
-    setCategories(prev => prev.map(c => c.id === id ? { ...c, ...updates } : c));
-    return true;
-  };
-
-  const deleteCategory = async (id: string) => {
-    const { error } = await supabase
-      .from('allocation_categories')
-      .delete()
-      .eq('id', id);
-    
-    if (error) {
-      toast({ title: 'Error deleting category', description: error.message, variant: 'destructive' });
-      return false;
-    }
-    
-    setCategories(prev => prev.filter(c => c.id !== id));
-    toast({ title: 'Category deleted' });
-    return true;
-  };
-
-  useEffect(() => {
-    fetchCategories();
-  }, [fetchCategories]);
-
-  return { categories, loading, addCategory, updateCategory, deleteCategory, refetch: fetchCategories };
-}
 
 // Restaurant Tables hook with add/delete
 export function useRestaurantTablesManagement(storeId: string | null) {

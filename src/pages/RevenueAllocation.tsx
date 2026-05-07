@@ -6,7 +6,8 @@ import { Badge } from '@/components/ui/badge';
 import { Slider } from '@/components/ui/slider';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
-import { useTransactions, useDailySummaries, useExpenses, useCredits, useAllocationCategories } from '@/hooks/useSupabaseData';
+import { useTransactions, useDailySummaries, useExpenses, useCredits } from '@/hooks/useSupabaseData';
+import { useAllocationCategories } from '@/hooks/useFinanceData';
 import { useTableSalesBreakdown } from '@/hooks/useTransactionItems';
 import { exportDailyReportPDF } from '@/utils/exportUtils';
 import { 
