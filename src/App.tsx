@@ -9,8 +9,6 @@ import POS from "./pages/POS";
 import Inventory from "./pages/Inventory";
 import Recipes from "./pages/Recipes";
 import Expenses from "./pages/Expenses";
-import EndOfDay from "./pages/EndOfDay";
-import RevenueAllocation from "./pages/RevenueAllocation";
 import Finance from "./pages/Finance";
 import Auth from "./pages/Auth";
 import NotFound from "./pages/NotFound";
@@ -18,6 +16,7 @@ import SubRecipes from "./pages/SubRecipes";
 import RestockHistory from "./pages/RestockHistory";
 import DebtorsPage from "./pages/Debtors";
 import SalesReport from "./pages/SalesReport";
+import Users from "./pages/Users";
 
 const queryClient = new QueryClient();
 
@@ -54,16 +53,6 @@ const App = () => (
               <Expenses />
             </ProtectedRoute>
           } />
-          <Route path="/end-of-day" element={
-            <ProtectedRoute allowedRoles={['manager']}>
-              <EndOfDay />
-            </ProtectedRoute>
-          } />
-          <Route path="/revenue-allocation" element={
-            <ProtectedRoute allowedRoles={['manager']}>
-              <RevenueAllocation />
-            </ProtectedRoute>
-          } />
           <Route path="/finance" element={
             <ProtectedRoute allowedRoles={['manager']}>
               <Finance />
@@ -87,6 +76,11 @@ const App = () => (
           <Route path="/debtors" element={
             <ProtectedRoute allowedRoles={['manager', 'cashier']}>
               <DebtorsPage />
+            </ProtectedRoute>
+          } />
+          <Route path="/users" element={
+            <ProtectedRoute allowedRoles={['manager']}>
+              <Users />
             </ProtectedRoute>
           } />
           <Route path="*" element={<NotFound />} />

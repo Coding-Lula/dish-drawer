@@ -6,7 +6,6 @@ import {
   Package, 
   UtensilsCrossed,
   Receipt,
-  Moon,
   Store,
   ChevronLeft,
   ChevronRight,
@@ -15,7 +14,8 @@ import {
   LogOut,
   Trash2,
   History,
-  Users
+  Users,
+  UserCog
 } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { 
@@ -51,9 +51,8 @@ const allNavItems = [
   { path: '/expenses', label: 'Despesas', icon: Receipt, roles: ['manager','cashier'] },
   { path: '/finance', label: 'Financeiro', icon: Wallet, roles: ['manager'] },
   { path: '/debtors', label: 'Devedores', icon: Users, roles: ['manager', 'cashier'] },
-  { path: '/end-of-day', label: 'Fim do Dia', icon: Moon, roles: ['manager'] },
   { path: '/sales-report', label: 'Relatório de Vendas', icon: PieChart, roles: ['manager','cashier'] },
-  { path: '/revenue-allocation', label: 'Alocação de Receita', icon: PieChart, roles: ['manager'] },
+  { path: '/users', label: 'Utilizadores', icon: UserCog, roles: ['manager'] },
 ];
 
 interface SidebarProps {
