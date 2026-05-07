@@ -11,6 +11,7 @@ import { cn } from '@/lib/utils';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { useExpenses } from '@/hooks/useSupabaseData';
+import { useFinancialTransactions } from '@/hooks/useFinanceData';
 
 const NON_REVENUE_METHODS = ['credit', 'self'];
 
@@ -35,7 +36,8 @@ function SalesReportContent() {
 
   const startStr = startDate ? format(startDate, 'yyyy-MM-dd') : undefined;
   const endStr = endDate ? format(endDate, 'yyyy-MM-dd') : undefined;
-  const { expenses } = useExpenses(currentStore?.id || null, startStr, endStr);
+  const { expenses: rawExpenses } = useExpenses(currentStore?.id || null, startStr, endStr);
+  const { transactions: financialTransactions } = useFinancialTransactions(currentStore?.id || null, startStr, endStr);
 
   const fetchSalesData = async () => {
     if (!currentStore?.id || !startDate || !endDate) return;
@@ -107,7 +109,11 @@ function SalesReportContent() {
   const nonRevenueTotal = salesData
     .filter(s => s.payment_method === 'credit')
     .reduce((sum, s) => sum + s.total, 0);
-  const expensesTotal = (expenses || []).reduce((sum: number, e: any) => sum + Number(e.amount || 0), 0);
+  const operationalExpensesTotal = (rawExpenses || []).reduce((sum: number, e: any) => sum + Number(e.amount || 0), 0);
+  const financialExpensesTotal = (financialTransactions || [])
+    .filter(t => t.type === 'expense')
+    .reduce((sum: number, t: any) => sum + Number(t.amount || 0), 0);
+  const expensesTotal = operationalExpensesTotal + financialExpensesTotal;
   const netRevenue = grandTotal - nonRevenueTotal - expensesTotal;
 
   return (

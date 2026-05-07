@@ -413,11 +413,13 @@ export function useFinancialTransactions(storeId: string | null, startDate?: str
     }
 
     if (startDate) {
-      query = query.gte('date', startDate);
+      const start = startDate.includes('T') ? startDate : `${startDate}T00:00:00`;
+      query = query.gte('date', start);
     }
 
     if (endDate) {
-      query = query.lte('date', endDate);
+      const end = endDate.includes('T') ? endDate : `${endDate}T23:59:59`;
+      query = query.lte('date', end);
     }
 
     const { data, error } = await query.order('date', { ascending: false });
