@@ -108,7 +108,7 @@ function ExpensesContent() {
   };
 
   const handleExportCSV = (startDate: Date, endDate: Date) => {
-    const filteredExpenses = expenses.filter(e => {
+    const filteredExpenses = rawExpenses.filter(e => {
       const date = new Date(e.date);
       return date >= startDate && date <= endDate;
     });
@@ -117,7 +117,7 @@ function ExpensesContent() {
   };
 
   const handleExportPDF = (startDate: Date, endDate: Date) => {
-    const filteredExpenses = expenses.filter(e => {
+    const filteredExpenses = rawExpenses.filter(e => {
       const date = new Date(e.date);
       return date >= startDate && date <= endDate;
     });
