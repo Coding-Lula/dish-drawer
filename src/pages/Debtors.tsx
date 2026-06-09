@@ -58,16 +58,27 @@ function DebtorsContent() {
         return;
       }
 
-      const { data: items, error: itemsError } = await supabase
-        .from('transaction_items')
-        .select('id, transaction_id, quantity, unit_price, dishes(name)')
-        .in('transaction_id', transactionIds);
-
-      if (itemsError) {
+      // Chunk to avoid exceeding URL length limits when many IDs are in play
+      const CHUNK = 100;
+      const all: TransactionItem[] = [];
+      let failed = false;
+      for (let i = 0; i < transactionIds.length; i += CHUNK) {
+        const slice = transactionIds.slice(i, i + CHUNK);
+        const { data: items, error: itemsError } = await supabase
+          .from('transaction_items')
+          .select('id, transaction_id, quantity, unit_price, dishes(name)')
+          .in('transaction_id', slice);
+        if (itemsError) {
+          console.error('Error fetching transaction items:', itemsError);
+          failed = true;
+          break;
+        }
+        all.push(...(items as TransactionItem[]));
+      }
+      if (failed) {
         setError('Failed to load transaction details for debtors.');
-        console.error('Error fetching transaction items:', itemsError);
       } else {
-        setTransactionItems(items as TransactionItem[]);
+        setTransactionItems(all);
       }
       
       setItemsLoading(false);
