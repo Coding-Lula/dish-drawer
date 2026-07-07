@@ -590,7 +590,7 @@ function POSPage({ currentStore }: { currentStore: any }) {
   };
 
   return (
-    <div className="h-[calc(100vh-3rem)] flex flex-col lg:flex-row gap-6">
+    <div className="h-[calc(100vh-3rem)] w-full max-w-full flex flex-col lg:flex-row gap-6">
       <div className="flex-1 flex flex-col min-w-0">
         <div className="mb-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <div>
