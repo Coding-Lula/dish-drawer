@@ -692,22 +692,53 @@ function POSPage({ currentStore }: { currentStore: any }) {
             {filteredDishes.map(dish => {
               const effectivePrice = getEffectivePrice(dish.id, Number(dish.selling_price));
               const isOverridden = hasOverride(dish.id);
-              
+              const cartQty = currentCart
+                .filter(i => i.dish.id === dish.id)
+                .reduce((s, i) => s + i.quantity, 0);
+
               return (
-                <Card key={dish.id} className="transition-all hover:shadow-lg relative">
-                  <div className="cursor-pointer" onClick={() => addToCart(dish)}>
-                    <CardContent className="p-4 text-center">
-                      <div className="w-12 h-12 rounded-full bg-primary/20 flex items-center justify-center mx-auto mb-2">
-                        <ShoppingBag className="w-6 h-6 text-primary" />
+                <Card
+                  key={dish.id}
+                  className="transition-all hover:shadow-lg relative overflow-hidden active:scale-[0.98] active:brightness-[0.85] duration-150"
+                >
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      // ripple
+                      const target = e.currentTarget;
+                      const circle = document.createElement('span');
+                      const rect = target.getBoundingClientRect();
+                      const size = Math.max(rect.width, rect.height);
+                      circle.style.width = circle.style.height = `${size}px`;
+                      circle.style.left = `${e.clientX - rect.left - size / 2}px`;
+                      circle.style.top = `${e.clientY - rect.top - size / 2}px`;
+                      circle.className =
+                        'absolute rounded-full bg-foreground/20 pointer-events-none animate-ping';
+                      target.appendChild(circle);
+                      setTimeout(() => circle.remove(), 500);
+                      addToCart(dish);
+                    }}
+                    className="relative w-full text-left cursor-pointer"
+                  >
+                    <CardContent className="p-3 flex items-center justify-between gap-3">
+                      <h3 className="font-semibold text-sm text-left flex-1 min-w-0 truncate">
+                        {dish.name}
+                      </h3>
+                      <div className="flex items-center gap-2 shrink-0">
+                        {cartQty > 0 && (
+                          <span className="text-xs font-bold text-muted-foreground">
+                            x{cartQty}
+                          </span>
+                        )}
+                        <p className="text-base font-bold text-primary text-right tabular-nums">
+                          {effectivePrice.toLocaleString()} MT
+                          {isOverridden && (
+                            <span className="text-[10px] ml-1 text-muted-foreground">(custom)</span>
+                          )}
+                        </p>
                       </div>
-                      <h3 className="font-semibold text-sm">{dish.name}</h3>
-                      <Badge variant="secondary" className="text-xs mt-1">{dish.category}</Badge>
-                      <p className="text-lg font-bold text-primary mt-2">
-                        {effectivePrice.toLocaleString()} MT
-                        {isOverridden && <span className="text-xs ml-1 text-muted-foreground">(custom)</span>}
-                      </p>
                     </CardContent>
-                  </div>
+                  </button>
                   {isManager && (
                     <Button
                       variant="ghost"
