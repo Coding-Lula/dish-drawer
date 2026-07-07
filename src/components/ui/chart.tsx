@@ -65,6 +65,17 @@ const ChartStyle = ({ id, config }: { id: string; config: ChartConfig }) => {
     return null;
   }
 
+  // SECURITY: this component renders CSS via dangerouslySetInnerHTML.
+  // It is safe ONLY because:
+  //   1. `id` is a library-generated chart id (never user input).
+  //   2. `config` is a typed ChartConfig defined in trusted app code.
+  //   3. We whitelist color values below to safe CSS color forms.
+  // DO NOT wire user-controlled data into ChartConfig without additional sanitization.
+  const isSafeCssColor = (value: string) =>
+    /^(#[0-9a-fA-F]{3,8}|rgb\([^)]*\)|rgba\([^)]*\)|hsl\([^)]*\)|hsla\([^)]*\)|var\(--[a-zA-Z0-9_-]+\)|[a-zA-Z]+)$/.test(
+      value.trim(),
+    );
+
   return (
     <style
       dangerouslySetInnerHTML={{
@@ -75,7 +86,8 @@ ${prefix} [data-chart=${id}] {
 ${colorConfig
   .map(([key, itemConfig]) => {
     const color = itemConfig.theme?.[theme as keyof typeof itemConfig.theme] || itemConfig.color;
-    return color ? `  --color-${key}: ${color};` : null;
+    if (!color || !isSafeCssColor(color)) return null;
+    return `  --color-${key}: ${color};`;
   })
   .join("\n")}
 }
