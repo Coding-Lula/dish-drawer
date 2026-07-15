@@ -18,15 +18,15 @@ interface EditDishModalProps {
 export function EditDishModal({ dish, categories, open, onOpenChange, onSubmit }: EditDishModalProps) {
   const [name, setName] = useState(dish.name);
   const [category, setCategory] = useState(dish.category || '');
-  const [sellingPrice, setSellingPrice] = useState(dish.selling_price.toString());
-  const [costOfProduction, setCostOfProduction] = useState(dish.cost_of_production.toString());
+  const [sellingPrice, setSellingPrice] = useState((dish.selling_price ?? 0).toString());
+  const [costOfProduction, setCostOfProduction] = useState((dish.cost_of_production ?? 0).toString());
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
     setName(dish.name);
     setCategory(dish.category || '');
-    setSellingPrice(dish.selling_price.toString());
-    setCostOfProduction(dish.cost_of_production.toString());
+    setSellingPrice((dish.selling_price ?? 0).toString());
+    setCostOfProduction((dish.cost_of_production ?? 0).toString());
   }, [dish]);
 
   const handleSubmit = async (e: React.FormEvent) => {
