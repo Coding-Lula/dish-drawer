@@ -12,6 +12,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { useExpenses } from '@/hooks/useSupabaseData';
 import { useFinancialTransactions } from '@/hooks/useFinanceData';
+import { ItemizedSalesSummary } from '@/components/ItemizedSalesSummary';
 
 const NON_REVENUE_METHODS = ['credit', 'self'];
 
@@ -160,6 +161,10 @@ function SalesReportContent() {
           )}
         </CardContent>
       </Card>
+
+      {salesData.length > 0 && (
+        <ItemizedSalesSummary salesData={salesData} />
+      )}
 
       {salesData.length > 0 && (
         <Card>
