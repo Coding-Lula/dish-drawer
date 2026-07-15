@@ -202,6 +202,44 @@ export type Database = {
           },
         ]
       }
+      debtor_payments: {
+        Row: {
+          amount: number
+          created_at: string
+          customer_name: string
+          date: string
+          id: string
+          note: string | null
+          store_id: string
+        }
+        Insert: {
+          amount: number
+          created_at?: string
+          customer_name: string
+          date?: string
+          id?: string
+          note?: string | null
+          store_id: string
+        }
+        Update: {
+          amount?: number
+          created_at?: string
+          customer_name?: string
+          date?: string
+          id?: string
+          note?: string | null
+          store_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "debtor_payments_store_id_fkey"
+            columns: ["store_id"]
+            isOneToOne: false
+            referencedRelation: "stores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       dish_bundles: {
         Row: {
           category: string | null
