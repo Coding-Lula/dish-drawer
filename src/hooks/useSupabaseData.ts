@@ -1286,6 +1286,60 @@ export function useCredits(storeId: string | null) {
   return { credits, loading, addCredit, settleCredit, refetch: fetchCredits };
 }
 
+// Debtor payments hook — records money received against a debtor's balance
+export interface DebtorPayment {
+  id: string;
+  store_id: string;
+  customer_name: string;
+  amount: number;
+  note: string | null;
+  date: string;
+  created_at: string;
+}
+
+export function useDebtorPayments(storeId: string | null) {
+  const [payments, setPayments] = useState<DebtorPayment[]>([]);
+  const [loading, setLoading] = useState(true);
+  const { toast } = useToast();
+
+  const fetchPayments = useCallback(async () => {
+    if (!storeId) return;
+    const { data, error } = await supabase
+      .from('debtor_payments')
+      .select('*')
+      .eq('store_id', storeId)
+      .order('date', { ascending: false });
+    if (error) {
+      toast({ title: 'Error fetching debtor payments', description: error.message, variant: 'destructive' });
+    } else {
+      setPayments((data as DebtorPayment[]) || []);
+    }
+    setLoading(false);
+  }, [storeId, toast]);
+
+  const addPayment = async (payment: { customer_name: string; amount: number; note?: string }) => {
+    if (!storeId) return null;
+    const { data, error } = await supabase
+      .from('debtor_payments')
+      .insert([{ ...payment, store_id: storeId }])
+      .select()
+      .single();
+    if (error) {
+      toast({ title: 'Error saving payment', description: error.message, variant: 'destructive' });
+      return null;
+    }
+    setPayments(prev => [data as DebtorPayment, ...prev]);
+    toast({ title: 'Credit added to debtor' });
+    return data;
+  };
+
+  useEffect(() => {
+    fetchPayments();
+  }, [fetchPayments]);
+
+  return { payments, loading, addPayment, refetch: fetchPayments };
+}
+
 
 // Restaurant Tables hook with add/delete
 export function useRestaurantTablesManagement(storeId: string | null) {

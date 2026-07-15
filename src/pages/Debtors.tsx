@@ -1,13 +1,15 @@
 import { MainLayout, useCurrentStore } from '@/components/layout/MainLayout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { useCredits, type Credit } from '@/hooks/useSupabaseData';
-import { useEffect, useState, useMemo } from 'react';
+import { useCredits, useDebtorPayments, type Credit, type DebtorPayment } from '@/hooks/useSupabaseData';
+import { useEffect, useState, useMemo, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
-import { AlertTriangle, Download, Loader2, User } from 'lucide-react';
+import { AlertTriangle, Download, Loader2, User, UserPlus, X, CreditCard } from 'lucide-react';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import * as XLSX from 'xlsx';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 
 interface TransactionItem {
   id: string;
@@ -25,15 +27,26 @@ interface DebtorBill {
 interface GroupedDebtor {
   customer_name: string;
   total_owed: number;
+  total_paid: number;
+  balance: number; // positive => credit in favor of customer
   bills: DebtorBill[];
+  payments: DebtorPayment[];
 }
 
 function DebtorsContent() {
   const { currentStore } = useCurrentStore();
   const { credits, loading: creditsLoading } = useCredits(currentStore?.id || null);
+  const { payments, loading: paymentsLoading, addPayment } = useDebtorPayments(currentStore?.id || null);
   const [transactionItems, setTransactionItems] = useState<TransactionItem[]>([]);
   const [itemsLoading, setItemsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [showAddCard, setShowAddCard] = useState(false);
+  const [formName, setFormName] = useState('');
+  const [formAmount, setFormAmount] = useState('');
+  const [formNote, setFormNote] = useState('');
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const suggestionsRef = useRef<HTMLDivElement>(null);
 
   // Fetch transaction items for all credits
   useEffect(() => {
@@ -87,30 +100,84 @@ function DebtorsContent() {
     fetchTransactionItems();
   }, [credits, creditsLoading]);
 
-  // Group credits by customer name
+  // Group credits + payments by customer name
   const groupedDebtors = useMemo((): GroupedDebtor[] => {
     const unsettledCredits = credits.filter(c => c.status === 'unsettled');
-    
-    const grouped = new Map<string, DebtorBill[]>();
-    
-    unsettledCredits.forEach(credit => {
-      const name = credit.customer_name.trim().toLowerCase();
-      const items = transactionItems.filter(item => item.transaction_id === credit.transaction_id);
-      
-      if (!grouped.has(name)) {
-        grouped.set(name, []);
+
+    const grouped = new Map<string, { display: string; bills: DebtorBill[]; payments: DebtorPayment[] }>();
+
+    const ensure = (rawName: string) => {
+      const key = rawName.trim().toLowerCase();
+      if (!grouped.has(key)) {
+        grouped.set(key, { display: rawName.trim(), bills: [], payments: [] });
       }
-      grouped.get(name)!.push({ credit, items });
+      return grouped.get(key)!;
+    };
+
+    unsettledCredits.forEach(credit => {
+      const items = transactionItems.filter(item => item.transaction_id === credit.transaction_id);
+      ensure(credit.customer_name).bills.push({ credit, items });
     });
 
-    return Array.from(grouped.entries()).map(([_, bills]) => ({
-      customer_name: bills[0].credit.customer_name,
-      total_owed: bills.reduce((sum, bill) => sum + Number(bill.credit.sale_amount), 0),
-      bills: bills.sort((a, b) => new Date(b.credit.date).getTime() - new Date(a.credit.date).getTime())
-    })).sort((a, b) => b.total_owed - a.total_owed);
-  }, [credits, transactionItems]);
+    payments.forEach(p => {
+      ensure(p.customer_name).payments.push(p);
+    });
 
-  const loading = creditsLoading || itemsLoading;
+    return Array.from(grouped.values()).map(({ display, bills, payments: pays }) => {
+      const total_owed = bills.reduce((s, b) => s + Number(b.credit.sale_amount), 0);
+      const total_paid = pays.reduce((s, p) => s + Number(p.amount), 0);
+      return {
+        customer_name: display,
+        total_owed,
+        total_paid,
+        balance: total_paid - total_owed,
+        bills: bills.sort((a, b) => new Date(b.credit.date).getTime() - new Date(a.credit.date).getTime()),
+        payments: pays.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()),
+      };
+    })
+    // Hide entries fully settled with zero balance
+    .filter(d => d.bills.length > 0 || d.payments.length > 0)
+    .sort((a, b) => (b.total_owed - b.total_paid) - (a.total_owed - a.total_paid));
+  }, [credits, transactionItems, payments]);
+
+  const existingNames = useMemo(() => {
+    const set = new Set<string>();
+    credits.forEach(c => set.add(c.customer_name.trim()));
+    payments.forEach(p => set.add(p.customer_name.trim()));
+    return Array.from(set).sort((a, b) => a.localeCompare(b));
+  }, [credits, payments]);
+
+  const filteredNameSuggestions = formName.trim()
+    ? existingNames.filter(n => n.toLowerCase().includes(formName.toLowerCase())).slice(0, 5)
+    : [];
+
+  useEffect(() => {
+    const handleClick = (e: MouseEvent) => {
+      if (suggestionsRef.current && !suggestionsRef.current.contains(e.target as Node)) {
+        setShowSuggestions(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, []);
+
+  const handleSubmitPayment = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const name = formName.trim();
+    const amount = parseFloat(formAmount);
+    if (!name || !amount || amount <= 0) return;
+    setSubmitting(true);
+    const res = await addPayment({ customer_name: name, amount, note: formNote.trim() || undefined });
+    setSubmitting(false);
+    if (res) {
+      setFormName('');
+      setFormAmount('');
+      setFormNote('');
+      setShowAddCard(false);
+    }
+  };
+
+  const loading = creditsLoading || itemsLoading || paymentsLoading;
 
   const handleDownload = () => {
     // Sheet 1: Summary (one row per debtor)
@@ -158,10 +225,67 @@ function DebtorsContent() {
     XLSX.writeFile(wb, `Relatorio_Devedores_${date}.xlsx`);
   };
 
+  const handleDownloadDebtor = (debtor: GroupedDebtor) => {
+    const wb = XLSX.utils.book_new();
+
+    const summary = [
+      { Campo: 'Cliente', Valor: debtor.customer_name },
+      { Campo: 'Total Faturado (MT)', Valor: debtor.total_owed },
+      { Campo: 'Total Pago (MT)', Valor: debtor.total_paid },
+      { Campo: 'Saldo (MT)', Valor: debtor.balance },
+    ];
+    const wsSummary = XLSX.utils.json_to_sheet(summary);
+    wsSummary['!cols'] = [{ wch: 25 }, { wch: 20 }];
+    XLSX.utils.book_append_sheet(wb, wsSummary, 'Resumo');
+
+    const items = debtor.bills.flatMap(bill =>
+      bill.items.length > 0
+        ? bill.items.map(item => ({
+            Data: new Date(bill.credit.date).toLocaleDateString(),
+            Item: item.dishes?.name || 'Item Desconhecido',
+            Quantidade: item.quantity,
+            'Preço Unitário (MT)': item.unit_price,
+            'Total (MT)': item.quantity * item.unit_price,
+          }))
+        : [{
+            Data: new Date(bill.credit.date).toLocaleDateString(),
+            Item: 'Sem detalhes de itens',
+            Quantidade: 0,
+            'Preço Unitário (MT)': 0,
+            'Total (MT)': Number(bill.credit.sale_amount),
+          }]
+    );
+    const wsItems = XLSX.utils.json_to_sheet(items);
+    wsItems['!cols'] = [{ wch: 15 }, { wch: 30 }, { wch: 12 }, { wch: 18 }, { wch: 15 }];
+    XLSX.utils.book_append_sheet(wb, wsItems, 'Faturas');
+
+    const pays = debtor.payments.map(p => ({
+      Data: new Date(p.date).toLocaleDateString(),
+      'Valor (MT)': Number(p.amount),
+      Nota: p.note || '',
+    }));
+    if (pays.length > 0) {
+      const wsPay = XLSX.utils.json_to_sheet(pays);
+      wsPay['!cols'] = [{ wch: 15 }, { wch: 15 }, { wch: 30 }];
+      XLSX.utils.book_append_sheet(wb, wsPay, 'Pagamentos');
+    }
+
+    const safe = debtor.customer_name.replace(/[^a-zA-Z0-9]+/g, '_');
+    XLSX.writeFile(wb, `Devedor_${safe}_${new Date().toISOString().split('T')[0]}.xlsx`);
+  };
+
   return (
     <div className="space-y-6 max-w-4xl mx-auto relative">
       <div className="text-center">
-        <div className="absolute right-0 top-0">
+        <div className="absolute right-0 top-0 flex gap-1">
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => setShowAddCard(v => !v)}
+            title="Adicionar Crédito ao Devedor"
+          >
+            <UserPlus className="h-5 w-5" />
+          </Button>
           <Button
             variant="ghost"
             size="icon"
@@ -177,6 +301,93 @@ function DebtorsContent() {
           {groupedDebtors.length} {groupedDebtors.length === 1 ? 'cliente' : 'clientes'} com saldo devedor
         </p>
       </div>
+
+      {showAddCard && (
+        <Card className="border-primary/40">
+          <CardHeader className="pb-3 flex flex-row items-center justify-between space-y-0">
+            <CardTitle className="text-base flex items-center gap-2">
+              <CreditCard className="w-4 h-4 text-primary" />
+              Adicionar Crédito ao Devedor
+            </CardTitle>
+            <Button variant="ghost" size="icon" onClick={() => setShowAddCard(false)}>
+              <X className="w-4 h-4" />
+            </Button>
+          </CardHeader>
+          <CardContent>
+            <form onSubmit={handleSubmitPayment} className="grid grid-cols-1 md:grid-cols-[1fr_140px_auto] gap-3 items-end">
+              <div className="space-y-1.5">
+                <Label htmlFor="debtor-name">Nome do Cliente</Label>
+                <div className="relative" ref={suggestionsRef}>
+                  <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                  <Input
+                    id="debtor-name"
+                    value={formName}
+                    onChange={e => { setFormName(e.target.value); setShowSuggestions(true); }}
+                    onFocus={() => setShowSuggestions(true)}
+                    placeholder="Existente ou novo"
+                    className="pl-10"
+                    autoComplete="off"
+                    maxLength={200}
+                    required
+                  />
+                  {showSuggestions && filteredNameSuggestions.length > 0 && (
+                    <div className="absolute z-50 w-full mt-1 bg-popover border border-border rounded-md shadow-md max-h-40 overflow-auto">
+                      {filteredNameSuggestions.map(name => (
+                        <button
+                          key={name}
+                          type="button"
+                          className="w-full text-left px-3 py-2 text-sm hover:bg-muted transition-colors"
+                          onClick={() => { setFormName(name); setShowSuggestions(false); }}
+                        >
+                          {name}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="debtor-amount">Valor (MT)</Label>
+                <Input
+                  id="debtor-amount"
+                  type="number"
+                  min="0.01"
+                  step="0.01"
+                  value={formAmount}
+                  onChange={e => setFormAmount(e.target.value)}
+                  placeholder="0"
+                  required
+                />
+              </div>
+              <Button type="submit" disabled={submitting || !formName.trim() || !formAmount}>
+                {submitting ? 'A guardar...' : 'Adicionar'}
+              </Button>
+              <div className="md:col-span-3 space-y-1.5">
+                <Label htmlFor="debtor-note" className="text-xs text-muted-foreground">Nota (opcional)</Label>
+                <Input
+                  id="debtor-note"
+                  value={formNote}
+                  onChange={e => setFormNote(e.target.value)}
+                  placeholder="Ex: pagamento parcial"
+                />
+              </div>
+            </form>
+            {formName.trim() && (() => {
+              const match = groupedDebtors.find(d => d.customer_name.toLowerCase() === formName.trim().toLowerCase());
+              if (!match) return null;
+              const bal = match.balance;
+              return (
+                <div className="mt-3 text-sm flex items-center justify-between border-t pt-3">
+                  <span className="text-muted-foreground">Saldo actual de {match.customer_name}:</span>
+                  <span className={`font-semibold ${bal > 0 ? 'text-green-600' : bal < 0 ? 'text-destructive' : ''}`}>
+                    {bal > 0 ? '+' : ''}{bal.toLocaleString()} MT
+                  </span>
+                </div>
+              );
+            })()}
+          </CardContent>
+        </Card>
+      )}
 
       {loading && (
         <div className="flex justify-center items-center p-8">
@@ -202,22 +413,41 @@ function DebtorsContent() {
         <Card key={debtor.customer_name}>
           <CardHeader className="pb-2">
             <div className="flex justify-between items-center">
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-3 min-w-0">
                 <div className="p-2 rounded-full bg-primary/10">
                   <User className="w-5 h-5 text-primary" />
                 </div>
-                <div>
-                  <CardTitle className="text-xl">{debtor.customer_name}</CardTitle>
+                <div className="min-w-0">
+                  <div className="flex items-center gap-1">
+                    <CardTitle className="text-xl truncate">{debtor.customer_name}</CardTitle>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7"
+                      onClick={() => handleDownloadDebtor(debtor)}
+                      title="Descarregar itens deste devedor"
+                    >
+                      <Download className="h-4 w-4" />
+                    </Button>
+                  </div>
                   <p className="text-sm text-muted-foreground">
                     {debtor.bills.length} {debtor.bills.length === 1 ? 'fatura pendente' : 'faturas pendentes'}
+                    {debtor.payments.length > 0 && ` · ${debtor.payments.length} pagamento(s)`}
                   </p>
                 </div>
               </div>
               <div className="text-right">
-                <p className="text-2xl font-bold text-destructive">
-                  {debtor.total_owed.toLocaleString()} MT
+                <p className={`text-2xl font-bold ${debtor.balance > 0 ? 'text-green-600' : 'text-destructive'}`}>
+                  {debtor.balance > 0 ? '+' : ''}{debtor.balance.toLocaleString()} MT
                 </p>
-                <p className="text-xs text-muted-foreground">Total em Dívida</p>
+                <p className="text-xs text-muted-foreground">
+                  {debtor.balance > 0 ? 'Saldo a Favor' : 'Saldo em Dívida'}
+                </p>
+                {debtor.total_paid > 0 && (
+                  <p className="text-[11px] text-muted-foreground mt-0.5">
+                    Fact. {debtor.total_owed.toLocaleString()} − Pago {debtor.total_paid.toLocaleString()}
+                  </p>
+                )}
               </div>
             </div>
           </CardHeader>
