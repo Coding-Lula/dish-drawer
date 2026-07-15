@@ -107,9 +107,6 @@ function InventoryContent() {
     .filter(item => !searchTerm || item?.ingredient?.name.toLowerCase().includes(searchTerm.toLowerCase()))
     .sort((a, b) => {
       if (!a || !b) return 0;
-      // First sort by low stock, then alphabetically
-      if (a.isLow && !b.isLow) return -1;
-      if (!a.isLow && b.isLow) return 1;
       return a.ingredient.name.localeCompare(b.ingredient.name);
     }) as NonNullable<typeof inventoryItems[number]>[];
 

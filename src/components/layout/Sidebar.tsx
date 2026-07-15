@@ -46,7 +46,7 @@ const allNavItems = [
   { path: '/pos', label: 'Ponto de Venda', icon: ShoppingCart, roles: ['manager', 'cashier'] },
   { path: '/inventory', label: 'Inventário', icon: Package, roles: ['manager', 'cashier'] },
   { path: '/restock-history', label: 'Histórico Reposição', icon: History, roles: ['manager', 'cashier'] },
-  { path: '/recipes', label: 'Folhas Técnicas', icon: UtensilsCrossed, roles: ['manager'] },
+  { path: '/recipes', label: 'Pratos', icon: UtensilsCrossed, roles: ['manager'] },
   { path: '/sub-recipes', label: 'Sub-Recipes', icon: UtensilsCrossed, roles: ['manager'] },
   { path: '/expenses', label: 'Despesas', icon: Receipt, roles: ['manager','cashier'] },
   { path: '/finance', label: 'Financeiro', icon: Wallet, roles: ['manager'] },
