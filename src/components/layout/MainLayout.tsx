@@ -66,7 +66,7 @@ export function MainLayout({ children, hideSidebar = false }: MainLayoutProps) {
       <div className="min-h-screen bg-background">
         {!hideSidebar && <Sidebar currentStore={currentStore} onStoreChange={setCurrentStore} />}
         <main className={cn(
-          "min-h-screen transition-all duration-300 p-6",
+          "min-h-screen transition-all duration-300 p-3 md:p-6",
           !hideSidebar && "ml-64"
         )}>
           {children}

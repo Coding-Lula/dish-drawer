@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Package, Trash2, UtensilsCrossed, Check } from 'lucide-react';
+import { Package, Trash2, UtensilsCrossed, Check, Search } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { Ingredient, Dish } from '@/hooks/useSupabaseData';
 
@@ -30,6 +30,7 @@ export function CreateRecipeModal({ dish, ingredients, existingRecipes, onSave, 
     }).filter(Boolean) as SelectedIngredient[]
   );
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [ingredientSearch, setIngredientSearch] = useState('');
 
   const FIXED_PRODUCTION_COST = dish.cost_of_production ?? 20;
 
@@ -95,9 +96,20 @@ export function CreateRecipeModal({ dish, ingredients, existingRecipes, onSave, 
             {/* Available Ingredients */}
             <div className="flex flex-col min-h-0">
               <Label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3 px-1">Ingredientes Disponíveis</Label>
+              <div className="relative mb-2 px-1">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
+                <Input
+                  placeholder="Pesquisar ingredientes..."
+                  value={ingredientSearch}
+                  onChange={(e) => setIngredientSearch(e.target.value)}
+                  className="pl-8 h-9 text-sm bg-slate-50 border-slate-200"
+                />
+              </div>
               <ScrollArea className="flex-1 border-none bg-slate-50/50 rounded-lg p-2">
                 <div className="space-y-2 pr-2">
-                  {ingredients.map(ingredient => {
+                  {ingredients
+                    .filter(ing => ing.name.toLowerCase().includes(ingredientSearch.toLowerCase()))
+                    .map(ingredient => {
                     const isSelected = selectedIngredients.some(s => s.ingredient.id === ingredient.id);
                     return (
                       <button
