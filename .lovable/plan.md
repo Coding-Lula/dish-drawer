@@ -1,74 +1,71 @@
+## Como o saldo dos devedores é calculado hoje
 
+O ecrã "Devedores" (`src/pages/Debtors.tsx`) combina duas tabelas separadas:
 
-## Bulk Stock Correction via CSV Upload
+- `credits` — cada linha representa uma **fatura por pagar** (uma venda a crédito). Só entram no cálculo as linhas com `status = 'unsettled'`. Campo principal: `sale_amount`.
+- `debtor_payments` — cada linha representa um **pagamento recebido** (ou crédito manual em favor do cliente). Campo principal: `amount`.
 
-### What it does
-Adds a "Bulk Correct Stock" button (manager-only) to the Inventory page. Users can:
-1. **Download a template** CSV pre-filled with current stock data (ingredient name, unit, current quantity, and a blank "new quantity" column)
-2. **Edit the CSV** in Excel/Google Sheets, filling in correct quantities
-3. **Upload the corrected CSV** back, review changes in a preview table, then apply all corrections at once
-
-### User Flow
+As linhas são agrupadas por `customer_name` (normalizado em minúsculas). Para cada cliente:
 
 ```text
-[Download Template] --> Edit in Excel --> [Upload CSV] --> Preview Changes --> [Apply All]
+total_owed  = soma(credits.sale_amount)          -- só unsettled
+total_paid  = soma(debtor_payments.amount)
+balance     = total_paid - total_owed
 ```
 
-### Files to Create/Modify
+Interpretação:
 
-**1. New file: `src/components/modals/BulkStockCorrectionModal.tsx`**
-- Dialog with two tabs/steps:
-  - **Step 1**: "Download Template" button that generates a CSV with columns: `Ingredient`, `Unit`, `Current Qty`, `New Qty`
-  - **Step 2**: File upload input (accepts .csv, .xlsx). On upload:
-    - Parse with `xlsx` library
-    - Match rows to ingredients by name (case-insensitive)
-    - Show a preview table with: Ingredient | Current Qty | New Qty | Difference
-    - Highlight increases in green, decreases in red, unchanged in gray
-    - Show unmatched rows as warnings
-  - **Submit**: Calls `manualAdjustStock` for each changed item
-- Manager-only (already controlled by the page)
+- `balance < 0` → cliente **deve** dinheiro (mostrado a vermelho como "Saldo em Dívida").
+- `balance > 0` → cliente tem **crédito a favor** (mostrado a verde como "Saldo a Favor").
+- `balance = 0` → quitado; o cliente é ocultado se não houver faturas nem pagamentos.
 
-**2. Modify: `src/pages/Inventory.tsx`**
-- Import and render `BulkStockCorrectionModal` in the manager actions area
-- Pass required props: `stocks`, `ingredients`, `manualAdjustStock`, `refetchStocks`
+## Refactor para uma única tabela — recomendação
 
-### Technical Details
+Sim, dá para unificar em **um único livro-razão** (ex.: `debtor_ledger`) com colunas tipo:
 
-**Template CSV generation:**
-```typescript
-// Using xlsx library already installed
-import * as XLSX from 'xlsx';
-
-const templateData = stocks.map(stock => {
-  const ing = ingredients.find(i => i.id === stock.ingredient_id);
-  return {
-    'Ingredient': ing?.name || '',
-    'Unit': ing?.unit || '',
-    'Current Qty': stock.current_quantity,
-    'New Qty': '' // user fills this in
-  };
-});
-const ws = XLSX.utils.json_to_sheet(templateData);
-const wb = XLSX.utils.book_new();
-XLSX.utils.book_append_sheet(wb, ws, 'Stock');
-XLSX.writeFile(wb, `stock-correction-${storeName}.xlsx`);
+```text
+id | store_id | customer_id/name | date | kind ('sale' | 'payment' | 'adjustment') | amount (signed) | transaction_id | note
 ```
 
-**CSV parsing and matching:**
-- Parse uploaded file with `XLSX.read()`
-- Match "Ingredient" column to `ingredients` by name (case-insensitive, trimmed)
-- Only process rows where "New Qty" is a valid number and differs from current
-- Each matched row calls `manualAdjustStock(stockId, newQuantity)`
+Vantagens: um único `SUM(amount)` dá o saldo, elimina a divergência entre `credits.status` e `debtor_payments`, simplifica o histórico. Desvantagens: `credits` está ligada ao POS (deduz stock, gera `transaction_id`, tem `status`/`settled_at`) e a várias outras páginas (Finanças, relatórios), portanto a migração toca em bastantes sítios.
 
-**Preview table columns:**
-- Ingredient name
-- Current quantity
-- New quantity (from CSV)
-- Change (+/- with color coding)
-- Status (Matched / Not Found)
+**Recomendação:** não fazer o refactor agora, só para inserir 4 clientes. Fica registado como melhoria futura; se quiser, abro um plano separado dedicado ao refactor.
 
-**Error handling:**
-- Skip rows with empty or invalid "New Qty"
-- Warn about ingredient names that don't match any store item
-- Show success/error count after applying
+## Inserir os 4 devedores via SQL (loja: Cantina C.Horizonte)
 
+Store id: `85cb8967-fcad-49f5-b0bb-dc84bf0448d9`.
+
+Convenção do utilizador:
+- "negativo 500" = deve 500 → inserir em `credits` (`sale_amount = 500`, `status = 'unsettled'`).
+- "positivo X" = crédito a favor do cliente → inserir em `debtor_payments` (`amount = X`), sem fatura correspondente, para que `balance = +X`.
+
+Registos a criar:
+
+| Cliente | Sinal | Valor | Tabela |
+|---|---|---|---|
+| Abdul Cadri e Noor | − | 500 | `credits` (unsettled) |
+| Familia | − | 500 | `credits` (unsettled) |
+| Elizabeth | + | 4 256 | `debtor_payments` |
+| Aallyah e Ayyan | + | 970 | `debtor_payments` |
+
+SQL a executar (via ferramenta de inserção de dados, com aprovação):
+
+```sql
+INSERT INTO public.credits (store_id, customer_name, sale_amount, status, date)
+VALUES
+  ('85cb8967-fcad-49f5-b0bb-dc84bf0448d9', 'Abdul Cadri e Noor', 500, 'unsettled', now()),
+  ('85cb8967-fcad-49f5-b0bb-dc84bf0448d9', 'Familia',            500, 'unsettled', now());
+
+INSERT INTO public.debtor_payments (store_id, customer_name, amount, note, date)
+VALUES
+  ('85cb8967-fcad-49f5-b0bb-dc84bf0448d9', 'Elizabeth',         4256, 'Saldo inicial a favor', now()),
+  ('85cb8967-fcad-49f5-b0bb-dc84bf0448d9', 'Aallyah e Ayyan',    970, 'Saldo inicial a favor', now());
+```
+
+Efeito no ecrã Devedores após inserir:
+- Abdul Cadri e Noor → −500 MT (dívida)
+- Familia → −500 MT (dívida)
+- Elizabeth → +4 256 MT (a favor, verde)
+- Aallyah e Ayyan → +970 MT (a favor, verde)
+
+Não há alterações de código nem de esquema neste plano — apenas inserção de dados.
