@@ -104,24 +104,117 @@ function SalesReportContent() {
     setLoading(false);
   };
 
-  const deleteCreditSale = async (transactionId: string) => {
-    const { error: cErr } = await supabase.from('credits').delete().eq('transaction_id', transactionId);
-    if (cErr) {
-      toast({ title: 'Error', description: cErr.message, variant: 'destructive' });
-      return;
+  const deleteSale = async (transactionId: string) => {
+    setLoading(true);
+    try {
+      // 1. Fetch transaction items
+      const { data: items, error: itemsErr } = await supabase
+        .from('transaction_items')
+        .select('dish_id, quantity')
+        .eq('transaction_id', transactionId);
+
+      if (itemsErr) {
+        toast({ title: 'Erro ao buscar itens da venda', description: itemsErr.message, variant: 'destructive' });
+        return;
+      }
+
+      // 2. Fetch transaction store_id
+      const { data: tx, error: txErr } = await supabase
+        .from('transactions')
+        .select('store_id')
+        .eq('id', transactionId)
+        .single();
+
+      if (txErr) {
+        toast({ title: 'Erro ao buscar detalhes da transação', description: txErr.message, variant: 'destructive' });
+        return;
+      }
+
+      // 3. Restore stock of ingredients
+      if (items && items.length > 0) {
+        const dishIds = items.map(item => item.dish_id).filter(Boolean);
+        if (dishIds.length > 0) {
+          const { data: recipes, error: recipesErr } = await supabase
+            .from('recipes')
+            .select('dish_id, ingredient_id, quantity_required')
+            .in('dish_id', dishIds);
+
+          if (recipesErr) {
+            toast({ title: 'Erro ao buscar receitas dos pratos', description: recipesErr.message, variant: 'destructive' });
+            return;
+          }
+
+          const restoreMap = new Map<string, number>();
+          for (const item of items) {
+            if (!item.dish_id) continue;
+            const dishRecipes = (recipes || []).filter(r => r.dish_id === item.dish_id);
+            for (const recipe of dishRecipes) {
+              const qtyToRestore = Number(recipe.quantity_required) * item.quantity;
+              restoreMap.set(recipe.ingredient_id, (restoreMap.get(recipe.ingredient_id) || 0) + qtyToRestore);
+            }
+          }
+
+          const ingredientIds = Array.from(restoreMap.keys());
+          if (ingredientIds.length > 0) {
+            const { data: stocks, error: stocksErr } = await supabase
+              .from('store_stock')
+              .select('id, ingredient_id, current_quantity')
+              .eq('store_id', tx.store_id)
+              .in('ingredient_id', ingredientIds);
+
+            if (stocksErr) {
+              toast({ title: 'Erro ao buscar stock da loja', description: stocksErr.message, variant: 'destructive' });
+              return;
+            }
+
+            for (const ingredientId of ingredientIds) {
+              const qtyToRestore = restoreMap.get(ingredientId) || 0;
+              const stockRecord = stocks?.find(s => s.ingredient_id === ingredientId);
+              if (stockRecord) {
+                const newQty = stockRecord.current_quantity + qtyToRestore;
+                const { error: updateErr } = await supabase
+                  .from('store_stock')
+                  .update({ current_quantity: newQty })
+                  .eq('id', stockRecord.id);
+
+                if (updateErr) {
+                  toast({ title: 'Erro ao atualizar stock', description: updateErr.message, variant: 'destructive' });
+                  return;
+                }
+              }
+            }
+          }
+        }
+      }
+
+      // 4. Delete associated credits (if any)
+      const { error: cErr } = await supabase.from('credits').delete().eq('transaction_id', transactionId);
+      if (cErr) {
+        toast({ title: 'Erro ao apagar registo de crédito', description: cErr.message, variant: 'destructive' });
+        return;
+      }
+
+      // 5. Delete transaction items
+      const { error: iErr } = await supabase.from('transaction_items').delete().eq('transaction_id', transactionId);
+      if (iErr) {
+        toast({ title: 'Erro ao apagar itens da transação', description: iErr.message, variant: 'destructive' });
+        return;
+      }
+
+      // 6. Delete the main transaction
+      const { error: tErr } = await supabase.from('transactions').delete().eq('id', transactionId);
+      if (tErr) {
+        toast({ title: 'Erro ao apagar transação', description: tErr.message, variant: 'destructive' });
+        return;
+      }
+
+      setSalesData(prev => prev.filter(s => s.transaction_id !== transactionId));
+      toast({ title: 'Venda eliminada com sucesso' });
+    } catch (err: any) {
+      toast({ title: 'Erro inesperado', description: err.message || err, variant: 'destructive' });
+    } finally {
+      setLoading(false);
     }
-    const { error: iErr } = await supabase.from('transaction_items').delete().eq('transaction_id', transactionId);
-    if (iErr) {
-      toast({ title: 'Error', description: iErr.message, variant: 'destructive' });
-      return;
-    }
-    const { error: tErr } = await supabase.from('transactions').delete().eq('id', transactionId);
-    if (tErr) {
-      toast({ title: 'Error', description: tErr.message, variant: 'destructive' });
-      return;
-    }
-    setSalesData(prev => prev.filter(s => s.transaction_id !== transactionId));
-    toast({ title: 'Credit sale deleted' });
   };
 
   const exportToCSV = () => {
@@ -273,37 +366,35 @@ function SalesReportContent() {
                     <TableCell>{sale.payment_method}</TableCell>
                     {isManager && (
                       <TableCell className="w-10 p-1">
-                        {sale.payment_method === 'credit' && (
-                          <AlertDialog>
-                            <AlertDialogTrigger asChild>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-7 w-7 text-muted-foreground hover:text-destructive"
-                                aria-label="Delete credit sale"
+                        <AlertDialog>
+                          <AlertDialogTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                              aria-label="Eliminar venda"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </AlertDialogTrigger>
+                          <AlertDialogContent>
+                            <AlertDialogHeader>
+                              <AlertDialogTitle>Eliminar venda?</AlertDialogTitle>
+                              <AlertDialogDescription>
+                                Isto irá remover toda a transação ({sale.table_name}) e os seus registos associados (incluindo dívidas, se houver). Esta ação não pode ser desfeita e o stock de ingredientes será reposto.
+                              </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                              <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                              <AlertDialogAction
+                                onClick={() => deleteSale(sale.transaction_id)}
+                                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
                               >
-                                <Trash2 className="h-4 w-4" />
-                              </Button>
-                            </AlertDialogTrigger>
-                            <AlertDialogContent>
-                              <AlertDialogHeader>
-                                <AlertDialogTitle>Delete credit sale?</AlertDialogTitle>
-                                <AlertDialogDescription>
-                                  This removes the entire transaction ({sale.table_name}) and its debt record. This cannot be undone.
-                                </AlertDialogDescription>
-                              </AlertDialogHeader>
-                              <AlertDialogFooter>
-                                <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                <AlertDialogAction
-                                  onClick={() => deleteCreditSale(sale.transaction_id)}
-                                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                                >
-                                  Delete
-                                </AlertDialogAction>
-                              </AlertDialogFooter>
-                            </AlertDialogContent>
-                          </AlertDialog>
-                        )}
+                                Eliminar
+                              </AlertDialogAction>
+                            </AlertDialogFooter>
+                          </AlertDialogContent>
+                        </AlertDialog>
                       </TableCell>
                     )}
                   </TableRow>
