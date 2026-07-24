@@ -6,13 +6,25 @@ import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { format } from 'date-fns';
-import { CalendarIcon, Download, DollarSign } from 'lucide-react';
+import { CalendarIcon, Download, DollarSign, Trash2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { useExpenses } from '@/hooks/useSupabaseData';
 import { useFinancialTransactions } from '@/hooks/useFinanceData';
 import { ItemizedSalesSummary } from '@/components/ItemizedSalesSummary';
+import { useAuth } from '@/hooks/useAuth';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog';
 
 const NON_REVENUE_METHODS = ['credit', 'self'];
 
@@ -25,11 +37,13 @@ interface SalesItem {
   unit_price: number;
   total: number;
   payment_method: string;
+  transaction_id: string;
 }
 
 function SalesReportContent() {
   const { currentStore } = useCurrentStore();
   const { toast } = useToast();
+  const { isManager } = useAuth();
   const [startDate, setStartDate] = useState<Date | undefined>(new Date());
   const [endDate, setEndDate] = useState<Date | undefined>(new Date());
   const [salesData, setSalesData] = useState<SalesItem[]>([]);
@@ -76,13 +90,34 @@ function SalesReportContent() {
           quantity: item.quantity,
           unit_price: Number(item.unit_price),
           total: Number(item.unit_price) * item.quantity,
-          payment_method: tx.payment_method
+          payment_method: tx.payment_method,
+          transaction_id: tx.id,
         });
       });
     });
 
     setSalesData(items);
     setLoading(false);
+  };
+
+  const deleteCreditSale = async (transactionId: string) => {
+    const { error: cErr } = await supabase.from('credits').delete().eq('transaction_id', transactionId);
+    if (cErr) {
+      toast({ title: 'Error', description: cErr.message, variant: 'destructive' });
+      return;
+    }
+    const { error: iErr } = await supabase.from('transaction_items').delete().eq('transaction_id', transactionId);
+    if (iErr) {
+      toast({ title: 'Error', description: iErr.message, variant: 'destructive' });
+      return;
+    }
+    const { error: tErr } = await supabase.from('transactions').delete().eq('id', transactionId);
+    if (tErr) {
+      toast({ title: 'Error', description: tErr.message, variant: 'destructive' });
+      return;
+    }
+    setSalesData(prev => prev.filter(s => s.transaction_id !== transactionId));
+    toast({ title: 'Credit sale deleted' });
   };
 
   const exportToCSV = () => {
@@ -212,6 +247,7 @@ function SalesReportContent() {
                   <TableHead className="text-right">Price</TableHead>
                   <TableHead className="text-right">Total</TableHead>
                   <TableHead>Payment</TableHead>
+                  {isManager && <TableHead className="w-10"></TableHead>}
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -224,6 +260,41 @@ function SalesReportContent() {
                     <TableCell className="text-right">{sale.unit_price.toLocaleString()} MT</TableCell>
                     <TableCell className="text-right">{sale.total.toLocaleString()} MT</TableCell>
                     <TableCell>{sale.payment_method}</TableCell>
+                    {isManager && (
+                      <TableCell className="w-10 p-1">
+                        {sale.payment_method === 'credit' && (
+                          <AlertDialog>
+                            <AlertDialogTrigger asChild>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                                aria-label="Delete credit sale"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </AlertDialogTrigger>
+                            <AlertDialogContent>
+                              <AlertDialogHeader>
+                                <AlertDialogTitle>Delete credit sale?</AlertDialogTitle>
+                                <AlertDialogDescription>
+                                  This removes the entire transaction ({sale.table_name}) and its debt record. This cannot be undone.
+                                </AlertDialogDescription>
+                              </AlertDialogHeader>
+                              <AlertDialogFooter>
+                                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                <AlertDialogAction
+                                  onClick={() => deleteCreditSale(sale.transaction_id)}
+                                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                                >
+                                  Delete
+                                </AlertDialogAction>
+                              </AlertDialogFooter>
+                            </AlertDialogContent>
+                          </AlertDialog>
+                        )}
+                      </TableCell>
+                    )}
                   </TableRow>
                 ))}
               </TableBody>
