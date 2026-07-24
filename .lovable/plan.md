@@ -1,71 +1,33 @@
-## Como o saldo dos devedores é calculado hoje
+## Goal
+Prevent the POS cart from being lost on refresh or accidental navigation by persisting it to `localStorage`, scoped per store + per user.
 
-O ecrã "Devedores" (`src/pages/Debtors.tsx`) combina duas tabelas separadas:
+## Approach
+Add a small persistence layer inside `src/pages/POS.tsx` (where the `cart` state lives) using a `useEffect` pair:
 
-- `credits` — cada linha representa uma **fatura por pagar** (uma venda a crédito). Só entram no cálculo as linhas com `status = 'unsettled'`. Campo principal: `sale_amount`.
-- `debtor_payments` — cada linha representa um **pagamento recebido** (ou crédito manual em favor do cliente). Campo principal: `amount`.
+1. **Load on mount / when store or user changes**
+   - Key: `pos_cart::<userId>::<storeId>`
+   - Parse JSON from `localStorage`; hydrate `cart` state if valid.
+   - Guard against malformed data (try/catch, schema check on shape).
 
-As linhas são agrupadas por `customer_name` (normalizado em minúsculas). Para cada cliente:
+2. **Save on every cart change**
+   - Serialize `cart` to the same key whenever it changes.
+   - If cart is empty, remove the key to avoid clutter.
 
-```text
-total_owed  = soma(credits.sale_amount)          -- só unsettled
-total_paid  = soma(debtor_payments.amount)
-balance     = total_paid - total_owed
-```
+3. **Clear on checkout**
+   - After a successful sale/split-bill (existing `clearCart` / setCart([]) paths), the empty-cart effect above naturally removes the key.
 
-Interpretação:
+4. **Scope isolation**
+   - Different store → different key, so switching stores doesn't leak items.
+   - Different user (logout/login) → different key.
+   - If `userId` or `storeId` isn't available yet, skip hydration until they are.
 
-- `balance < 0` → cliente **deve** dinheiro (mostrado a vermelho como "Saldo em Dívida").
-- `balance > 0` → cliente tem **crédito a favor** (mostrado a verde como "Saldo a Favor").
-- `balance = 0` → quitado; o cliente é ocultado se não houver faturas nem pagamentos.
+## Out of scope
+- Selected table, category filter, search term, split-bill draft (per user's answer: cart only).
+- Cross-device sync (no DB table).
+- `beforeunload` warnings.
 
-## Refactor para uma única tabela — recomendação
-
-Sim, dá para unificar em **um único livro-razão** (ex.: `debtor_ledger`) com colunas tipo:
-
-```text
-id | store_id | customer_id/name | date | kind ('sale' | 'payment' | 'adjustment') | amount (signed) | transaction_id | note
-```
-
-Vantagens: um único `SUM(amount)` dá o saldo, elimina a divergência entre `credits.status` e `debtor_payments`, simplifica o histórico. Desvantagens: `credits` está ligada ao POS (deduz stock, gera `transaction_id`, tem `status`/`settled_at`) e a várias outras páginas (Finanças, relatórios), portanto a migração toca em bastantes sítios.
-
-**Recomendação:** não fazer o refactor agora, só para inserir 4 clientes. Fica registado como melhoria futura; se quiser, abro um plano separado dedicado ao refactor.
-
-## Inserir os 4 devedores via SQL (loja: Cantina C.Horizonte)
-
-Store id: `85cb8967-fcad-49f5-b0bb-dc84bf0448d9`.
-
-Convenção do utilizador:
-- "negativo 500" = deve 500 → inserir em `credits` (`sale_amount = 500`, `status = 'unsettled'`).
-- "positivo X" = crédito a favor do cliente → inserir em `debtor_payments` (`amount = X`), sem fatura correspondente, para que `balance = +X`.
-
-Registos a criar:
-
-| Cliente | Sinal | Valor | Tabela |
-|---|---|---|---|
-| Abdul Cadri e Noor | − | 500 | `credits` (unsettled) |
-| Familia | − | 500 | `credits` (unsettled) |
-| Elizabeth | + | 4 256 | `debtor_payments` |
-| Aallyah e Ayyan | + | 970 | `debtor_payments` |
-
-SQL a executar (via ferramenta de inserção de dados, com aprovação):
-
-```sql
-INSERT INTO public.credits (store_id, customer_name, sale_amount, status, date)
-VALUES
-  ('85cb8967-fcad-49f5-b0bb-dc84bf0448d9', 'Abdul Cadri e Noor', 500, 'unsettled', now()),
-  ('85cb8967-fcad-49f5-b0bb-dc84bf0448d9', 'Familia',            500, 'unsettled', now());
-
-INSERT INTO public.debtor_payments (store_id, customer_name, amount, note, date)
-VALUES
-  ('85cb8967-fcad-49f5-b0bb-dc84bf0448d9', 'Elizabeth',         4256, 'Saldo inicial a favor', now()),
-  ('85cb8967-fcad-49f5-b0bb-dc84bf0448d9', 'Aallyah e Ayyan',    970, 'Saldo inicial a favor', now());
-```
-
-Efeito no ecrã Devedores após inserir:
-- Abdul Cadri e Noor → −500 MT (dívida)
-- Familia → −500 MT (dívida)
-- Elizabeth → +4 256 MT (a favor, verde)
-- Aallyah e Ayyan → +970 MT (a favor, verde)
-
-Não há alterações de código nem de esquema neste plano — apenas inserção de dados.
+## Technical notes
+- Only `src/pages/POS.tsx` changes. No schema, no new hooks required.
+- Storage key format: `pos_cart::${userId}::${storeId}`.
+- Wrap `JSON.parse` in try/catch; on failure, remove the key and start fresh.
+- Persist only serializable fields already on `CartItem` (dish + quantity + any bundle/notes metadata already stored).
