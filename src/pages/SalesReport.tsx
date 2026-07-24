@@ -38,6 +38,7 @@ interface SalesItem {
   total: number;
   payment_method: string;
   transaction_id: string;
+  creditor_name?: string;
 }
 
 function SalesReportContent() {
@@ -66,7 +67,8 @@ function SalesReportContent() {
       .select(`
         id, date, payment_method, table_id,
         restaurant_tables(name),
-        transaction_items(id, quantity, unit_price, dish_id, dishes(name))
+        transaction_items(id, quantity, unit_price, dish_id, dishes(name)),
+        credits(customer_name)
       `)
       .eq('store_id', currentStore.id)
       .gte('date', `${start}T00:00:00`)
@@ -81,6 +83,7 @@ function SalesReportContent() {
 
     const items: SalesItem[] = [];
     (transactions || []).forEach((tx: any) => {
+      const creditorName = tx.credits?.[0]?.customer_name || tx.credits?.customer_name || undefined;
       (tx.transaction_items || []).forEach((item: any) => {
         items.push({
           id: item.id,
@@ -92,6 +95,7 @@ function SalesReportContent() {
           total: Number(item.unit_price) * item.quantity,
           payment_method: tx.payment_method,
           transaction_id: tx.id,
+          creditor_name: creditorName,
         });
       });
     });
@@ -253,7 +257,14 @@ function SalesReportContent() {
               <TableBody>
                 {salesData.map(sale => (
                   <TableRow key={sale.id}>
-                    <TableCell>{sale.date}</TableCell>
+                    <TableCell>
+                      {sale.date}
+                      {isManager && sale.payment_method === 'credit' && sale.creditor_name && (
+                        <span className="text-xs text-muted-foreground mt-0.5 block font-normal">
+                          {sale.creditor_name}
+                        </span>
+                      )}
+                    </TableCell>
                     <TableCell>{sale.table_name}</TableCell>
                     <TableCell>{sale.dish_name}</TableCell>
                     <TableCell className="text-right">{sale.quantity}</TableCell>
