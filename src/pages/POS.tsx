@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { MainLayout, useCurrentStore } from '@/components/layout/MainLayout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -182,10 +182,56 @@ function POSPage({ currentStore }: { currentStore: any }) {
   const { enabledCategories, setCategories: updateEnabledCategories } = useStoreCategories(currentStore?.id || null);
   const { bundles } = useBundles();
   const { getEffectiveBundlePrice } = useStoreBundlePrices(currentStore?.id || null);
-  const { isManager } = useAuth();
+  const { isManager, user } = useAuth();
   const { stores: allStores } = useStores();
 
   const [tableCarts, setTableCarts] = useState<Record<string, CartItem[]>>({});
+
+  // Persist per-table carts to localStorage, scoped per user + per store,
+  // so a page refresh or accidental navigation doesn't lose the cart.
+  const cartStorageKey = user?.id && currentStore?.id
+    ? `pos_cart::${user.id}::${currentStore.id}`
+    : null;
+  const hasHydratedCartRef = useRef(false);
+
+  // Hydrate on mount / when the scope key changes
+  useEffect(() => {
+    hasHydratedCartRef.current = false;
+    if (!cartStorageKey) return;
+    try {
+      const raw = localStorage.getItem(cartStorageKey);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+          setTableCarts(parsed as Record<string, CartItem[]>);
+        } else {
+          setTableCarts({});
+        }
+      } else {
+        setTableCarts({});
+      }
+    } catch {
+      localStorage.removeItem(cartStorageKey);
+      setTableCarts({});
+    }
+    hasHydratedCartRef.current = true;
+  }, [cartStorageKey]);
+
+  // Persist on every change (after hydration)
+  useEffect(() => {
+    if (!cartStorageKey || !hasHydratedCartRef.current) return;
+    try {
+      const hasAnyItems = Object.values(tableCarts).some(items => items && items.length > 0);
+      if (hasAnyItems) {
+        localStorage.setItem(cartStorageKey, JSON.stringify(tableCarts));
+      } else {
+        localStorage.removeItem(cartStorageKey);
+      }
+    } catch {
+      // Ignore quota / serialization errors
+    }
+  }, [tableCarts, cartStorageKey]);
+
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [selectedPayment, setSelectedPayment] = useState('cash');
   const [selectedTable, setSelectedTable] = useState<string | null>(null);
