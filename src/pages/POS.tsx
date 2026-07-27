@@ -19,6 +19,8 @@ import { DishSelectionModal } from '@/components/modals/DishSelectionModal';
 import { Plus, Minus, Trash2, ShoppingBag, CreditCard, Printer, Table, Split, Pencil, Coffee, Search } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Label } from '@/components/ui/label';
 import { CartModal } from '@/components/modals/CartModal';
 import { EditPriceModal } from '@/components/modals/EditPriceModal';
 import { useAuth } from '@/hooks/useAuth';
@@ -45,6 +47,7 @@ const paymentMethods = [
   { id: 'cash', name: 'Cash', icon: '', isRevenue: true, isCash: true },
   { id: 'cartao', name: 'Cartão', icon: '', isRevenue: true, isCash: true },
   { id: 'mpesa', name: 'M-Pesa', icon: '', isRevenue: true, isCash: true },
+  { id: 'emola', name: 'Emola', icon: '', isRevenue: true, isCash: true },
   { id: 'paga_facil', name: 'Paga Fácil', icon: '', isRevenue: true, isCash: true },
   { id: 'credit', name: 'Credito', icon: '', isRevenue: false, isCash: false },
   { id: 'self_consumption', name: 'Mesa 0', icon: '', isRevenue: false, isCash: false },
@@ -78,7 +81,10 @@ function CartContent({
   selectedTable,
   tables,
   toast,
-  dishes
+  dishes,
+  isDiscountEnabled,
+  discountApplied,
+  setDiscountApplied
 }: any) {
   const currentTableName = tables.find((t: any) => t.id === selectedTable)?.name || 'No Table';
 
@@ -101,8 +107,8 @@ function CartContent({
         </CardTitle>
       </CardHeader>
 
-      <CardContent className="flex-1 min-h-0 py-2">
-        <div className="h-[220px] overflow-y-auto">
+      <CardContent className="flex-1 min-h-0 py-2 flex flex-col">
+        <div className="h-[220px] lg:h-auto lg:flex-1 lg:min-h-0 overflow-y-auto">
           {cart.length === 0 ? (
             <div className="h-full flex flex-col items-center justify-center text-muted-foreground">
               <ShoppingBag className="w-10 h-10 mb-2 opacity-30" />
@@ -136,6 +142,19 @@ function CartContent({
       </CardContent>
 
       <div className="border-t p-4 space-y-3">
+        {isDiscountEnabled && cart.length > 0 && (
+          <div className="flex items-center space-x-2 p-2 bg-amber-500/10 border border-amber-500/20 rounded-md">
+            <Checkbox
+              id="cart-discount"
+              checked={discountApplied}
+              onCheckedChange={(checked) => setDiscountApplied(!!checked)}
+            />
+            <Label htmlFor="cart-discount" className="text-xs font-medium text-amber-800 dark:text-amber-300 cursor-pointer">
+              Aplicar Desconto (-5 MT)
+            </Label>
+          </div>
+        )}
+
         <div>
           <p className="text-xs font-medium text-muted-foreground mb-1.5">Payment Method</p>
           <div className="grid grid-cols-4 gap-1">
@@ -186,6 +205,7 @@ function POSPage({ currentStore }: { currentStore: any }) {
   const { stores: allStores } = useStores();
 
   const [tableCarts, setTableCarts] = useState<Record<string, CartItem[]>>({});
+  const [tableDiscounts, setTableDiscounts] = useState<Record<string, boolean>>({});
 
   // Persist per-table carts to localStorage, scoped per user + per store,
   // so a page refresh or accidental navigation doesn't lose the cart.
@@ -193,6 +213,11 @@ function POSPage({ currentStore }: { currentStore: any }) {
     ? `pos_cart::${user.id}::${currentStore.id}`
     : null;
   const hasHydratedCartRef = useRef(false);
+
+  const discountStorageKey = user?.id && currentStore?.id
+    ? `pos_discount::${user.id}::${currentStore.id}`
+    : null;
+  const hasHydratedDiscountRef = useRef(false);
 
   // Hydrate on mount / when the scope key changes
   useEffect(() => {
@@ -217,6 +242,29 @@ function POSPage({ currentStore }: { currentStore: any }) {
     hasHydratedCartRef.current = true;
   }, [cartStorageKey]);
 
+  // Hydrate discounts on mount / when the scope key changes
+  useEffect(() => {
+    hasHydratedDiscountRef.current = false;
+    if (!discountStorageKey) return;
+    try {
+      const raw = localStorage.getItem(discountStorageKey);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+          setTableDiscounts(parsed as Record<string, boolean>);
+        } else {
+          setTableDiscounts({});
+        }
+      } else {
+        setTableDiscounts({});
+      }
+    } catch {
+      localStorage.removeItem(discountStorageKey);
+      setTableDiscounts({});
+    }
+    hasHydratedDiscountRef.current = true;
+  }, [discountStorageKey]);
+
   // Persist on every change (after hydration)
   useEffect(() => {
     if (!cartStorageKey || !hasHydratedCartRef.current) return;
@@ -231,6 +279,21 @@ function POSPage({ currentStore }: { currentStore: any }) {
       // Ignore quota / serialization errors
     }
   }, [tableCarts, cartStorageKey]);
+
+  // Persist discounts on every change (after hydration)
+  useEffect(() => {
+    if (!discountStorageKey || !hasHydratedDiscountRef.current) return;
+    try {
+      const hasAnyDiscounts = Object.values(tableDiscounts).some(val => val === true);
+      if (hasAnyDiscounts) {
+        localStorage.setItem(discountStorageKey, JSON.stringify(tableDiscounts));
+      } else {
+        localStorage.removeItem(discountStorageKey);
+      }
+    } catch {
+      // Ignore quota / serialization errors
+    }
+  }, [tableDiscounts, discountStorageKey]);
 
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [selectedPayment, setSelectedPayment] = useState('cash');
@@ -283,7 +346,10 @@ function POSPage({ currentStore }: { currentStore: any }) {
     return matchesCategory && matchesSearch;
   });
 
-  const cartTotal = currentCart.reduce((sum, item) => sum + (Number(item.unitPrice) * item.quantity), 0);
+  const isDiscountEnabled = currentStore?.id === '85cb8967-fcad-49f5-b0bb-dc84bf0448d9';
+  const discountApplied = selectedTable && isDiscountEnabled ? !!tableDiscounts[selectedTable] : false;
+  const rawCartTotal = currentCart.reduce((sum, item) => sum + (Number(item.unitPrice) * item.quantity), 0);
+  const cartTotal = Math.max(0, rawCartTotal - (discountApplied ? 5 : 0));
 
   const showBreakfastDish = breakfastDish && (!breakfastDish.category || displayCategories.includes(breakfastDish.category));
   const filteredBundles = bundles.filter(b => !b.category || displayCategories.includes(b.category));
@@ -417,6 +483,11 @@ function POSPage({ currentStore }: { currentStore: any }) {
   const clearCart = () => {
     if (!selectedTable) return;
     setTableCarts(prev => ({ ...prev, [selectedTable]: [] }));
+    setTableDiscounts(prev => {
+      const newState = { ...prev };
+      delete newState[selectedTable];
+      return newState;
+    });
   };
 
   const handleCheckout = async () => {
@@ -504,6 +575,11 @@ function POSPage({ currentStore }: { currentStore: any }) {
     
     // Clear only the current table's cart
     setTableCarts(prev => ({ ...prev, [selectedTable]: [] }));
+    setTableDiscounts(prev => {
+      const newState = { ...prev };
+      delete newState[selectedTable];
+      return newState;
+    });
     setIsProcessing(false);
     setShowCreditModal(false);
     
@@ -805,8 +881,8 @@ function POSPage({ currentStore }: { currentStore: any }) {
         </div>
       </div>
 
-      <div className="hidden lg:flex lg:w-96">
-        <Card className="w-full flex flex-col shrink-0">
+      <div className="hidden lg:flex lg:w-96 h-full">
+        <Card className="w-full h-full flex flex-col shrink-0">
           <CartContent
             cart={currentCart}
             updateQuantity={updateQuantity}
@@ -822,6 +898,13 @@ function POSPage({ currentStore }: { currentStore: any }) {
             tables={tables}
              toast={toast} 
              dishes={dishes}
+             isDiscountEnabled={isDiscountEnabled}
+             discountApplied={discountApplied}
+             setDiscountApplied={(applied: boolean) => {
+               if (selectedTable) {
+                 setTableDiscounts(prev => ({ ...prev, [selectedTable]: applied }));
+               }
+             }}
           />
         </Card>
       </div>
@@ -864,6 +947,13 @@ function POSPage({ currentStore }: { currentStore: any }) {
           selectedTable={selectedTable}
           tables={tables}
           dishes={dishes}
+          isDiscountEnabled={isDiscountEnabled}
+          discountApplied={discountApplied}
+          setDiscountApplied={(applied: boolean) => {
+            if (selectedTable) {
+              setTableDiscounts(prev => ({ ...prev, [selectedTable]: applied }));
+            }
+          }}
         />
       </CartModal>
 

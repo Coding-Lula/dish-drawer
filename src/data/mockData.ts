@@ -111,6 +111,7 @@ export const storeStocks: StoreStock[] = [
 export const paymentMethods: PaymentMethod[] = [
   { id: 'cash', name: 'Cash', isRevenue: true, isCash: true, icon: '💵' },
   { id: 'mpesa', name: 'M-Pesa', isRevenue: true, isCash: true, icon: '📱' },
+  { id: 'emola', name: 'Emola', isRevenue: true, isCash: true, icon: '📲' },
   { id: 'mkesh', name: 'M-Kesh', isRevenue: true, isCash: true, icon: '💳' },
   { id: 'paga_facil', name: 'Paga Fácil', isRevenue: true, isCash: true, icon: '🏦' },
   { id: 'credit', name: 'Credit', isRevenue: false, isCash: false, icon: '📝' },

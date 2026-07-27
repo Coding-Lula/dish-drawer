@@ -49,7 +49,7 @@ export interface StoreStock {
   targetStock: number;
 }
 
-export type PaymentMethodType = 'cash' | 'mpesa' | 'mkesh' | 'paga_facil' | 'credit' | 'self_consumption';
+export type PaymentMethodType = 'cash' | 'mpesa' | 'mkesh' | 'emola' | 'paga_facil' | 'credit' | 'self_consumption';
 
 export interface PaymentMethod {
   id: PaymentMethodType;
