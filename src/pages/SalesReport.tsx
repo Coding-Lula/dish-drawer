@@ -104,24 +104,13 @@ function SalesReportContent() {
     setLoading(false);
   };
 
-  const deleteSale = async (transactionId: string) => {
+  const deleteSaleItem = async (itemId: string, transactionId: string) => {
     setLoading(true);
     try {
-      // 1. Fetch transaction items
-      const { data: items, error: itemsErr } = await supabase
-        .from('transaction_items')
-        .select('dish_id, quantity')
-        .eq('transaction_id', transactionId);
-
-      if (itemsErr) {
-        toast({ title: 'Erro ao buscar itens da venda', description: itemsErr.message, variant: 'destructive' });
-        return;
-      }
-
-      // 2. Fetch transaction store_id
+      // 1. Fetch transaction store_id
       const { data: tx, error: txErr } = await supabase
         .from('transactions')
-        .select('store_id')
+        .select('store_id, total_amount')
         .eq('id', transactionId)
         .single();
 
@@ -130,86 +119,146 @@ function SalesReportContent() {
         return;
       }
 
-      // 3. Restore stock of ingredients
-      if (items && items.length > 0) {
-        const dishIds = items.map(item => item.dish_id).filter(Boolean);
-        if (dishIds.length > 0) {
-          const { data: recipes, error: recipesErr } = await supabase
-            .from('recipes')
-            .select('dish_id, ingredient_id, quantity_required')
-            .in('dish_id', dishIds);
+      // 2. Fetch the specific item being deleted
+      const { data: itemToDelete, error: itemErr } = await supabase
+        .from('transaction_items')
+        .select('dish_id, quantity, unit_price')
+        .eq('id', itemId)
+        .single();
 
-          if (recipesErr) {
-            toast({ title: 'Erro ao buscar receitas dos pratos', description: recipesErr.message, variant: 'destructive' });
+      if (itemErr) {
+        toast({ title: 'Erro ao buscar o item da venda', description: itemErr.message, variant: 'destructive' });
+        return;
+      }
+
+      // 3. Fetch all transaction items for this transaction to see if this is the last one
+      const { data: allItems, error: allItemsErr } = await supabase
+        .from('transaction_items')
+        .select('id, quantity, unit_price')
+        .eq('transaction_id', transactionId);
+
+      if (allItemsErr) {
+        toast({ title: 'Erro ao buscar itens da venda', description: allItemsErr.message, variant: 'destructive' });
+        return;
+      }
+
+      const isLastItem = allItems.length <= 1;
+
+      // 4. Restore stock of ingredients for this specific item
+      if (itemToDelete && itemToDelete.dish_id) {
+        const { data: recipes, error: recipesErr } = await supabase
+          .from('recipes')
+          .select('dish_id, ingredient_id, quantity_required')
+          .eq('dish_id', itemToDelete.dish_id);
+
+        if (recipesErr) {
+          toast({ title: 'Erro ao buscar receitas dos pratos', description: recipesErr.message, variant: 'destructive' });
+          return;
+        }
+
+        const restoreMap = new Map<string, number>();
+        for (const recipe of (recipes || [])) {
+          const qtyToRestore = Number(recipe.quantity_required) * itemToDelete.quantity;
+          restoreMap.set(recipe.ingredient_id, (restoreMap.get(recipe.ingredient_id) || 0) + qtyToRestore);
+        }
+
+        const ingredientIds = Array.from(restoreMap.keys());
+        if (ingredientIds.length > 0) {
+          const { data: stocks, error: stocksErr } = await supabase
+            .from('store_stock')
+            .select('id, ingredient_id, current_quantity')
+            .eq('store_id', tx.store_id)
+            .in('ingredient_id', ingredientIds);
+
+          if (stocksErr) {
+            toast({ title: 'Erro ao buscar stock da loja', description: stocksErr.message, variant: 'destructive' });
             return;
           }
 
-          const restoreMap = new Map<string, number>();
-          for (const item of items) {
-            if (!item.dish_id) continue;
-            const dishRecipes = (recipes || []).filter(r => r.dish_id === item.dish_id);
-            for (const recipe of dishRecipes) {
-              const qtyToRestore = Number(recipe.quantity_required) * item.quantity;
-              restoreMap.set(recipe.ingredient_id, (restoreMap.get(recipe.ingredient_id) || 0) + qtyToRestore);
-            }
-          }
+          for (const ingredientId of ingredientIds) {
+            const qtyToRestore = restoreMap.get(ingredientId) || 0;
+            const stockRecord = stocks?.find(s => s.ingredient_id === ingredientId);
+            if (stockRecord) {
+              const newQty = stockRecord.current_quantity + qtyToRestore;
+              const { error: updateErr } = await supabase
+                .from('store_stock')
+                .update({ current_quantity: newQty })
+                .eq('id', stockRecord.id);
 
-          const ingredientIds = Array.from(restoreMap.keys());
-          if (ingredientIds.length > 0) {
-            const { data: stocks, error: stocksErr } = await supabase
-              .from('store_stock')
-              .select('id, ingredient_id, current_quantity')
-              .eq('store_id', tx.store_id)
-              .in('ingredient_id', ingredientIds);
-
-            if (stocksErr) {
-              toast({ title: 'Erro ao buscar stock da loja', description: stocksErr.message, variant: 'destructive' });
-              return;
-            }
-
-            for (const ingredientId of ingredientIds) {
-              const qtyToRestore = restoreMap.get(ingredientId) || 0;
-              const stockRecord = stocks?.find(s => s.ingredient_id === ingredientId);
-              if (stockRecord) {
-                const newQty = stockRecord.current_quantity + qtyToRestore;
-                const { error: updateErr } = await supabase
-                  .from('store_stock')
-                  .update({ current_quantity: newQty })
-                  .eq('id', stockRecord.id);
-
-                if (updateErr) {
-                  toast({ title: 'Erro ao atualizar stock', description: updateErr.message, variant: 'destructive' });
-                  return;
-                }
+              if (updateErr) {
+                toast({ title: 'Erro ao atualizar stock', description: updateErr.message, variant: 'destructive' });
+                return;
               }
             }
           }
         }
       }
 
-      // 4. Delete associated credits (if any)
-      const { error: cErr } = await supabase.from('credits').delete().eq('transaction_id', transactionId);
-      if (cErr) {
-        toast({ title: 'Erro ao apagar registo de crédito', description: cErr.message, variant: 'destructive' });
-        return;
-      }
+      if (isLastItem) {
+        // 5a. If it's the last item, delete the entire transaction and associated credits
+        const { error: cErr } = await supabase.from('credits').delete().eq('transaction_id', transactionId);
+        if (cErr) {
+          toast({ title: 'Erro ao apagar registo de crédito', description: cErr.message, variant: 'destructive' });
+          return;
+        }
 
-      // 5. Delete transaction items
-      const { error: iErr } = await supabase.from('transaction_items').delete().eq('transaction_id', transactionId);
-      if (iErr) {
-        toast({ title: 'Erro ao apagar itens da transação', description: iErr.message, variant: 'destructive' });
-        return;
-      }
+        const { error: iErr } = await supabase.from('transaction_items').delete().eq('id', itemId);
+        if (iErr) {
+          toast({ title: 'Erro ao apagar item da transação', description: iErr.message, variant: 'destructive' });
+          return;
+        }
 
-      // 6. Delete the main transaction
-      const { error: tErr } = await supabase.from('transactions').delete().eq('id', transactionId);
-      if (tErr) {
-        toast({ title: 'Erro ao apagar transação', description: tErr.message, variant: 'destructive' });
-        return;
-      }
+        const { error: tErr } = await supabase.from('transactions').delete().eq('id', transactionId);
+        if (tErr) {
+          toast({ title: 'Erro ao apagar transação', description: tErr.message, variant: 'destructive' });
+          return;
+        }
 
-      setSalesData(prev => prev.filter(s => s.transaction_id !== transactionId));
-      toast({ title: 'Venda eliminada com sucesso' });
+        setSalesData(prev => prev.filter(s => s.id !== itemId));
+        toast({ title: 'Item e venda eliminados com sucesso' });
+      } else {
+        // 5b. If not the last item, delete only the selected item and update transaction / credit totals
+        const { error: iErr } = await supabase.from('transaction_items').delete().eq('id', itemId);
+        if (iErr) {
+          toast({ title: 'Erro ao apagar item da transação', description: iErr.message, variant: 'destructive' });
+          return;
+        }
+
+        const itemTotal = Number(itemToDelete.unit_price) * itemToDelete.quantity;
+        const newTotal = Number(tx.total_amount) - itemTotal;
+
+        const { error: tUpdateErr } = await supabase
+          .from('transactions')
+          .update({ total_amount: newTotal })
+          .eq('id', transactionId);
+
+        if (tUpdateErr) {
+          toast({ title: 'Erro ao atualizar total da transação', description: tUpdateErr.message, variant: 'destructive' });
+          return;
+        }
+
+        // Update associated credit amount if it exists
+        const { data: creditRec } = await supabase
+          .from('credits')
+          .select('id')
+          .eq('transaction_id', transactionId)
+          .maybeSingle();
+
+        if (creditRec) {
+          const { error: cUpdateErr } = await supabase
+            .from('credits')
+            .update({ sale_amount: newTotal })
+            .eq('id', creditRec.id);
+
+          if (cUpdateErr) {
+            toast({ title: 'Erro ao atualizar registo de crédito', description: cUpdateErr.message, variant: 'destructive' });
+            return;
+          }
+        }
+
+        setSalesData(prev => prev.filter(s => s.id !== itemId));
+        toast({ title: 'Item eliminado com sucesso' });
+      }
     } catch (err: any) {
       toast({ title: 'Erro inesperado', description: err.message || err, variant: 'destructive' });
     } finally {
@@ -379,15 +428,15 @@ function SalesReportContent() {
                           </AlertDialogTrigger>
                           <AlertDialogContent>
                             <AlertDialogHeader>
-                              <AlertDialogTitle>Eliminar venda?</AlertDialogTitle>
+                              <AlertDialogTitle>Eliminar item?</AlertDialogTitle>
                               <AlertDialogDescription>
-                                Isto irá remover toda a transação ({sale.table_name}) e os seus registos associados (incluindo dívidas, se houver). Esta ação não pode ser desfeita e o stock de ingredientes será reposto.
+                                Isto irá remover o item "{sale.dish_name}" ({sale.quantity}x) desta transação ({sale.table_name}). Se este for o único item, a transação e seus registos associados (incluindo dívidas) serão eliminados. O stock de ingredientes correspondente a este item será reposto. Esta ação não pode ser desfeita.
                               </AlertDialogDescription>
                             </AlertDialogHeader>
                             <AlertDialogFooter>
                               <AlertDialogCancel>Cancelar</AlertDialogCancel>
                               <AlertDialogAction
-                                onClick={() => deleteSale(sale.transaction_id)}
+                                onClick={() => deleteSaleItem(sale.id, sale.transaction_id)}
                                 className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
                               >
                                 Eliminar
