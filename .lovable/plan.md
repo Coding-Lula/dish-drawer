@@ -1,33 +1,30 @@
 ## Goal
-Prevent the POS cart from being lost on refresh or accidental navigation by persisting it to `localStorage`, scoped per store + per user.
+Replace the per-debtor Excel download on the Devedores page with a minimal, beige, invoice-style PDF matching the reference.
 
-## Approach
-Add a small persistence layer inside `src/pages/POS.tsx` (where the `cart` state lives) using a `useEffect` pair:
+## Dependencies
+Yes, two small ones are needed (no PDF engine exists today, only `xlsx`):
+- `jspdf` — creates the PDF file
+- `html2canvas` — renders a styled HTML invoice (so we get the cursive script font, beige paper, exact spacing) into the PDF
 
-1. **Load on mount / when store or user changes**
-   - Key: `pos_cart::<userId>::<storeId>`
-   - Parse JSON from `localStorage`; hydrate `cart` state if valid.
-   - Guard against malformed data (try/catch, schema check on shape).
+This is the only reliable way to get a cursive/script typeface; pure jsPDF text would require embedding a TTF manually.
 
-2. **Save on every cart change**
-   - Serialize `cart` to the same key whenever it changes.
-   - If cart is empty, remove the key to avoid clutter.
+## Design (matches the reference)
+- Beige/off-white page background (`#F7F4EF`), dark ink text
+- Large cursive script title top-left: **Conta Corrente** (Google font, e.g. Great Vibes / Dancing Script)
+- Top-right meta block: **Data** only
+- **Para:** debtor name (replaces "Billed To")
+- **De:** store name
+- Itemized table, centered on the page: DESCRIÇÃO · DATA · QTD · TOTAL — one row per bill/item, with dates
+- Thin rules above/below the table, generous whitespace
+- **SUBTOTAL** and **SALDO** rows (negative = dívida)
+- **FORMAS DE PAGAMENTO:** Emola — 87 398 8847 (only)
+- Cursive **Obrigado!** bottom-right
 
-3. **Clear on checkout**
-   - After a successful sale/split-bill (existing `clearCart` / setCart([]) paths), the empty-cart effect above naturally removes the key.
+## Implementation
+1. Add `src/components/DebtorReceipt.tsx` — off-screen HTML invoice template (fixed A4 width, inline styling).
+2. Add `src/utils/pdfReceipt.ts` — renders that node with html2canvas at 2x scale and writes an A4 PDF via jsPDF, filename `Conta_Corrente_<Nome>_<data>.pdf`.
+3. In `src/pages/Debtors.tsx`, point the existing per-debtor download button at the new PDF export, passing the debtor's bills (with dates, qty, value) and payments. Keep the global Excel export as-is.
+4. Load the script font via an `@import` in `index.css` so html2canvas captures it; wait for `document.fonts.ready` before rendering.
 
-4. **Scope isolation**
-   - Different store → different key, so switching stores doesn't leak items.
-   - Different user (logout/login) → different key.
-   - If `userId` or `storeId` isn't available yet, skip hydration until they are.
-
-## Out of scope
-- Selected table, category filter, search term, split-bill draft (per user's answer: cart only).
-- Cross-device sync (no DB table).
-- `beforeunload` warnings.
-
-## Technical notes
-- Only `src/pages/POS.tsx` changes. No schema, no new hooks required.
-- Storage key format: `pos_cart::${userId}::${storeId}`.
-- Wrap `JSON.parse` in try/catch; on failure, remove the key and start fresh.
-- Persist only serializable fields already on `CartItem` (dish + quantity + any bundle/notes metadata already stored).
+## Verification
+Generate a receipt for a real debtor, convert to image, and visually check for clipping, missing font, and correct totals.
