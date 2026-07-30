@@ -25,7 +25,7 @@ const RULE = '#C9C0B4';
 const fmt = (n: number) =>
   n.toLocaleString('pt-PT', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
-function buildHtml(data: ReceiptData): string {
+export function buildHtml(data: ReceiptData): string {
   const today = new Date().toLocaleDateString('pt-PT');
 
   const rows =
