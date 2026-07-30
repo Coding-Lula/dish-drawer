@@ -10,6 +10,7 @@ import * as XLSX from 'xlsx';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { downloadDebtorReceiptPdf, type ReceiptRow } from '@/utils/debtorReceiptPdf';
 
 interface TransactionItem {
   id: string;
@@ -225,53 +226,39 @@ function DebtorsContent() {
     XLSX.writeFile(wb, `Relatorio_Devedores_${date}.xlsx`);
   };
 
-  const handleDownloadDebtor = (debtor: GroupedDebtor) => {
-    const wb = XLSX.utils.book_new();
+  const handleDownloadDebtor = async (debtor: GroupedDebtor) => {
+    const rows: ReceiptRow[] = debtor.bills.flatMap(bill => {
+      const date = new Date(bill.credit.date).toLocaleDateString('pt-PT');
+      if (bill.items.length === 0) {
+        return [{ date, description: 'Consumo', qty: null, total: Number(bill.credit.sale_amount) }];
+      }
+      return bill.items.map(item => ({
+        date,
+        description: item.dishes?.name || 'Item Desconhecido',
+        qty: item.quantity,
+        total: item.quantity * item.unit_price,
+      }));
+    });
 
-    const summary = [
-      { Campo: 'Cliente', Valor: debtor.customer_name },
-      { Campo: 'Total Faturado (MT)', Valor: debtor.total_owed },
-      { Campo: 'Total Pago (MT)', Valor: debtor.total_paid },
-      { Campo: 'Saldo (MT)', Valor: debtor.balance },
-    ];
-    const wsSummary = XLSX.utils.json_to_sheet(summary);
-    wsSummary['!cols'] = [{ wch: 25 }, { wch: 20 }];
-    XLSX.utils.book_append_sheet(wb, wsSummary, 'Resumo');
+    debtor.payments.forEach(p => {
+      rows.push({
+        date: new Date(p.date).toLocaleDateString('pt-PT'),
+        description: p.note?.trim() ? `Pagamento — ${p.note}` : 'Pagamento',
+        qty: null,
+        total: -Number(p.amount),
+      });
+    });
 
-    const items = debtor.bills.flatMap(bill =>
-      bill.items.length > 0
-        ? bill.items.map(item => ({
-            Data: new Date(bill.credit.date).toLocaleDateString(),
-            Item: item.dishes?.name || 'Item Desconhecido',
-            Quantidade: item.quantity,
-            'Preço Unitário (MT)': item.unit_price,
-            'Total (MT)': item.quantity * item.unit_price,
-          }))
-        : [{
-            Data: new Date(bill.credit.date).toLocaleDateString(),
-            Item: 'Sem detalhes de itens',
-            Quantidade: 0,
-            'Preço Unitário (MT)': 0,
-            'Total (MT)': Number(bill.credit.sale_amount),
-          }]
-    );
-    const wsItems = XLSX.utils.json_to_sheet(items);
-    wsItems['!cols'] = [{ wch: 15 }, { wch: 30 }, { wch: 12 }, { wch: 18 }, { wch: 15 }];
-    XLSX.utils.book_append_sheet(wb, wsItems, 'Faturas');
+    rows.sort((a, b) => a.date.localeCompare(b.date));
 
-    const pays = debtor.payments.map(p => ({
-      Data: new Date(p.date).toLocaleDateString(),
-      'Valor (MT)': Number(p.amount),
-      Nota: p.note || '',
-    }));
-    if (pays.length > 0) {
-      const wsPay = XLSX.utils.json_to_sheet(pays);
-      wsPay['!cols'] = [{ wch: 15 }, { wch: 15 }, { wch: 30 }];
-      XLSX.utils.book_append_sheet(wb, wsPay, 'Pagamentos');
-    }
-
-    const safe = debtor.customer_name.replace(/[^a-zA-Z0-9]+/g, '_');
-    XLSX.writeFile(wb, `Devedor_${safe}_${new Date().toISOString().split('T')[0]}.xlsx`);
+    await downloadDebtorReceiptPdf({
+      customerName: debtor.customer_name,
+      storeName: currentStore?.name || '',
+      rows,
+      totalOwed: debtor.total_owed,
+      totalPaid: debtor.total_paid,
+      balance: debtor.balance,
+    });
   };
 
   return (
