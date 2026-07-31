@@ -11,6 +11,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { downloadDebtorReceiptPdf, type ReceiptRow } from '@/utils/debtorReceiptPdf';
+import { DebtorBillingModal } from '@/components/modals/DebtorBillingModal';
+import { format } from 'date-fns';
 
 interface TransactionItem {
   id: string;
@@ -48,6 +50,10 @@ function DebtorsContent() {
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const suggestionsRef = useRef<HTMLDivElement>(null);
+
+  // Billing modal states
+  const [billingModalOpen, setBillingModalOpen] = useState(false);
+  const [selectedDebtorForBilling, setSelectedDebtorForBilling] = useState<GroupedDebtor | null>(null);
 
   // Fetch transaction items for all credits
   useEffect(() => {
@@ -226,38 +232,41 @@ function DebtorsContent() {
     XLSX.writeFile(wb, `Relatorio_Devedores_${date}.xlsx`);
   };
 
-  const handleDownloadDebtor = async (debtor: GroupedDebtor) => {
-    const rows: ReceiptRow[] = debtor.bills.flatMap(bill => {
-      const date = new Date(bill.credit.date).toLocaleDateString('pt-PT');
-      if (bill.items.length === 0) {
-        return [{ date, description: 'Consumo', qty: null, total: Number(bill.credit.sale_amount) }];
-      }
-      return bill.items.map(item => ({
-        date,
-        description: item.dishes?.name || 'Item Desconhecido',
-        qty: item.quantity,
-        total: item.quantity * item.unit_price,
-      }));
-    });
+  const handleOpenBillingModal = (debtor: GroupedDebtor) => {
+    setSelectedDebtorForBilling(debtor);
+    setBillingModalOpen(true);
+  };
 
-    debtor.payments.forEach(p => {
-      rows.push({
-        date: new Date(p.date).toLocaleDateString('pt-PT'),
-        description: p.note?.trim() ? `Pagamento — ${p.note}` : 'Pagamento',
-        qty: null,
-        total: -Number(p.amount),
-      });
-    });
+  const handleGeneratePdf = async (
+    startDate: Date,
+    endDate: Date,
+    salesRows: any[],
+    previousBalance: number,
+    periodOwed: number,
+    periodPaid: number,
+    cumulativeBalance: number
+  ) => {
+    if (!selectedDebtorForBilling) return;
 
-    rows.sort((a, b) => a.date.localeCompare(b.date));
+    // Convert preview rows to ReceiptRow interface
+    const pdfRows: ReceiptRow[] = salesRows.map((row) => ({
+      date: row.date.split(' ')[0], // only show dd/MM/yyyy in PDF row
+      description: row.dish_name,
+      qty: row.quantity,
+      total: row.total,
+    }));
+
+    const periodLabel = `${format(startDate, 'dd/MM/yyyy')} - ${format(endDate, 'dd/MM/yyyy')}`;
 
     await downloadDebtorReceiptPdf({
-      customerName: debtor.customer_name,
+      customerName: selectedDebtorForBilling.customer_name,
       storeName: currentStore?.name || '',
-      rows,
-      totalOwed: debtor.total_owed,
-      totalPaid: debtor.total_paid,
-      balance: debtor.balance,
+      rows: pdfRows,
+      totalOwed: periodOwed,
+      totalPaid: periodPaid,
+      balance: cumulativeBalance,
+      periodLabel,
+      previousBalance,
     });
   };
 
@@ -411,7 +420,7 @@ function DebtorsContent() {
                       variant="ghost"
                       size="icon"
                       className="h-7 w-7"
-                      onClick={() => handleDownloadDebtor(debtor)}
+                      onClick={() => handleOpenBillingModal(debtor)}
                       title="Descarregar itens deste devedor"
                     >
                       <Download className="h-4 w-4" />
@@ -483,6 +492,19 @@ function DebtorsContent() {
           </CardContent>
         </Card>
       ))}
+
+      {/* Debtor Billing Period & Preview Modal */}
+      {selectedDebtorForBilling && (
+        <DebtorBillingModal
+          open={billingModalOpen}
+          onOpenChange={setBillingModalOpen}
+          customerName={selectedDebtorForBilling.customer_name}
+          storeName={currentStore?.name || ''}
+          bills={selectedDebtorForBilling.bills}
+          payments={selectedDebtorForBilling.payments}
+          onDownload={handleGeneratePdf}
+        />
+      )}
     </div>
   );
 }

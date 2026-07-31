@@ -4,9 +4,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { format } from 'date-fns';
-import { CalendarIcon, Download, DollarSign, Trash2 } from 'lucide-react';
+import { CalendarIcon, Download, DollarSign } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
@@ -14,32 +13,9 @@ import { useExpenses } from '@/hooks/useSupabaseData';
 import { useFinancialTransactions } from '@/hooks/useFinanceData';
 import { ItemizedSalesSummary } from '@/components/ItemizedSalesSummary';
 import { useAuth } from '@/hooks/useAuth';
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from '@/components/ui/alert-dialog';
+import { SalesDataCard, type SalesDataRow } from '@/components/SalesDataCard';
 
 const NON_REVENUE_METHODS = ['credit', 'self'];
-
-interface SalesItem {
-  id: string;
-  date: string;
-  table_name: string;
-  dish_name: string;
-  quantity: number;
-  unit_price: number;
-  total: number;
-  payment_method: string;
-  transaction_id: string;
-  creditor_name?: string;
-}
 
 function SalesReportContent() {
   const { currentStore } = useCurrentStore();
@@ -47,7 +23,7 @@ function SalesReportContent() {
   const { isManager } = useAuth();
   const [startDate, setStartDate] = useState<Date | undefined>(new Date());
   const [endDate, setEndDate] = useState<Date | undefined>(new Date());
-  const [salesData, setSalesData] = useState<SalesItem[]>([]);
+  const [salesData, setSalesData] = useState<SalesDataRow[]>([]);
   const [loading, setLoading] = useState(false);
 
   const startStr = startDate ? format(startDate, 'yyyy-MM-dd') : undefined;
@@ -81,7 +57,7 @@ function SalesReportContent() {
       return;
     }
 
-    const items: SalesItem[] = [];
+    const items: SalesDataRow[] = [];
     (transactions || []).forEach((tx: any) => {
       const creditorName = tx.credits?.[0]?.customer_name || tx.credits?.customer_name || undefined;
       (tx.transaction_items || []).forEach((item: any) => {
@@ -270,7 +246,7 @@ function SalesReportContent() {
     if (salesData.length === 0) return;
     
     const headers = ['Date', 'Table', 'Item', 'Qty', 'Price', 'Total', 'Payment'];
-    const rows = salesData.map(s => [s.date, s.table_name, s.dish_name, s.quantity, s.unit_price, s.total, s.payment_method]);
+    const rows = salesData.map(s => [s.date, s.table_name || 'N/A', s.dish_name, s.quantity, s.unit_price, s.total, s.payment_method]);
     const csv = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
     
     const blob = new Blob([csv], { type: 'text/csv' });
@@ -297,6 +273,18 @@ function SalesReportContent() {
     .reduce((sum: number, t: any) => sum + Number(t.amount || 0), 0);
   const expensesTotal = operationalExpensesTotal + financialExpensesTotal;
   const netRevenue = grandTotal - nonRevenueTotal - expensesTotal;
+
+  // Adapt data format for ItemizedSalesSummary
+  const itemizedAdapted = salesData.map(s => ({
+    id: s.id,
+    date: s.date,
+    table_name: s.table_name || 'N/A',
+    dish_name: s.dish_name,
+    quantity: s.quantity || 0,
+    unit_price: s.unit_price,
+    total: s.total,
+    payment_method: s.payment_method || 'N/A',
+  }));
 
   return (
     <div className="space-y-6">
@@ -344,7 +332,7 @@ function SalesReportContent() {
       </Card>
 
       {salesData.length > 0 && (
-        <ItemizedSalesSummary salesData={salesData} />
+        <ItemizedSalesSummary salesData={itemizedAdapted} />
       )}
 
       {salesData.length > 0 && (
@@ -378,80 +366,14 @@ function SalesReportContent() {
       )}
 
       {salesData.length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Sales Data ({salesData.length} items) - Total: {grandTotal.toLocaleString()} MT</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Date</TableHead>
-                  <TableHead>Table</TableHead>
-                  <TableHead>Item</TableHead>
-                  <TableHead className="text-right">Qty</TableHead>
-                  <TableHead className="text-right">Price</TableHead>
-                  <TableHead className="text-right">Total</TableHead>
-                  <TableHead>Payment</TableHead>
-                  {isManager && <TableHead className="w-10"></TableHead>}
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {salesData.map(sale => (
-                  <TableRow key={sale.id}>
-                    <TableCell>
-                      {sale.date}
-                      {isManager && sale.payment_method === 'credit' && sale.creditor_name && (
-                        <span className="text-xs text-muted-foreground mt-0.5 block font-normal">
-                          {sale.creditor_name}
-                        </span>
-                      )}
-                    </TableCell>
-                    <TableCell>{sale.table_name}</TableCell>
-                    <TableCell>{sale.dish_name}</TableCell>
-                    <TableCell className="text-right">{sale.quantity}</TableCell>
-                    <TableCell className="text-right">{sale.unit_price.toLocaleString()} MT</TableCell>
-                    <TableCell className="text-right">{sale.total.toLocaleString()} MT</TableCell>
-                    <TableCell>{sale.payment_method}</TableCell>
-                    {isManager && (
-                      <TableCell className="w-10 p-1">
-                        <AlertDialog>
-                          <AlertDialogTrigger asChild>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-7 w-7 text-muted-foreground hover:text-destructive"
-                              aria-label="Eliminar venda"
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
-                          </AlertDialogTrigger>
-                          <AlertDialogContent>
-                            <AlertDialogHeader>
-                              <AlertDialogTitle>Eliminar item?</AlertDialogTitle>
-                              <AlertDialogDescription>
-                                Isto irá remover o item "{sale.dish_name}" ({sale.quantity}x) desta transação ({sale.table_name}). Se este for o único item, a transação e seus registos associados (incluindo dívidas) serão eliminados. O stock de ingredientes correspondente a este item será reposto. Esta ação não pode ser desfeita.
-                              </AlertDialogDescription>
-                            </AlertDialogHeader>
-                            <AlertDialogFooter>
-                              <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                              <AlertDialogAction
-                                onClick={() => deleteSaleItem(sale.id, sale.transaction_id)}
-                                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                              >
-                                Eliminar
-                              </AlertDialogAction>
-                            </AlertDialogFooter>
-                          </AlertDialogContent>
-                        </AlertDialog>
-                      </TableCell>
-                    )}
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </CardContent>
-        </Card>
+        <SalesDataCard
+          title={`Sales Data (${salesData.length} items) - Total: ${grandTotal.toLocaleString()} MT`}
+          salesData={salesData}
+          showTableColumn={true}
+          showPaymentColumn={true}
+          isManager={isManager}
+          onDeleteItem={deleteSaleItem}
+        />
       )}
     </div>
   );
