@@ -1,10 +1,10 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { MainLayout, useCurrentStore } from '@/components/layout/MainLayout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
-import { useDishes, useRecipes, useTransactions, useStoreStock, useCredits, useRestaurantTablesManagement, useStores } from '@/hooks/useSupabaseData';
+import { useDishes, useRecipes, useTransactions, useStoreStock, useCredits, useDebtorPayments, useRestaurantTablesManagement, useStores } from '@/hooks/useSupabaseData';
 import type { Dish } from '@/hooks/useSupabaseData';
 import { useStoreDishPrices } from '@/hooks/useStoreDishPrices';
 import { useStoreCategories } from '@/hooks/useStoreCategories';
@@ -197,6 +197,7 @@ function POSPage({ currentStore }: { currentStore: any }) {
   const { addTransaction } = useTransactions(currentStore?.id || null);
   const { deductStock } = useStoreStock(currentStore?.id || null);
   const { addCredit, credits } = useCredits(currentStore?.id || null);
+  const { payments } = useDebtorPayments(currentStore?.id || null);
   const { getEffectivePrice, hasOverride, setOverridePrice, removeOverridePrice, getOverridePrice } = useStoreDishPrices(currentStore?.id || null);
   const { enabledCategories, setCategories: updateEnabledCategories } = useStoreCategories(currentStore?.id || null);
   const { bundles } = useBundles();
@@ -324,7 +325,12 @@ function POSPage({ currentStore }: { currentStore: any }) {
     }
   }, [tables, selectedTable]);
 
-  const existingCustomerNames = [...new Set(credits.filter(c => c.status !== 'settled').map(c => c.customer_name))];
+  const existingCustomerNames = useMemo(() => {
+    const set = new Set<string>();
+    credits.forEach(c => set.add(c.customer_name.trim()));
+    payments.forEach(p => set.add(p.customer_name.trim()));
+    return Array.from(set).sort((a, b) => a.localeCompare(b));
+  }, [credits, payments]);
 
   const currentCart = selectedTable ? tableCarts[selectedTable] || [] : [];
   const breakfastDish = dishes.find(d => d.name.toLowerCase() === 'breakfast');

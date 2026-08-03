@@ -18,8 +18,11 @@ export function CreditCustomerModal({ open, onOpenChange, amount, onConfirm, exi
   const [showSuggestions, setShowSuggestions] = useState(false);
   const wrapperRef = useRef<HTMLDivElement>(null);
 
+  const normalizeStr = (str: string) =>
+    str.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+
   const filtered = customerName.trim()
-    ? existingCustomers.filter(c => c.toLowerCase().includes(customerName.toLowerCase())).slice(0, 5)
+    ? existingCustomers.filter(c => normalizeStr(c).includes(normalizeStr(customerName))).slice(0, 5)
     : [];
 
   useEffect(() => {
