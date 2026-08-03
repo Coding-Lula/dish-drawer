@@ -68,6 +68,9 @@ export function SplitBillModal({
   const [showCreditSuggestions, setShowCreditSuggestions] = useState(false);
   const creditInputRef = useRef<HTMLDivElement>(null);
 
+  const normalizeStr = (str: string) =>
+    str.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+
   useEffect(() => {
     if (open && cart.length > 0) {
       setBills([{ id: 'bill-1', items: [...cart], paymentMethod: null, isPaid: false, storeId: currentStoreId }]);
@@ -350,7 +353,7 @@ export function SplitBillModal({
                             autoComplete="off"
                           />
                           {showCreditSuggestions && (creditCustomerName[currentBill.id] || '').trim() && (() => {
-                            const filtered = existingCustomers.filter(c => c.toLowerCase().includes((creditCustomerName[currentBill.id] || '').toLowerCase())).slice(0, 5);
+                            const filtered = existingCustomers.filter(c => normalizeStr(c).includes(normalizeStr(creditCustomerName[currentBill.id] || ''))).slice(0, 5);
                             return filtered.length > 0 ? (
                               <div className="absolute z-50 w-full mt-1 bg-popover border border-border rounded-md shadow-md max-h-32 overflow-auto">
                                 {filtered.map((name) => (

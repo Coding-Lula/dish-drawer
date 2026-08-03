@@ -4,7 +4,7 @@ import { Badge } from '@/components/ui/badge';
 import { useCredits, useDebtorPayments, type Credit, type DebtorPayment } from '@/hooks/useSupabaseData';
 import { useEffect, useState, useMemo, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
-import { AlertTriangle, Download, Loader2, User, UserPlus, X, CreditCard } from 'lucide-react';
+import { AlertTriangle, Download, Loader2, User, UserPlus, X, CreditCard, Trash2 } from 'lucide-react';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import * as XLSX from 'xlsx';
 import { Button } from '@/components/ui/button';
@@ -13,6 +13,18 @@ import { Label } from '@/components/ui/label';
 import { downloadDebtorReceiptPdf, type ReceiptRow } from '@/utils/debtorReceiptPdf';
 import { DebtorBillingModal } from '@/components/modals/DebtorBillingModal';
 import { format } from 'date-fns';
+import { useAuth } from '@/hooks/useAuth';
+import { useToast } from '@/hooks/use-toast';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 
 interface TransactionItem {
   id: string;
@@ -38,8 +50,8 @@ interface GroupedDebtor {
 
 function DebtorsContent() {
   const { currentStore } = useCurrentStore();
-  const { credits, loading: creditsLoading } = useCredits(currentStore?.id || null);
-  const { payments, loading: paymentsLoading, addPayment } = useDebtorPayments(currentStore?.id || null);
+  const { credits, loading: creditsLoading, refetch: refetchCredits } = useCredits(currentStore?.id || null);
+  const { payments, loading: paymentsLoading, addPayment, refetch: refetchPayments } = useDebtorPayments(currentStore?.id || null);
   const [transactionItems, setTransactionItems] = useState<TransactionItem[]>([]);
   const [itemsLoading, setItemsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -50,6 +62,57 @@ function DebtorsContent() {
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const suggestionsRef = useRef<HTMLDivElement>(null);
+
+  const { isManager } = useAuth();
+  const { toast } = useToast();
+  const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
+  const [deletingDebtorName, setDeletingDebtorName] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState(false);
+
+  const handleDeleteDebtor = (customerName: string) => {
+    setDeletingDebtorName(customerName);
+    setConfirmDeleteOpen(true);
+  };
+
+  const executeDeleteDebtor = async () => {
+    if (!currentStore || !deletingDebtorName) return;
+    setDeleting(true);
+    try {
+      const { error: creditsError } = await supabase
+        .from('credits')
+        .delete()
+        .eq('store_id', currentStore.id)
+        .eq('customer_name', deletingDebtorName);
+
+      if (creditsError) throw creditsError;
+
+      const { error: paymentsError } = await supabase
+        .from('debtor_payments')
+        .delete()
+        .eq('store_id', currentStore.id)
+        .eq('customer_name', deletingDebtorName);
+
+      if (paymentsError) throw paymentsError;
+
+      toast({
+        title: 'Devedor eliminado',
+        description: `O devedor "${deletingDebtorName}" e todo o seu histórico foram eliminados com sucesso.`
+      });
+
+      await Promise.all([refetchCredits(), refetchPayments()]);
+    } catch (err: any) {
+      console.error('Error deleting debtor:', err);
+      toast({
+        title: 'Erro ao eliminar devedor',
+        description: err.message,
+        variant: 'destructive'
+      });
+    } finally {
+      setDeleting(false);
+      setConfirmDeleteOpen(false);
+      setDeletingDebtorName(null);
+    }
+  };
 
   // Billing modal states
   const [billingModalOpen, setBillingModalOpen] = useState(false);
@@ -425,6 +488,17 @@ function DebtorsContent() {
                     >
                       <Download className="h-4 w-4" />
                     </Button>
+                    {isManager && (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7 text-destructive hover:text-destructive hover:bg-destructive/10"
+                        onClick={() => handleDeleteDebtor(debtor.customer_name)}
+                        title="Eliminar devedor e todo o seu histórico"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    )}
                   </div>
                   <p className="text-sm text-muted-foreground">
                     {debtor.bills.length} {debtor.bills.length === 1 ? 'fatura pendente' : 'faturas pendentes'}
@@ -505,6 +579,27 @@ function DebtorsContent() {
           onDownload={handleGeneratePdf}
         />
       )}
+
+      <AlertDialog open={confirmDeleteOpen} onOpenChange={setConfirmDeleteOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Eliminar Devedor</AlertDialogTitle>
+            <AlertDialogDescription>
+              Tem certeza de que deseja eliminar o devedor <strong>{deletingDebtorName}</strong>? Esta ação é irreversível e irá apagar permanentemente todo o histórico de créditos e pagamentos deste cliente para esta loja.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleting}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={executeDeleteDebtor}
+              disabled={deleting}
+            >
+              {deleting ? 'A eliminar...' : 'Confirmar Eliminação'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
