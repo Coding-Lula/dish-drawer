@@ -24,6 +24,8 @@ import { Label } from '@/components/ui/label';
 import { CartModal } from '@/components/modals/CartModal';
 import { EditPriceModal } from '@/components/modals/EditPriceModal';
 import { useAuth } from '@/hooks/useAuth';
+import { buildReceiptBytes, sendToPrinter } from '@/utils/escposReceipt';
+import { getNextOrderNumber } from '@/hooks/useOrderNumber';
 
 interface CartItem {
   dish: Dish;
