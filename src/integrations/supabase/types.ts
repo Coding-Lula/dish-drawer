@@ -887,6 +887,41 @@ export type Database = {
           },
         ]
       }
+      order_counters: {
+        Row: {
+          created_at: string
+          id: string
+          latest_order_date: string
+          order_number: number
+          store_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          latest_order_date?: string
+          order_number?: number
+          store_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          latest_order_date?: string
+          order_number?: number
+          store_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "order_counters_store_id_fkey"
+            columns: ["store_id"]
+            isOneToOne: true
+            referencedRelation: "stores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       production_log_items: {
         Row: {
           created_at: string
@@ -1554,6 +1589,7 @@ export type Database = {
         Args: { _store_id: string; _user_id: string }
         Returns: boolean
       }
+      next_order_number: { Args: { p_store_id: string }; Returns: number }
     }
     Enums: {
       app_role: "manager" | "cashier"
