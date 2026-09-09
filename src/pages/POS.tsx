@@ -674,47 +674,39 @@ function POSPage({ currentStore }: { currentStore: any }) {
     });
   };
 
+  const printOrder = async (
+    items: { dish: Dish; quantity: number; unitPrice: number }[],
+    tableLabel: string
+  ) => {
+    if (items.length === 0 || !currentStore?.id) return;
+    try {
+      const orderNumber = await getNextOrderNumber(currentStore.id);
+      const total = items.reduce((sum, i) => sum + Number(i.unitPrice) * i.quantity, 0);
+      const bytes = await buildReceiptBytes({
+        orderNumber,
+        dateTime: new Date(),
+        items: items.map(i => ({ name: i.dish.name, qty: i.quantity, price: Number(i.unitPrice) })),
+        total,
+        storeName: currentStore?.name,
+        tableName: tableLabel
+      });
+      const mode = await sendToPrinter(bytes, `pedido-${orderNumber}.bin`);
+      toast({
+        title: `Pedido Nº ${orderNumber}`,
+        description: mode === 'usb' ? 'Enviado para a impressora' : 'Recibo descarregado'
+      });
+    } catch (e: any) {
+      toast({ title: 'Erro ao imprimir', description: e?.message ?? String(e), variant: 'destructive' });
+    }
+  };
+
   const handlePrintBill = (bill: SplitBill, billNumber: number) => {
-    const billTotal = bill.items.reduce((sum, item) => sum + (Number(item.unitPrice) * item.quantity), 0);
-    const receipt = [
-      `${currentStore?.name}`,
-      `Table: ${tables.find(t => t.id === selectedTable)?.name || 'N/A'} - Bill ${billNumber}`,
-      `Date: ${new Date().toLocaleString()}`,
-      '─'.repeat(30),
-      ...bill.items.map(item => `${item.dish.name} x${item.quantity} - ${(Number(item.unitPrice) * item.quantity).toLocaleString()} MT`),
-      '─'.repeat(30),
-      `TOTAL: ${billTotal.toLocaleString()} MT`
-    ].join('\n');
-    
-    const blob = new Blob([receipt], { type: 'text/plain' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `receipt-bill${billNumber}-${Date.now()}.txt`;
-    a.click();
-    toast({ title: `Bill ${billNumber} receipt downloaded` });
+    const tableLabel = `${tables.find(t => t.id === selectedTable)?.name || 'N/A'} - Conta ${billNumber}`;
+    void printOrder(bill.items, tableLabel);
   };
 
   const handlePrintReceipt = () => {
-    if (currentCart.length === 0) return;
-    
-    const receipt = [
-      `${currentStore?.name}`,
-      `Table: ${tables.find(t => t.id === selectedTable)?.name || 'N/A'}`,
-      `Date: ${new Date().toLocaleString()}`,
-      '─'.repeat(30),
-      ...currentCart.map(item => `${item.dish.name} x${item.quantity} - ${(Number(item.unitPrice) * item.quantity).toLocaleString()} MT`),
-      '─'.repeat(30),
-      `TOTAL: ${cartTotal.toLocaleString()} MT`
-    ].join('\n');
-    
-    const blob = new Blob([receipt], { type: 'text/plain' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `receipt-${Date.now()}.txt`;
-    a.click();
-    toast({ title: 'Receipt downloaded' });
+    void printOrder(currentCart, tables.find(t => t.id === selectedTable)?.name || '');
   };
 
   return (
