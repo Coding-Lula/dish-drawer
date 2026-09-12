@@ -692,12 +692,18 @@ function POSPage({ currentStore }: { currentStore: any }) {
         storeName: currentStore?.name,
         tableName: tableLabel
       });
-      const mode = await sendToPrinter(bytes, `pedido-${orderNumber}.bin`);
-      toast({
-        title: `Pedido Nº ${orderNumber}`,
-        description: mode === 'usb' ? 'Enviado para a impressora' : 'Recibo descarregado'
-      });
+      const result = await sendToPrinter(bytes, `pedido-${orderNumber}.bin`);
+      if (result.mode === 'usb') {
+        toast({ title: `Pedido Nº ${orderNumber}`, description: 'Enviado para a impressora' });
+      } else {
+        toast({
+          title: `Pedido Nº ${orderNumber} - impressora não usada`,
+          description: result.error ? `Recibo descarregado. Motivo: ${result.error}` : 'Recibo descarregado',
+          variant: 'destructive'
+        });
+      }
     } catch (e: any) {
+      console.error('[POS] print error:', e);
       toast({ title: 'Erro ao imprimir', description: e?.message ?? String(e), variant: 'destructive' });
     }
   };
