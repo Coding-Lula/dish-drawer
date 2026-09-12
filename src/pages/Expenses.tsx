@@ -10,17 +10,30 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useToast } from '@/hooks/use-toast';
 import { useExpenses, useExpenseCategories, useIngredients, useStoreStock, useSuppliers } from '@/hooks/useSupabaseData';
 import { useFinancialTransactions } from '@/hooks/useFinanceData';
+import { useAuth } from '@/hooks/useAuth';
 import { AddCategoryModal } from '@/components/modals/AddCategoryModal';
 import { AddSupplierModal } from '@/components/modals/AddSupplierModal';
 import { DateRangePickerModal } from '@/components/modals/DateRangePickerModal';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog';
 import { exportExpensesToCSV, exportExpensesToPDF } from '@/utils/exportUtils';
-import { Receipt, Plus, Package, FileText, Building2 } from 'lucide-react';
+import { Receipt, Plus, Package, FileText, Building2, Trash2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 function ExpensesContent() {
   const { toast } = useToast();
   const { currentStore } = useCurrentStore();
-  const { expenses: rawExpenses, addExpense, loading: expensesLoading } = useExpenses(currentStore?.id || null);
+  const { isManager } = useAuth();
+  const { expenses: rawExpenses, addExpense, deleteExpense, loading: expensesLoading } = useExpenses(currentStore?.id || null);
   const { transactions: financialTransactions, loading: financialLoading } = useFinancialTransactions(currentStore?.id || null);
   const { categories, addCategory } = useExpenseCategories();
   const { ingredients } = useIngredients();
@@ -28,6 +41,7 @@ function ExpensesContent() {
   const { suppliers, addSupplier } = useSuppliers();
 
   const [showForm, setShowForm] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [amount, setAmount] = useState('');
   const [categoryId, setCategoryId] = useState('');
   const [description, setDescription] = useState('');
@@ -76,35 +90,40 @@ function ExpensesContent() {
       return;
     }
 
-    const expense = {
-      amount: parseFloat(amount),
-      category_id: categoryId,
-      category: selectedCategory?.name,
-      description: description || `${selectedCategory?.name} expense`,
-      ingredient_id: isStockCategory ? ingredientId || undefined : undefined,
-      ingredient_quantity: isStockCategory && ingredientQty ? parseFloat(ingredientQty) : undefined,
-      supplier_id: supplierId || undefined,
-      invoice_no: invoiceNo || undefined,
-      is_iva_deductible: isIvaDeductible,
-      payment_method: paymentMethod || undefined,
-    };
+    setIsSubmitting(true);
+    try {
+      const expense = {
+        amount: parseFloat(amount),
+        category_id: categoryId,
+        category: selectedCategory?.name,
+        description: description || `${selectedCategory?.name} expense`,
+        ingredient_id: isStockCategory ? ingredientId || undefined : undefined,
+        ingredient_quantity: isStockCategory && ingredientQty ? parseFloat(ingredientQty) : undefined,
+        supplier_id: supplierId || undefined,
+        invoice_no: invoiceNo || undefined,
+        is_iva_deductible: isIvaDeductible,
+        payment_method: paymentMethod || undefined,
+      };
 
-    const result = await addExpense(expense);
+      const result = await addExpense(expense);
 
-    if (result && isStockCategory && ingredientId && ingredientQty) {
-      await addStock(ingredientId, parseFloat(ingredientQty), parseFloat(amount));
+      if (result && isStockCategory && ingredientId && ingredientQty) {
+        await addStock(ingredientId, parseFloat(ingredientQty), parseFloat(amount));
+      }
+
+      // Reset form
+      setAmount('');
+      setDescription('');
+      setIngredientId('');
+      setIngredientQty('');
+      setSupplierId('');
+      setInvoiceNo('');
+      setIsIvaDeductible(false);
+      setPaymentMethod('');
+      setShowForm(false);
+    } finally {
+      setIsSubmitting(false);
     }
-
-    // Reset form
-    setAmount('');
-    setDescription('');
-    setIngredientId('');
-    setIngredientQty('');
-    setSupplierId('');
-    setInvoiceNo('');
-    setIsIvaDeductible(false);
-    setPaymentMethod('');
-    setShowForm(false);
   };
 
   const handleExportCSV = (startDate: Date, endDate: Date) => {
@@ -266,8 +285,10 @@ function ExpensesContent() {
               </div>
 
               <div className="flex gap-2 justify-end">
-                <Button type="button" variant="outline" onClick={() => setShowForm(false)}>Cancel</Button>
-                <Button type="submit">Registrar Despesa</Button>
+                <Button type="button" variant="outline" onClick={() => setShowForm(false)} disabled={isSubmitting}>Cancel</Button>
+                <Button type="submit" disabled={isSubmitting}>
+                  {isSubmitting ? 'Registrando...' : 'Registrar Despesa'}
+                </Button>
               </div>
             </form>
           </CardContent>
@@ -315,9 +336,37 @@ function ExpensesContent() {
                     )}
                   </div>
                 </div>
-                <div className="text-right">
-                  <p className="text-xl font-bold text-destructive">-{Number(expense.amount).toLocaleString()} MT</p>
-                  <p className="text-xs text-muted-foreground">{new Date(expense.date).toLocaleString()}</p>
+                <div className="flex items-center gap-4">
+                  <div className="text-right">
+                    <p className="text-xl font-bold text-destructive">-{Number(expense.amount).toLocaleString()} MT</p>
+                    <p className="text-xs text-muted-foreground">{new Date(expense.date).toLocaleString()}</p>
+                  </div>
+                  {isManager && expense.source === 'operational' && (
+                    <AlertDialog>
+                      <AlertDialogTrigger asChild>
+                        <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive hover:bg-destructive/10">
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
+                      </AlertDialogTrigger>
+                      <AlertDialogContent>
+                        <AlertDialogHeader>
+                          <AlertDialogTitle>Eliminar Despesa</AlertDialogTitle>
+                          <AlertDialogDescription>
+                            Tem certeza que deseja eliminar esta despesa? Esta ação não pode ser desfeita.
+                          </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                          <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                          <AlertDialogAction
+                            onClick={() => deleteExpense(expense.id)}
+                            className="bg-destructive hover:bg-destructive/90"
+                          >
+                            Eliminar
+                          </AlertDialogAction>
+                        </AlertDialogFooter>
+                      </AlertDialogContent>
+                    </AlertDialog>
+                  )}
                 </div>
               </CardContent>
             </Card>

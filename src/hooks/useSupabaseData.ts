@@ -1062,11 +1062,22 @@ export function useExpenses(storeId: string | null, startDate?: string, endDate?
     return data;
   };
 
+  const deleteExpense = async (id: string) => {
+    const { error } = await supabase.from('expenses').delete().eq('id', id);
+    if (error) {
+      toast({ title: 'Erro ao eliminar despesa', description: error.message, variant: 'destructive' });
+      return false;
+    }
+    setExpenses(prev => prev.filter(e => e.id !== id));
+    toast({ title: 'Despesa eliminada com sucesso' });
+    return true;
+  };
+
   useEffect(() => {
     fetchExpenses();
   }, [fetchExpenses]);
 
-  return { expenses, loading, addExpense, refetch: fetchExpenses };
+  return { expenses, loading, addExpense, deleteExpense, refetch: fetchExpenses };
 }
 
 export function useSplitConfigs() {
