@@ -148,25 +148,99 @@ export async function buildReceiptBytes(order: ReceiptOrder): Promise<Uint8Array
 }
 
 /**
- * Sends the bytes to a printer. Tries Web Bluetooth / WebUSB when the browser
- * supports it, otherwise downloads the raw file so it can be piped to the
- * printer by the POS terminal.
+ * Sends the bytes to a printer. Tries WebUSB when the browser supports it,
+ * otherwise downloads the raw file so it can be piped to the printer by the
+ * POS terminal. Logs every step to the console for diagnostics.
  */
-export async function sendToPrinter(bytes: Uint8Array, filename = 'recibo.bin'): Promise<'usb' | 'download'> {
+export interface PrintResult {
+  mode: 'usb' | 'download';
+  error?: string;
+}
+
+export async function sendToPrinter(bytes: Uint8Array, filename = 'recibo.bin'): Promise<PrintResult> {
+  const log = (...args: unknown[]) => console.log('[ESC/POS]', ...args);
   const nav = navigator as Navigator & { usb?: any };
-  if (nav.usb?.requestDevice) {
+  let lastError: string | undefined;
+
+  log('bytes to send:', bytes.length, 'secureContext:', window.isSecureContext, 'webusb:', !!nav.usb);
+
+  if (!nav.usb?.requestDevice) {
+    lastError = 'WebUSB não suportado neste navegador (use Chrome/Edge em HTTPS).';
+    log('WebUSB unavailable');
+  } else {
+    let device: any;
     try {
-      const device = await nav.usb.requestDevice({ filters: [{ classCode: 7 }] });
-      await device.open();
-      if (device.configuration === null) await device.selectConfiguration(1);
-      const iface = device.configuration.interfaces[0];
+      const known = await nav.usb.getDevices();
+      log('previously authorised devices:', known.map((d: any) => `${d.productName ?? '?'} ${d.vendorId}:${d.productId}`));
+      device = known[0];
+      if (!device) {
+        device = await nav.usb.requestDevice({ filters: [] });
+      }
+      log('device selected:', {
+        productName: device.productName,
+        manufacturerName: device.manufacturerName,
+        vendorId: device.vendorId,
+        productId: device.productId,
+        opened: device.opened,
+      });
+
+      if (!device.opened) await device.open();
+      log('device opened');
+
+      if (device.configuration === null) {
+        await device.selectConfiguration(1);
+        log('configuration 1 selected');
+      }
+
+      const interfaces = device.configuration.interfaces;
+      log(
+        'interfaces:',
+        interfaces.map((i: any) => ({
+          number: i.interfaceNumber,
+          class: i.alternate.interfaceClass,
+          endpoints: i.alternate.endpoints.map((e: any) => `${e.direction}#${e.endpointNumber}/${e.type}`),
+        }))
+      );
+
+      // Prefer a printer-class interface (7) with a bulk OUT endpoint
+      const candidates = interfaces.filter((i: any) =>
+        i.alternate.endpoints.some((e: any) => e.direction === 'out' && e.type === 'bulk')
+      );
+      const iface =
+        candidates.find((i: any) => i.alternate.interfaceClass === 7) ?? candidates[0];
+      if (!iface) throw new Error('Nenhuma interface de impressão (bulk OUT) encontrada no dispositivo.');
+      log('using interface', iface.interfaceNumber, 'class', iface.alternate.interfaceClass);
+
       await device.claimInterface(iface.interfaceNumber);
-      const endpoint = iface.alternate.endpoints.find((e: any) => e.direction === 'out');
-      await device.transferOut(endpoint.endpointNumber, bytes);
-      await device.close();
-      return 'usb';
-    } catch {
-      /* fall through to download */
+      log('interface claimed');
+
+      const endpoint = iface.alternate.endpoints.find(
+        (e: any) => e.direction === 'out' && e.type === 'bulk'
+      );
+      const res = await device.transferOut(endpoint.endpointNumber, bytes);
+      log('transferOut result:', res.status, 'bytesWritten:', res.bytesWritten);
+
+      try {
+        await device.releaseInterface(iface.interfaceNumber);
+        await device.close();
+      } catch (closeErr) {
+        log('close warning:', closeErr);
+      }
+
+      if (res.status !== 'ok') throw new Error(`Transferência falhou: ${res.status}`);
+      return { mode: 'usb' };
+    } catch (err: any) {
+      lastError = err?.message ?? String(err);
+      console.error('[ESC/POS] USB print failed:', err);
+      if (/access denied|não foi possível reivindicar|claim/i.test(lastError ?? '')) {
+        lastError +=
+          ' — o Windows está a usar o driver da impressora. Substitua o driver por WinUSB (Zadig) ou imprima através do driver do sistema.';
+      }
+      try {
+        await device?.close();
+      } catch {
+        /* ignore */
+      }
     }
   }
 
@@ -177,5 +251,7 @@ export async function sendToPrinter(bytes: Uint8Array, filename = 'recibo.bin'):
   a.download = filename;
   a.click();
   URL.revokeObjectURL(url);
-  return 'download';
+  log('fell back to file download:', filename, 'reason:', lastError);
+  return { mode: 'download', error: lastError };
 }
+
