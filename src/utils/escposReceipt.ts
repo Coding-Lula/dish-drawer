@@ -148,6 +148,89 @@ export async function buildReceiptBytes(order: ReceiptOrder): Promise<Uint8Array
 }
 
 /**
+ * Builds a standalone HTML page styled for 80mm thermal paper so the
+ * receipt can be printed through the operating system's printer driver
+ * (window.print). Used when WebUSB access is blocked (e.g. Windows owns
+ * the printer through its driver).
+ */
+export function buildReceiptHtml(order: ReceiptOrder, logoUrl?: string): string {
+  const dt = order.dateTime instanceof Date ? order.dateTime : new Date(order.dateTime);
+  const esc = (s: string) =>
+    s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+  const rows = order.items
+    .map(
+      i => `<tr>
+        <td class="l">${i.qty}x ${esc(i.name)}</td>
+        <td class="r">${money(i.qty * i.price)}</td>
+      </tr>`
+    )
+    .join('');
+
+  return `<!DOCTYPE html>
+<html lang="pt">
+<head>
+<meta charset="utf-8">
+<title>Pedido Nº ${esc(String(order.orderNumber))}</title>
+<style>
+  @page { size: 80mm auto; margin: 4mm; }
+  * { box-sizing: border-box; }
+  body {
+    width: 72mm; margin: 0 auto; padding: 0;
+    font-family: 'Courier New', monospace; font-size: 12px; color: #000;
+  }
+  .center { text-align: center; }
+  .bold { font-weight: bold; }
+  .logo { display: block; margin: 0 auto 4px; max-width: 45mm; max-height: 45mm; }
+  hr { border: none; border-top: 1px dashed #000; margin: 6px 0; }
+  table { width: 100%; border-collapse: collapse; }
+  td { padding: 1px 0; vertical-align: top; }
+  .l { text-align: left; }
+  .r { text-align: right; white-space: nowrap; }
+  .total { font-size: 18px; font-weight: bold; text-align: right; margin-top: 6px; }
+</style>
+</head>
+<body>
+  <div class="center">
+    ${logoUrl ? `<img class="logo" src="${logoUrl}" alt="">` : ''}
+    <div class="bold">${esc(order.storeName || 'Pizzaria 360°')}</div>
+    <div>Pedido Nº ${esc(String(order.orderNumber))}</div>
+    <div>${dt.toLocaleString('pt-PT')}</div>
+    ${order.tableName ? `<div>${esc(order.tableName)}</div>` : ''}
+  </div>
+  <hr>
+  <table>
+    <tr><td class="l bold">QTD ARTIGO</td><td class="r bold">VALOR</td></tr>
+    ${rows}
+  </table>
+  <hr>
+  <div class="total">TOTAL ${money(order.total)}</div>
+  <hr>
+  <div class="center">Obrigado pela preferência!</div>
+</body>
+</html>`;
+}
+
+/**
+ * Opens the receipt HTML in a new window and triggers the system print
+ * dialog, so printing goes through the OS printer driver (works with any
+ * printer installed on the computer, no WebUSB needed).
+ */
+export function printViaSystem(order: ReceiptOrder, logoUrl?: string): boolean {
+  const win = window.open('', '_blank', 'width=400,height=600');
+  if (!win) return false; // popup blocked
+  win.document.write(buildReceiptHtml(order, logoUrl));
+  win.document.close();
+  win.focus();
+  // Give the logo a moment to load before printing
+  win.onload = () => {
+    win.print();
+  };
+  setTimeout(() => win.print(), 500);
+  return true;
+}
+
+/**
  * Sends the bytes to a printer. Tries WebUSB when the browser supports it,
  * otherwise downloads the raw file so it can be piped to the printer by the
  * POS terminal. Logs every step to the console for diagnostics.
