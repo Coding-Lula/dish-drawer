@@ -24,7 +24,8 @@ import { Label } from '@/components/ui/label';
 import { CartModal } from '@/components/modals/CartModal';
 import { EditPriceModal } from '@/components/modals/EditPriceModal';
 import { useAuth } from '@/hooks/useAuth';
-import { buildReceiptBytes, sendToPrinter } from '@/utils/escposReceipt';
+import { buildReceiptBytes, sendToPrinter, printViaSystem, ReceiptOrder } from '@/utils/escposReceipt';
+import logoAsset from '@/assets/360-logo.bmp.asset.json';
 import { getNextOrderNumber } from '@/hooks/useOrderNumber';
 
 interface CartItem {
