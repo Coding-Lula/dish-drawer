@@ -699,7 +699,7 @@ function POSPage({ currentStore }: { currentStore: any }) {
         toast({ title: `Pedido Nº ${orderNumber}`, description: 'Enviado para a impressora' });
       } else if (result.error && /access denied|open/i.test(result.error)) {
         // Windows owns the printer via its driver — print through the OS instead
-        const opened = printViaSystem(order, logoAsset.url);
+        const opened = printViaSystem(order, new URL(logoAsset.url, window.location.origin).href);
         toast({
           title: `Pedido Nº ${orderNumber}`,
           description: opened
