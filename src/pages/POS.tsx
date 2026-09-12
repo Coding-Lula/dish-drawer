@@ -684,17 +684,28 @@ function POSPage({ currentStore }: { currentStore: any }) {
     try {
       const orderNumber = await getNextOrderNumber(currentStore.id);
       const total = items.reduce((sum, i) => sum + Number(i.unitPrice) * i.quantity, 0);
-      const bytes = await buildReceiptBytes({
+      const order: ReceiptOrder = {
         orderNumber,
         dateTime: new Date(),
         items: items.map(i => ({ name: i.dish.name, qty: i.quantity, price: Number(i.unitPrice) })),
         total,
         storeName: currentStore?.name,
         tableName: tableLabel
-      });
+      };
+      const bytes = await buildReceiptBytes(order);
       const result = await sendToPrinter(bytes, `pedido-${orderNumber}.bin`);
       if (result.mode === 'usb') {
         toast({ title: `Pedido Nº ${orderNumber}`, description: 'Enviado para a impressora' });
+      } else if (result.error && /access denied|open/i.test(result.error)) {
+        // Windows owns the printer via its driver — print through the OS instead
+        const opened = printViaSystem(order, logoAsset.url);
+        toast({
+          title: `Pedido Nº ${orderNumber}`,
+          description: opened
+            ? 'A abrir a janela de impressão do sistema — selecione a Xprinter'
+            : 'Pop-up bloqueado. Permita pop-ups para imprimir via sistema.',
+          variant: opened ? 'default' : 'destructive'
+        });
       } else {
         toast({
           title: `Pedido Nº ${orderNumber} - impressora não usada`,
