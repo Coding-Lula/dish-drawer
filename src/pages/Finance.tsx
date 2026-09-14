@@ -18,6 +18,7 @@ import {
   AlertTriangle,
   Building2,
   Settings,
+  FileText,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { DateRangePicker } from '@/components/ui/date-range-picker';
@@ -56,6 +57,7 @@ function FinanceContent() {
     allocationCategories,
     deleteAllocationCategory,
     currentStoreSummary,
+    incomeStatement,
     revenueByPaymentMethod,
     expensesByPaymentMethod,
     performanceAnalytics,
@@ -290,6 +292,173 @@ function FinanceContent() {
                 {currentStoreSummary.netTotal.toLocaleString()} MT
               </p>
             </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Income Statement (Demonstração de Resultados - DRE) Card */}
+      <Card className="border-primary/30">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <FileText className="w-5 h-5 text-primary" />
+            Demonstração de Resultados (DRE) - {currentStore.name}
+          </CardTitle>
+          <CardDescription>
+            Relatório de desempenho financeiro ({monthStart} a {monthEnd})
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+              <div className="p-4 rounded-lg bg-muted/30 border">
+                <span className="text-xs text-muted-foreground font-medium uppercase tracking-wider block">
+                  Receita Bruta
+                </span>
+                <span className="text-xl font-bold text-green-600 mt-1 block">
+                  {incomeStatement.grossRevenue.toLocaleString()} MT
+                </span>
+              </div>
+
+              <div className="p-4 rounded-lg bg-muted/30 border">
+                <span className="text-xs text-muted-foreground font-medium uppercase tracking-wider block">
+                  Custo de Mercadorias (CMV)
+                </span>
+                <span className="text-xl font-bold text-destructive mt-1 block">
+                  - {incomeStatement.cogs.toLocaleString()} MT
+                </span>
+              </div>
+
+              <div className="p-4 rounded-lg bg-muted/30 border">
+                <div className="flex justify-between items-center">
+                  <span className="text-xs text-muted-foreground font-medium uppercase tracking-wider block">
+                    Lucro Bruto
+                  </span>
+                  <Badge variant="outline" className="text-xs">
+                    {incomeStatement.grossMarginPercent.toFixed(1)}%
+                  </Badge>
+                </div>
+                <span
+                  className={cn(
+                    'text-xl font-bold mt-1 block',
+                    incomeStatement.grossProfit >= 0 ? 'text-green-600' : 'text-destructive'
+                  )}
+                >
+                  {incomeStatement.grossProfit.toLocaleString()} MT
+                </span>
+              </div>
+
+              <div className="p-4 rounded-lg bg-muted/30 border">
+                <span className="text-xs text-muted-foreground font-medium uppercase tracking-wider block">
+                  Despesas Operacionais
+                </span>
+                <span className="text-xl font-bold text-destructive mt-1 block">
+                  - {incomeStatement.operationalExpenses.toLocaleString()} MT
+                </span>
+              </div>
+
+              <div className="p-4 rounded-lg bg-primary/10 border border-primary/20">
+                <div className="flex justify-between items-center">
+                  <span className="text-xs text-primary font-bold uppercase tracking-wider block">
+                    Lucro Líquido
+                  </span>
+                  <Badge
+                    className={cn(
+                      'text-xs',
+                      incomeStatement.netProfit >= 0
+                        ? 'bg-green-600 hover:bg-green-700'
+                        : 'bg-destructive hover:bg-destructive'
+                    )}
+                  >
+                    {incomeStatement.netMarginPercent.toFixed(1)}%
+                  </Badge>
+                </div>
+                <span
+                  className={cn(
+                    'text-xl font-bold mt-1 block',
+                    incomeStatement.netProfit >= 0 ? 'text-green-600' : 'text-destructive'
+                  )}
+                >
+                  {incomeStatement.netProfit.toLocaleString()} MT
+                </span>
+              </div>
+            </div>
+
+            <Table className="mt-4 border rounded-lg">
+              <TableHeader>
+                <TableRow className="bg-muted/50">
+                  <TableHead className="font-bold">Item de Demonstração (DRE)</TableHead>
+                  <TableHead className="text-right font-bold">Valor (MT)</TableHead>
+                  <TableHead className="text-right font-bold">% da Receita</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                <TableRow>
+                  <TableCell className="font-semibold text-green-700">(+) Receita Bruta de Vendas</TableCell>
+                  <TableCell className="text-right font-bold text-green-700">
+                    {incomeStatement.grossRevenue.toLocaleString()} MT
+                  </TableCell>
+                  <TableCell className="text-right font-medium">100.0%</TableCell>
+                </TableRow>
+                <TableRow>
+                  <TableCell className="font-medium text-destructive">
+                    (-) Custo das Mercadorias Vendidas (CMV)
+                  </TableCell>
+                  <TableCell className="text-right font-medium text-destructive">
+                    - {incomeStatement.cogs.toLocaleString()} MT
+                  </TableCell>
+                  <TableCell className="text-right text-muted-foreground">
+                    {incomeStatement.grossRevenue > 0
+                      ? ((incomeStatement.cogs / incomeStatement.grossRevenue) * 100).toFixed(1)
+                      : '0.0'}
+                    %
+                  </TableCell>
+                </TableRow>
+                <TableRow className="bg-muted/30 font-bold">
+                  <TableCell>
+                    (=) Lucro Bruto
+                  </TableCell>
+                  <TableCell
+                    className={cn(
+                      'text-right',
+                      incomeStatement.grossProfit >= 0 ? 'text-green-600' : 'text-destructive'
+                    )}
+                  >
+                    {incomeStatement.grossProfit.toLocaleString()} MT
+                  </TableCell>
+                  <TableCell className="text-right">
+                    {incomeStatement.grossMarginPercent.toFixed(1)}%
+                  </TableCell>
+                </TableRow>
+                <TableRow>
+                  <TableCell className="font-medium text-destructive">
+                    (-) Despesas Operacionais e Financeiras
+                  </TableCell>
+                  <TableCell className="text-right font-medium text-destructive">
+                    - {incomeStatement.operationalExpenses.toLocaleString()} MT
+                  </TableCell>
+                  <TableCell className="text-right text-muted-foreground">
+                    {incomeStatement.grossRevenue > 0
+                      ? ((incomeStatement.operationalExpenses / incomeStatement.grossRevenue) * 100).toFixed(1)
+                      : '0.0'}
+                    %
+                  </TableCell>
+                </TableRow>
+                <TableRow className="bg-primary/10 font-bold text-lg border-t-2">
+                  <TableCell className="text-primary">(=) Lucro Líquido do Período</TableCell>
+                  <TableCell
+                    className={cn(
+                      'text-right',
+                      incomeStatement.netProfit >= 0 ? 'text-green-600' : 'text-destructive'
+                    )}
+                  >
+                    {incomeStatement.netProfit.toLocaleString()} MT
+                  </TableCell>
+                  <TableCell className="text-right">
+                    {incomeStatement.netMarginPercent.toFixed(1)}%
+                  </TableCell>
+                </TableRow>
+              </TableBody>
+            </Table>
           </div>
         </CardContent>
       </Card>

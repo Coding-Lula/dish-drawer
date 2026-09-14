@@ -24,6 +24,110 @@ export interface LowMarginItem extends Dish {
   totalCost: number;
 }
 
+export interface IncomeStatement {
+  grossRevenue: number;
+  cogs: number; // Custo das Mercadorias Vendidas (CMV)
+  grossProfit: number;
+  grossMarginPercent: number;
+  operationalExpenses: number;
+  netProfit: number;
+  netMarginPercent: number;
+}
+
+/**
+ * Calculates Cost of Goods Sold (COGS / CMV) based on sold transaction items and ingredient costs.
+ */
+export function calculateCOGS(
+  transactions: Transaction[],
+  transactionItems: TransactionItem[],
+  recipes: Recipe[],
+  ingredients: Ingredient[],
+  storeId: string,
+  monthStart: string,
+  monthEnd: string
+): number {
+  const storeTxIds = new Set(
+    transactions
+      .filter(t => {
+        const txDate = t.date?.split('T')[0];
+        return (
+          t.store_id === storeId &&
+          txDate >= monthStart &&
+          txDate <= monthEnd &&
+          t.payment_method &&
+          t.payment_method !== 'self_consumption'
+        );
+      })
+      .map(t => t.id)
+  );
+
+  const soldItems = transactionItems.filter(item => storeTxIds.has(item.transaction_id));
+
+  let totalCOGS = 0;
+
+  soldItems.forEach(item => {
+    if (!item.dish_id) return;
+    const dishRecipes = recipes.filter(r => r.dish_id === item.dish_id);
+    const unitIngredientCost = dishRecipes.reduce((sum, r) => {
+      const ingredient = ingredients.find(i => i.id === r.ingredient_id);
+      return sum + Number(ingredient?.average_cost || 0) * Number(r.quantity_required);
+    }, 0);
+
+    totalCOGS += unitIngredientCost * Number(item.quantity);
+  });
+
+  return totalCOGS;
+}
+
+/**
+ * Calculates the complete Income Statement (Demonstração de Resultados / DRE).
+ */
+export function calculateIncomeStatement(
+  transactions: Transaction[],
+  transactionItems: TransactionItem[],
+  recipes: Recipe[],
+  ingredients: Ingredient[],
+  rawExpenses: Expense[],
+  financialTransactions: FinancialTransaction[],
+  storeId: string,
+  monthStart: string,
+  monthEnd: string
+): IncomeStatement {
+  const grossRevenue = calculateStoreRevenue(transactions, storeId, monthStart, monthEnd);
+  const cogs = calculateCOGS(
+    transactions,
+    transactionItems,
+    recipes,
+    ingredients,
+    storeId,
+    monthStart,
+    monthEnd
+  );
+  const grossProfit = grossRevenue - cogs;
+  const grossMarginPercent = grossRevenue > 0 ? (grossProfit / grossRevenue) * 100 : 0;
+
+  const { total: operationalExpenses } = calculateStoreExpenses(
+    rawExpenses,
+    financialTransactions,
+    storeId,
+    monthStart,
+    monthEnd
+  );
+
+  const netProfit = grossProfit - operationalExpenses;
+  const netMarginPercent = grossRevenue > 0 ? (netProfit / grossRevenue) * 100 : 0;
+
+  return {
+    grossRevenue,
+    cogs,
+    grossProfit,
+    grossMarginPercent,
+    operationalExpenses,
+    netProfit,
+    netMarginPercent,
+  };
+}
+
 /**
  * Calculates revenue for a specific store within a date range.
  */
