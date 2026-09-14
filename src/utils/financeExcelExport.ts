@@ -17,6 +17,15 @@ interface ExportData {
   expensesByParentCategory: { parent: ExpenseParentCategory; amount: number }[];
   transactions: FinancialTransaction[];
   storeName: string;
+  incomeStatement?: {
+    grossRevenue: number;
+    cogs: number;
+    grossProfit: number;
+    grossMarginPercent: number;
+    operationalExpenses: number;
+    netProfit: number;
+    netMarginPercent: number;
+  };
 }
 
 export function exportFinancialReport(data: ExportData) {
@@ -25,22 +34,37 @@ export function exportFinancialReport(data: ExportData) {
   
   // Sheet 1: Summary
   const summaryData = [
-    ['FINANCIAL REPORT'],
-    [`MONTH: ${monthName} ${data.year}`],
-    [`LOCK DATE: ${data.lockDate}`],
-    [`STORE: ${data.storeName}`],
+    ['RELATÓRIO FINANCEIRO'],
+    [`MÊS: ${monthName} ${data.year}`],
+    [`DATA DE BLOQUEIO: ${data.lockDate}`],
+    [`LOJA: ${data.storeName}`],
     [],
-    ['FINANCIAL SUMMARY'],
-    ['Total Income:', formatCurrency(data.totalIncome)],
-    ['Total Expenses:', formatCurrency(data.totalExpenses)],
-    ['Global Balance:', formatCurrency(data.globalBalance)],
+    ['SUMÁRIO FINANCEIRO'],
+    ['Receita Total:', formatCurrency(data.totalIncome)],
+    ['Despesas Totais:', formatCurrency(data.totalExpenses)],
+    ['Saldo Global:', formatCurrency(data.globalBalance)],
     [],
-    ['INCOME BY SOURCE'],
+  ];
+
+  if (data.incomeStatement) {
+    summaryData.push(
+      ['DEMONSTRAÇÃO DE RESULTADOS (DRE)'],
+      ['(+) Receita Bruta de Vendas:', formatCurrency(data.incomeStatement.grossRevenue)],
+      ['(-) Custo das Mercadorias Vendidas (CMV):', formatCurrency(data.incomeStatement.cogs)],
+      ['(=) Lucro Bruto:', `${formatCurrency(data.incomeStatement.grossProfit)} (${data.incomeStatement.grossMarginPercent.toFixed(1)}%)`],
+      ['(-) Despesas Operacionais e Financeiras:', formatCurrency(data.incomeStatement.operationalExpenses)],
+      ['(=) Lucro Líquido do Período:', `${formatCurrency(data.incomeStatement.netProfit)} (${data.incomeStatement.netMarginPercent.toFixed(1)}%)`],
+      []
+    );
+  }
+
+  summaryData.push(
+    ['RECEITA POR FONTE'],
     ...data.incomeBySource.map(item => [item.source.name, formatCurrency(item.amount)]),
     [],
-    ['EXPENSES BY CATEGORY'],
-    ...data.expensesByParentCategory.map(item => [item.parent.name, formatCurrency(item.amount)]),
-  ];
+    ['DESPESAS POR CATEGORIA'],
+    ...data.expensesByParentCategory.map(item => [item.parent.name, formatCurrency(item.amount)])
+  );
   
   const summarySheet = XLSX.utils.aoa_to_sheet(summaryData);
   summarySheet['!cols'] = [{ wch: 25 }, { wch: 20 }];

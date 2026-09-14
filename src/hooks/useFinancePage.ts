@@ -18,6 +18,7 @@ import {
   mapPaymentMethodToSourceId,
   calculateStorePerformanceAnalytics,
   calculateLowMarginItems,
+  calculateIncomeStatement,
 } from '@/services/financeService';
 
 export function useFinancePage() {
@@ -85,6 +86,42 @@ export function useFinancePage() {
     () => allTransactions.filter(t => t.store_id === currentStore?.id),
     [allTransactions, currentStore?.id]
   );
+
+  // Income Statement (Demonstração de Resultados - DRE)
+  const incomeStatement = useMemo(() => {
+    if (!currentStore?.id) {
+      return {
+        grossRevenue: 0,
+        cogs: 0,
+        grossProfit: 0,
+        grossMarginPercent: 0,
+        operationalExpenses: 0,
+        netProfit: 0,
+        netMarginPercent: 0,
+      };
+    }
+    return calculateIncomeStatement(
+      allTransactions,
+      allTransactionItems,
+      recipes,
+      ingredients,
+      allStoreExpenses,
+      allFinancialTransactions,
+      currentStore.id,
+      monthStart,
+      monthEnd
+    );
+  }, [
+    currentStore?.id,
+    allTransactions,
+    allTransactionItems,
+    recipes,
+    ingredients,
+    allStoreExpenses,
+    allFinancialTransactions,
+    monthStart,
+    monthEnd,
+  ]);
 
   const rawExpenses = useMemo(
     () => allStoreExpenses.filter(e => e.store_id === currentStore?.id),
@@ -332,6 +369,7 @@ export function useFinancePage() {
     allocationCategories,
     deleteAllocationCategory,
     currentStoreSummary,
+    incomeStatement,
     revenueByPaymentMethod,
     expensesByPaymentMethod,
     performanceAnalytics,
