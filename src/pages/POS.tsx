@@ -1,14 +1,7 @@
-import { useState, useEffect, useRef, useMemo } from 'react';
 import { MainLayout, useCurrentStore } from '@/components/layout/MainLayout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { useToast } from '@/hooks/use-toast';
-import { useDishes, useRecipes, useTransactions, useStoreStock, useCredits, useDebtorPayments, useRestaurantTablesManagement, useStores } from '@/hooks/useSupabaseData';
-import type { Dish } from '@/hooks/useSupabaseData';
-import { useStoreDishPrices } from '@/hooks/useStoreDishPrices';
-import { useStoreCategories } from '@/hooks/useStoreCategories';
-import { useBundles, useStoreBundlePrices } from '@/hooks/useBundles';
 import { ManageTablesModal } from '@/components/modals/ManageTablesModal';
 import { CategoryManagerModal } from '@/components/modals/CategoryManagerModal';
 import { CreditCustomerModal } from '@/components/modals/CreditCustomerModal';
@@ -23,28 +16,9 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 import { CartModal } from '@/components/modals/CartModal';
 import { EditPriceModal } from '@/components/modals/EditPriceModal';
-import { useAuth } from '@/hooks/useAuth';
-import { buildReceiptBytes, sendToPrinter, printViaSystem, ReceiptOrder } from '@/utils/escposReceipt';
-import logoAsset from '@/assets/360-logo.bmp.asset.json';
-import { getNextOrderNumber } from '@/hooks/useOrderNumber';
-
-interface CartItem {
-  dish: Dish;
-  quantity: number;
-  unitPrice: number;
-  isBundle?: boolean;
-  bundleId?: string;
-  bundleDishId?: string;
-  bundleName?: string;
-  selectedDishIds?: string[]; // For bundles: the dishes selected in this bundle
-}
-
-interface SplitBill {
-  id: string;
-  items: CartItem[];
-  paymentMethod: string | null;
-  isPaid: boolean;
-}
+import { usePosPage, SplitBill } from '@/hooks/usePosPage';
+import type { Dish } from '@/hooks/useSupabaseData';
+import type { PosCartItem } from '@/services/posService';
 
 const paymentMethods = [
   { id: 'cash', name: 'Cash', icon: '', isRevenue: true, isCash: true },
@@ -70,24 +44,23 @@ function POSContent() {
   return <POSPage currentStore={currentStore} />;
 }
 
-function CartContent({ 
-  cart, 
-  updateQuantity, 
-  setCart, 
-  setShowSplitBillModal, 
-  selectedPayment, 
-  setSelectedPayment, 
-  cartTotal, 
-  handlePrintReceipt, 
-  handleCheckout, 
-  isProcessing, 
+function CartContent({
+  cart,
+  updateQuantity,
+  setCart,
+  setShowSplitBillModal,
+  selectedPayment,
+  setSelectedPayment,
+  cartTotal,
+  handlePrintReceipt,
+  handleCheckout,
+  isProcessing,
   selectedTable,
   tables,
-  toast,
   dishes,
   isDiscountEnabled,
   discountApplied,
-  setDiscountApplied
+  setDiscountApplied,
 }: any) {
   const currentTableName = tables.find((t: any) => t.id === selectedTable)?.name || 'No Table';
 
@@ -96,7 +69,10 @@ function CartContent({
       <CardHeader className="pb-3 border-b">
         <CardTitle className="flex items-center justify-between">
           <div className="flex flex-col">
-            <span className="flex items-center gap-2"><ShoppingBag className="w-5 h-5" />Cart</span>
+            <span className="flex items-center gap-2">
+              <ShoppingBag className="w-5 h-5" />
+              Cart
+            </span>
             <span className="text-xs text-muted-foreground">Table: {currentTableName}</span>
           </div>
           <div className="flex gap-1">
@@ -105,7 +81,11 @@ function CartContent({
                 <Split className="w-4 h-4" /> Dividir Mesa
               </Button>
             )}
-            {cart.length > 0 && <Button variant="ghost" size="sm" onClick={() => setCart([])} className="text-destructive">Clear</Button>}
+            {cart.length > 0 && (
+              <Button variant="ghost" size="sm" onClick={() => setCart([])} className="text-destructive">
+                Clear
+              </Button>
+            )}
           </div>
         </CardTitle>
       </CardHeader>
@@ -120,22 +100,48 @@ function CartContent({
             </div>
           ) : (
             <div className="space-y-2 pr-2">
-              {cart.map((item: CartItem) => (
+              {cart.map((item: PosCartItem) => (
                 <div key={item.dish.id} className="flex items-center gap-2 p-2 rounded-lg bg-muted/30 border">
                   <div className="flex-1 min-w-0">
                     <p className="font-medium text-sm truncate">{item.dish.name}</p>
                     {item.isBundle && item.selectedDishIds && (
                       <p className="text-[10px] text-muted-foreground truncate leading-tight mb-0.5">
-                        {item.selectedDishIds.map(id => dishes.find((d: any) => d.id === id)?.name).filter(Boolean).join(', ')}
+                        {item.selectedDishIds
+                          .map(id => dishes.find((d: any) => d.id === id)?.name)
+                          .filter(Boolean)
+                          .join(', ')}
                       </p>
                     )}
-                    <p className="text-xs text-muted-foreground">{Number(item.unitPrice).toLocaleString()} MT × {item.quantity}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {Number(item.unitPrice).toLocaleString()} MT × {item.quantity}
+                    </p>
                   </div>
                   <div className="flex items-center gap-1">
-                    <Button variant="outline" size="icon" className="h-6 w-6" onClick={() => updateQuantity(item.dish.id, item.quantity - 1)}><Minus className="w-3 h-3" /></Button>
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      className="h-6 w-6"
+                      onClick={() => updateQuantity(item.dish.id, item.quantity - 1)}
+                    >
+                      <Minus className="w-3 h-3" />
+                    </Button>
                     <span className="w-5 text-center text-sm">{item.quantity}</span>
-                    <Button variant="outline" size="icon" className="h-6 w-6" onClick={() => updateQuantity(item.dish.id, item.quantity + 1)}><Plus className="w-3 h-3" /></Button>
-                    <Button variant="ghost" size="icon" className="h-6 w-6 text-destructive" onClick={() => updateQuantity(item.dish.id, 0)}><Trash2 className="w-3 h-3" /></Button>
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      className="h-6 w-6"
+                      onClick={() => updateQuantity(item.dish.id, item.quantity + 1)}
+                    >
+                      <Plus className="w-3 h-3" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-6 w-6 text-destructive"
+                      onClick={() => updateQuantity(item.dish.id, 0)}
+                    >
+                      <Trash2 className="w-3 h-3" />
+                    </Button>
                   </div>
                 </div>
               ))}
@@ -150,9 +156,12 @@ function CartContent({
             <Checkbox
               id="cart-discount"
               checked={discountApplied}
-              onCheckedChange={(checked) => setDiscountApplied(!!checked)}
+              onCheckedChange={checked => setDiscountApplied(!!checked)}
             />
-            <Label htmlFor="cart-discount" className="text-xs font-medium text-amber-800 dark:text-amber-300 cursor-pointer">
+            <Label
+              htmlFor="cart-discount"
+              className="text-xs font-medium text-amber-800 dark:text-amber-300 cursor-pointer"
+            >
               Aplicar Desconto (-5 MT)
             </Label>
           </div>
@@ -162,7 +171,16 @@ function CartContent({
           <p className="text-xs font-medium text-muted-foreground mb-1.5">Payment Method</p>
           <div className="grid grid-cols-4 gap-1">
             {paymentMethods.map(method => (
-              <Button key={method.id} variant={selectedPayment === method.id ? "default" : "outline"} size="sm" className={cn("flex flex-col h-auto py-1 px-1", !method.isRevenue && selectedPayment === method.id && "bg-amber-600 hover:bg-amber-700")} onClick={() => setSelectedPayment(method.id)}>
+              <Button
+                key={method.id}
+                variant={selectedPayment === method.id ? 'default' : 'outline'}
+                size="sm"
+                className={cn(
+                  'flex flex-col h-auto py-1 px-1',
+                  !method.isRevenue && selectedPayment === method.id && 'bg-amber-600 hover:bg-amber-700'
+                )}
+                onClick={() => setSelectedPayment(method.id)}
+              >
                 <span className="text-sm">{method.icon}</span>
                 <span className="text-[10px] leading-tight">{method.name}</span>
               </Button>
@@ -182,552 +200,87 @@ function CartContent({
             <Button variant="outline" size="sm" onClick={handlePrintReceipt} disabled={cart.length === 0}>
               <Printer className="w-4 h-4" />
             </Button>
-            <Button className="flex-1 h-10" onClick={handleCheckout} disabled={cart.length === 0 || isProcessing || !selectedTable}>
+            <Button
+              className="flex-1 h-10"
+              onClick={handleCheckout}
+              disabled={cart.length === 0 || isProcessing || !selectedTable}
+            >
               {isProcessing ? 'Processing...' : <><CreditCard className="w-4 h-4 mr-1" />Completar</>}
             </Button>
           </div>
         </div>
       </div>
     </>
-  )
-};
+  );
+}
 
 function POSPage({ currentStore }: { currentStore: any }) {
-  const { toast } = useToast();
-  const { dishes } = useDishes();
-  const { recipes } = useRecipes();
-  const { tables, addTable, deleteTable, initializeTables } = useRestaurantTablesManagement(currentStore?.id || null);
-  const { addTransaction } = useTransactions(currentStore?.id || null);
-  const { deductStock } = useStoreStock(currentStore?.id || null);
-  const { addCredit, credits } = useCredits(currentStore?.id || null);
-  const { payments } = useDebtorPayments(currentStore?.id || null);
-  const { getEffectivePrice, hasOverride, setOverridePrice, removeOverridePrice, getOverridePrice } = useStoreDishPrices(currentStore?.id || null);
-  const { enabledCategories, setCategories: updateEnabledCategories } = useStoreCategories(currentStore?.id || null);
-  const { bundles } = useBundles();
-  const { getEffectiveBundlePrice } = useStoreBundlePrices(currentStore?.id || null);
-  const { isManager, user } = useAuth();
-  const { stores: allStores } = useStores();
-
-  const [tableCarts, setTableCarts] = useState<Record<string, CartItem[]>>({});
-  const [tableDiscounts, setTableDiscounts] = useState<Record<string, boolean>>({});
-
-  // Persist per-table carts to localStorage, scoped per user + per store,
-  // so a page refresh or accidental navigation doesn't lose the cart.
-  const cartStorageKey = user?.id && currentStore?.id
-    ? `pos_cart::${user.id}::${currentStore.id}`
-    : null;
-  const hasHydratedCartRef = useRef(false);
-
-  const discountStorageKey = user?.id && currentStore?.id
-    ? `pos_discount::${user.id}::${currentStore.id}`
-    : null;
-  const hasHydratedDiscountRef = useRef(false);
-
-  // Hydrate on mount / when the scope key changes
-  useEffect(() => {
-    hasHydratedCartRef.current = false;
-    if (!cartStorageKey) return;
-    try {
-      const raw = localStorage.getItem(cartStorageKey);
-      if (raw) {
-        const parsed = JSON.parse(raw);
-        if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
-          setTableCarts(parsed as Record<string, CartItem[]>);
-        } else {
-          setTableCarts({});
-        }
-      } else {
-        setTableCarts({});
-      }
-    } catch {
-      localStorage.removeItem(cartStorageKey);
-      setTableCarts({});
-    }
-    hasHydratedCartRef.current = true;
-  }, [cartStorageKey]);
-
-  // Hydrate discounts on mount / when the scope key changes
-  useEffect(() => {
-    hasHydratedDiscountRef.current = false;
-    if (!discountStorageKey) return;
-    try {
-      const raw = localStorage.getItem(discountStorageKey);
-      if (raw) {
-        const parsed = JSON.parse(raw);
-        if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
-          setTableDiscounts(parsed as Record<string, boolean>);
-        } else {
-          setTableDiscounts({});
-        }
-      } else {
-        setTableDiscounts({});
-      }
-    } catch {
-      localStorage.removeItem(discountStorageKey);
-      setTableDiscounts({});
-    }
-    hasHydratedDiscountRef.current = true;
-  }, [discountStorageKey]);
-
-  // Persist on every change (after hydration)
-  useEffect(() => {
-    if (!cartStorageKey || !hasHydratedCartRef.current) return;
-    try {
-      const hasAnyItems = Object.values(tableCarts).some(items => items && items.length > 0);
-      if (hasAnyItems) {
-        localStorage.setItem(cartStorageKey, JSON.stringify(tableCarts));
-      } else {
-        localStorage.removeItem(cartStorageKey);
-      }
-    } catch {
-      // Ignore quota / serialization errors
-    }
-  }, [tableCarts, cartStorageKey]);
-
-  // Persist discounts on every change (after hydration)
-  useEffect(() => {
-    if (!discountStorageKey || !hasHydratedDiscountRef.current) return;
-    try {
-      const hasAnyDiscounts = Object.values(tableDiscounts).some(val => val === true);
-      if (hasAnyDiscounts) {
-        localStorage.setItem(discountStorageKey, JSON.stringify(tableDiscounts));
-      } else {
-        localStorage.removeItem(discountStorageKey);
-      }
-    } catch {
-      // Ignore quota / serialization errors
-    }
-  }, [tableDiscounts, discountStorageKey]);
-
-  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
-  const [selectedPayment, setSelectedPayment] = useState('cash');
-  const [selectedTable, setSelectedTable] = useState<string | null>(null);
-  const [isProcessing, setIsProcessing] = useState(false);
-  const [showCreditModal, setShowCreditModal] = useState(false);
-  const [showSplitBillModal, setShowSplitBillModal] = useState(false);
-  const [showTableMap, setShowTableMap] = useState(false);
-  const [showCart, setShowCart] = useState(false);
-  const [showEditPriceModal, setShowEditPriceModal] = useState(false);
-  const [selectedDish, setSelectedDish] = useState<Dish | null>(null);
-  const [showBundleSelector, setShowBundleSelector] = useState(false);
-  const [selectedBundle, setSelectedBundle] = useState<typeof bundles[0] | null>(null);
-  const [showBreakfastSelector, setShowBreakfastSelector] = useState(false);
-  const [searchQuery, setSearchQuery] = useState('');
-
-  // Initialize tables if needed
-  useEffect(() => {
-    if (currentStore?.id && tables.length < 15) {
-      initializeTables(15);
-    }
-  }, [currentStore?.id, tables.length, initializeTables]);
-
-  // Default to first table
-  useEffect(() => {
-    if (tables.length > 0 && !selectedTable) {
-      setSelectedTable(tables[0].id);
-    }
-  }, [tables, selectedTable]);
-
-  const existingCustomerNames = useMemo(() => {
-    const set = new Set<string>();
-    credits.forEach(c => set.add(c.customer_name.trim()));
-    payments.forEach(p => set.add(p.customer_name.trim()));
-    return Array.from(set).sort((a, b) => a.localeCompare(b));
-  }, [credits, payments]);
-
-  const currentCart = selectedTable ? tableCarts[selectedTable] || [] : [];
-  const breakfastDish = dishes.find(d => d.name.toLowerCase() === 'breakfast');
-
-  const allCategories = [...new Set(dishes.map(d => d.category).filter(Boolean))] as string[];
-  const displayCategories = enabledCategories.length > 0
-    ? allCategories.filter(cat => enabledCategories.includes(cat))
-    : allCategories;
-
-  const categories = displayCategories;
-
-  const dishesInEnabledCategories = dishes.filter(d =>
-    !d.category || displayCategories.includes(d.category)
-  );
-
-  const filteredDishes = dishesInEnabledCategories.filter(d => {
-    const matchesCategory = !selectedCategory || d.category === selectedCategory;
-    const matchesSearch = !searchQuery || d.name.toLowerCase().includes(searchQuery.toLowerCase());
-    return matchesCategory && matchesSearch;
-  });
-
-  const isDiscountEnabled = currentStore?.id === '85cb8967-fcad-49f5-b0bb-dc84bf0448d9';
-  const discountApplied = selectedTable && isDiscountEnabled ? !!tableDiscounts[selectedTable] : false;
-  const rawCartTotal = currentCart.reduce((sum, item) => sum + (Number(item.unitPrice) * item.quantity), 0);
-  const cartTotal = Math.max(0, rawCartTotal - (discountApplied ? 5 : 0));
-
-  const showBreakfastDish = breakfastDish && (!breakfastDish.category || displayCategories.includes(breakfastDish.category));
-  const filteredBundles = bundles.filter(b => !b.category || displayCategories.includes(b.category));
-
-  const addToCart = (dish: Dish) => {
-    if (!selectedTable) {
-      toast({ 
-        title: 'Select Table First', 
-        description: 'Please select a table before adding items to cart',
-        variant: 'destructive'
-      });
-      setShowTableMap(true);
-      return;
-    }
-
-    if (dish.name.toLowerCase() === 'breakfast') {
-      setSelectedDish(dish);
-      setShowBreakfastSelector(true);
-      return;
-    }
-    
-    // Get the effective price for this store
-    const effectivePrice = getEffectivePrice(dish.id, Number(dish.selling_price));
-    
-    setTableCarts(prev => {
-      const tableCart = prev[selectedTable] || [];
-      const existing = tableCart.find(i => i.dish.id === dish.id);
-      
-      if (existing) {
-        return {
-          ...prev,
-          [selectedTable]: tableCart.map(i => 
-            i.dish.id === dish.id ? { ...i, quantity: i.quantity + 1 } : i
-          )
-        };
-      }
-      
-      return {
-        ...prev,
-        [selectedTable]: [...tableCart, { dish, quantity: 1, unitPrice: effectivePrice }]
-      };
-    });
-  };
-
-  // Add a bundle to cart
-  const addBundleToCart = (bundle: typeof bundles[0], selectedDishIds: string[]) => {
-    if (!selectedTable) {
-      toast({ 
-        title: 'Select Table First', 
-        description: 'Please select a table before adding items to cart',
-        variant: 'destructive'
-      });
-      setShowTableMap(true);
-      return;
-    }
-    
-    const effectivePrice = getEffectiveBundlePrice(bundle.id, Number(bundle.default_price));
-    
-    // Create a placeholder "dish" for the bundle in cart display
-    const bundleDish: Dish = {
-      id: `bundle-${bundle.id}-${Date.now()}`, // Unique ID for each bundle instance
-      name: bundle.name,
-      category: 'Breakfast',
-      selling_price: effectivePrice,
-      image: bundle.image,
-      cost_of_production: bundle.cost_of_production,
-      created_at: new Date().toISOString(),
-    };
-    
-    setTableCarts(prev => {
-      const tableCart = prev[selectedTable] || [];
-      return {
-        ...prev,
-        [selectedTable]: [...tableCart, { 
-          dish: bundleDish, 
-          quantity: 1, 
-          unitPrice: effectivePrice,
-          isBundle: true,
-          bundleId: bundle.id,
-          bundleName: bundle.name,
-          selectedDishIds: selectedDishIds,
-        }]
-      };
-    });
-    
-    toast({ title: `${bundle.name} added`, description: `${selectedDishIds.length} items selected` });
-  };
-
-  const handleBundleClick = (bundle: typeof bundles[0]) => {
-    if (!selectedTable) {
-      toast({ 
-        title: 'Select Table First', 
-        description: 'Please select a table before adding items to cart',
-        variant: 'destructive'
-      });
-      setShowTableMap(true);
-      return;
-    }
-    setSelectedBundle(bundle);
-    setShowBundleSelector(true);
-  };
-
-  const updateQuantity = (dishId: string, quantity: number) => {
-    if (!selectedTable) return;
-    
-    setTableCarts(prev => {
-      const tableCart = prev[selectedTable] || [];
-      
-      if (quantity <= 0) {
-        const newTableCart = tableCart.filter(i => i.dish.id !== dishId);
-        const newTableCarts = { ...prev, [selectedTable]: newTableCart };
-        
-        // If cart becomes empty, we could optionally clear the table selection
-        if (newTableCart.length === 0) {
-          // Option: Clear table selection when cart is empty
-          // setSelectedTable(null);
-        }
-        
-        return newTableCarts;
-      }
-      
-      return {
-        ...prev,
-        [selectedTable]: tableCart.map(i => 
-          i.dish.id === dishId ? { ...i, quantity } : i
-        )
-      };
-    });
-  };
-
-  const clearCart = () => {
-    if (!selectedTable) return;
-    setTableCarts(prev => ({ ...prev, [selectedTable]: [] }));
-    setTableDiscounts(prev => {
-      const newState = { ...prev };
-      delete newState[selectedTable];
-      return newState;
-    });
-  };
-
-  const handleCheckout = async () => {
-    if (currentCart.length === 0 || !selectedTable) {
-      toast({ title: !selectedTable ? 'Select a table' : 'Cart is empty', variant: 'destructive' });
-      return;
-    }
-
-    if (selectedPayment === 'credit') {
-      setShowCreditModal(true);
-      return;
-    }
-
-    await processCheckout();
-  };
-
-  const processCheckout = async (customerName?: string) => {
-    if (!selectedTable) return;
-    
-    setIsProcessing(true);
-
-    // Aggregate all ingredient deductions first to avoid stale-state overwrites
-    const deductionMap = new Map<string, number>();
-    for (const cartItem of currentCart) {
-      if (cartItem.isBundle && cartItem.selectedDishIds) {
-        for (const dishId of cartItem.selectedDishIds) {
-          const dishRecipes = recipes.filter(r => r.dish_id === dishId);
-          for (const recipe of dishRecipes) {
-            const key = recipe.ingredient_id;
-            deductionMap.set(key, (deductionMap.get(key) || 0) + Number(recipe.quantity_required) * cartItem.quantity);
-          }
-        }
-      } else {
-        const dishRecipes = recipes.filter(r => r.dish_id === cartItem.dish.id);
-        for (const recipe of dishRecipes) {
-          const key = recipe.ingredient_id;
-          deductionMap.set(key, (deductionMap.get(key) || 0) + Number(recipe.quantity_required) * cartItem.quantity);
-        }
-      }
-    }
-    // Apply aggregated deductions
-    for (const [ingredientId, totalAmount] of deductionMap) {
-      await deductStock(ingredientId, totalAmount);
-    }
-
-    const transaction = await addTransaction(
-      cartTotal,
-      selectedPayment,
-      selectedTable,
-      currentCart.flatMap(item => {
-        const items = [{
-          dishId: (item.isBundle ? item.bundleDishId : item.dish.id) || item.dish.id,
-          quantity: item.quantity,
-          unitPrice: Number(item.unitPrice)
-        }];
-
-        // Add sub-items to transaction with 0 price for bundles
-        if (item.isBundle && item.selectedDishIds) {
-          item.selectedDishIds.forEach(id => {
-            items.push({
-              dishId: id,
-              quantity: item.quantity,
-              unitPrice: 0
-            });
-          });
-        }
-
-        return items;
-      })
-    );
-
-    if (selectedPayment === 'credit' && customerName && transaction) {
-      await addCredit({
-        customer_name: customerName,
-        sale_amount: cartTotal,
-        transaction_id: transaction.id
-      });
-    }
-
-    const method = paymentMethods.find(m => m.id === selectedPayment);
-    toast({ 
-      title: 'Sale Complete!', 
-      description: `${cartTotal.toLocaleString()} MT via ${method?.name}${!method?.isRevenue ? ' (No Revenue)' : ''}${customerName ? ` - ${customerName}` : ''}` 
-    });
-    
-    // Clear only the current table's cart
-    setTableCarts(prev => ({ ...prev, [selectedTable]: [] }));
-    setTableDiscounts(prev => {
-      const newState = { ...prev };
-      delete newState[selectedTable];
-      return newState;
-    });
-    setIsProcessing(false);
-    setShowCreditModal(false);
-    
-    // Optionally clear table selection after checkout
-    // setSelectedTable(null);
-  };
-
-  const handleCreditConfirm = (customerName: string) => {
-    processCheckout(customerName);
-  };
-
-  const handleProcessSingleBill = async (bill: SplitBill, customerName?: string) => {
-    if (!selectedTable) return;
-    
-    const billTotal = bill.items.reduce((sum, item) => sum + (Number(item.unitPrice) * item.quantity), 0);
-
-    // Aggregate deductions to avoid stale-state overwrites
-    const billDeductionMap = new Map<string, number>();
-    for (const cartItem of bill.items) {
-      const dishRecipes = recipes.filter(r => r.dish_id === cartItem.dish.id);
-      for (const recipe of dishRecipes) {
-        const key = recipe.ingredient_id;
-        billDeductionMap.set(key, (billDeductionMap.get(key) || 0) + Number(recipe.quantity_required) * cartItem.quantity);
-      }
-    }
-    for (const [ingredientId, totalAmount] of billDeductionMap) {
-      await deductStock(ingredientId, totalAmount);
-    }
-
-    const transaction = await addTransaction(
-      billTotal,
-      bill.paymentMethod || 'cash',
-      selectedTable,
-      bill.items.flatMap(item => {
-        const items = [{
-          dishId: (item.isBundle ? item.bundleDishId : item.dish.id) || item.dish.id,
-          quantity: item.quantity,
-          unitPrice: Number(item.unitPrice)
-        }];
-
-        if (item.isBundle && item.selectedDishIds) {
-          item.selectedDishIds.forEach(id => {
-            items.push({
-              dishId: id,
-              quantity: item.quantity,
-              unitPrice: 0
-            });
-          });
-        }
-
-        return items;
-      })
-    );
-
-    // Record credit if payment method is credit
-    if (bill.paymentMethod === 'credit' && customerName && transaction) {
-      await addCredit({
-        customer_name: customerName,
-        sale_amount: billTotal,
-        transaction_id: transaction.id
-      });
-    }
-
-    // Update the table-specific cart
-    setTableCarts(prev => {
-      const tableCart = prev[selectedTable] || [];
-      const newTableCart = [...tableCart];
-      
-      for (const item of bill.items) {
-        const index = newTableCart.findIndex(cartItem => cartItem.dish.id === item.dish.id);
-        if (index !== -1) {
-          newTableCart[index].quantity -= item.quantity;
-          if (newTableCart[index].quantity <= 0) {
-            newTableCart.splice(index, 1);
-          }
-        }
-      }
-      
-      return { ...prev, [selectedTable]: newTableCart };
-    });
-
-    const method = paymentMethods.find(m => m.id === bill.paymentMethod);
-    toast({ 
-      title: 'Bill paid!', 
-      description: `${billTotal.toLocaleString()} MT via ${method?.name}${customerName ? ` - ${customerName}` : ''}` 
-    });
-  };
-
-  const printOrder = async (
-    items: { dish: Dish; quantity: number; unitPrice: number }[],
-    tableLabel: string
-  ) => {
-    if (items.length === 0 || !currentStore?.id) return;
-    try {
-      const orderNumber = await getNextOrderNumber(currentStore.id);
-      const total = items.reduce((sum, i) => sum + Number(i.unitPrice) * i.quantity, 0);
-      const order: ReceiptOrder = {
-        orderNumber,
-        dateTime: new Date(),
-        items: items.map(i => ({ name: i.dish.name, qty: i.quantity, price: Number(i.unitPrice) })),
-        total,
-        storeName: currentStore?.name,
-        tableName: tableLabel
-      };
-      const bytes = await buildReceiptBytes(order);
-      const result = await sendToPrinter(bytes, `pedido-${orderNumber}.bin`);
-      if (result.mode === 'usb') {
-        toast({ title: `Pedido Nº ${orderNumber}`, description: 'Enviado para a impressora' });
-      } else if (result.error && /access denied|open/i.test(result.error)) {
-        // Windows owns the printer via its driver — print through the OS instead
-        const opened = printViaSystem(order, new URL(logoAsset.url, window.location.origin).href);
-        toast({
-          title: `Pedido Nº ${orderNumber}`,
-          description: opened
-            ? 'A abrir a janela de impressão do sistema — selecione a Xprinter'
-            : 'Pop-up bloqueado. Permita pop-ups para imprimir via sistema.',
-          variant: opened ? 'default' : 'destructive'
-        });
-      } else {
-        toast({
-          title: `Pedido Nº ${orderNumber} - impressora não usada`,
-          description: result.error ? `Recibo descarregado. Motivo: ${result.error}` : 'Recibo descarregado',
-          variant: 'destructive'
-        });
-      }
-    } catch (e: any) {
-      console.error('[POS] print error:', e);
-      toast({ title: 'Erro ao imprimir', description: e?.message ?? String(e), variant: 'destructive' });
-    }
-  };
-
-  const handlePrintBill = (bill: SplitBill, billNumber: number) => {
-    const tableLabel = `${tables.find(t => t.id === selectedTable)?.name || 'N/A'} - Conta ${billNumber}`;
-    void printOrder(bill.items, tableLabel);
-  };
-
-  const handlePrintReceipt = () => {
-    void printOrder(currentCart, tables.find(t => t.id === selectedTable)?.name || '');
-  };
+  const {
+    toast,
+    dishes,
+    tables,
+    addTable,
+    deleteTable,
+    isManager,
+    allStores,
+    tableCarts,
+    selectedCategory,
+    setSelectedCategory,
+    selectedPayment,
+    setSelectedPayment,
+    selectedTable,
+    setSelectedTable,
+    isProcessing,
+    showCreditModal,
+    setShowCreditModal,
+    showSplitBillModal,
+    setShowSplitBillModal,
+    showTableMap,
+    setShowTableMap,
+    showCart,
+    setShowCart,
+    showEditPriceModal,
+    setShowEditPriceModal,
+    selectedDish,
+    setSelectedDish,
+    showBundleSelector,
+    setShowBundleSelector,
+    selectedBundle,
+    showBreakfastSelector,
+    setShowBreakfastSelector,
+    searchQuery,
+    setSearchQuery,
+    existingCustomerNames,
+    currentCart,
+    breakfastDish,
+    categories,
+    allCategories,
+    enabledCategories,
+    updateEnabledCategories,
+    filteredDishes,
+    isDiscountEnabled,
+    discountApplied,
+    setDiscountApplied,
+    cartTotal,
+    showBreakfastDish,
+    filteredBundles,
+    getEffectivePrice,
+    hasOverride,
+    setOverridePrice,
+    removeOverridePrice,
+    getOverridePrice,
+    getEffectiveBundlePrice,
+    addToCart,
+    addBundleToCart,
+    handleBundleClick,
+    updateQuantity,
+    clearCart,
+    handleCheckout,
+    handleCreditConfirm,
+    handleProcessSingleBill,
+    handlePrintBill,
+    handlePrintReceipt,
+  } = usePosPage(currentStore);
 
   return (
     <div className="h-[calc(100vh-3rem)] w-full max-w-full flex flex-col lg:flex-row gap-6">
@@ -795,7 +348,9 @@ function POSPage({ currentStore }: { currentStore: any }) {
               >
                 <Coffee className="w-5 h-5" />
                 {bundle.name}
-                <Badge variant="secondary" className="text-sm ml-1 bg-amber-200 dark:bg-amber-900">{bundlePrice.toLocaleString()} MT</Badge>
+                <Badge variant="secondary" className="text-sm ml-1 bg-amber-200 dark:bg-amber-900">
+                  {bundlePrice.toLocaleString()} MT
+                </Badge>
               </Button>
             );
           })}
@@ -808,13 +363,26 @@ function POSPage({ currentStore }: { currentStore: any }) {
               type="text"
               placeholder="Procurar prato..."
               value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
+              onChange={e => setSearchQuery(e.target.value)}
               className="w-full pl-8 pr-3 py-1.5 text-sm rounded-md border bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
             />
           </div>
-          <Button variant={selectedCategory === null ? "default" : "outline"} size="sm" onClick={() => setSelectedCategory(null)}>All</Button>
+          <Button
+            variant={selectedCategory === null ? 'default' : 'outline'}
+            size="sm"
+            onClick={() => setSelectedCategory(null)}
+          >
+            All
+          </Button>
           {[...categories].sort().map(cat => (
-            <Button key={cat} variant={selectedCategory === cat ? "default" : "outline"} size="sm" onClick={() => setSelectedCategory(cat)}>{cat}</Button>
+            <Button
+              key={cat}
+              variant={selectedCategory === cat ? 'default' : 'outline'}
+              size="sm"
+              onClick={() => setSelectedCategory(cat)}
+            >
+              {cat}
+            </Button>
           ))}
           {isManager && (
             <div className="ml-auto">
@@ -843,8 +411,7 @@ function POSPage({ currentStore }: { currentStore: any }) {
                 >
                   <button
                     type="button"
-                    onClick={(e) => {
-                      // ripple
+                    onClick={e => {
                       const target = e.currentTarget;
                       const circle = document.createElement('span');
                       const rect = target.getBoundingClientRect();
@@ -914,15 +481,11 @@ function POSPage({ currentStore }: { currentStore: any }) {
             isProcessing={isProcessing}
             selectedTable={selectedTable}
             tables={tables}
-             toast={toast} 
-             dishes={dishes}
-             isDiscountEnabled={isDiscountEnabled}
-             discountApplied={discountApplied}
-             setDiscountApplied={(applied: boolean) => {
-               if (selectedTable) {
-                 setTableDiscounts(prev => ({ ...prev, [selectedTable]: applied }));
-               }
-             }}
+            toast={toast}
+            dishes={dishes}
+            isDiscountEnabled={isDiscountEnabled}
+            discountApplied={discountApplied}
+            setDiscountApplied={setDiscountApplied}
           />
         </Card>
       </div>
@@ -967,11 +530,7 @@ function POSPage({ currentStore }: { currentStore: any }) {
           dishes={dishes}
           isDiscountEnabled={isDiscountEnabled}
           discountApplied={discountApplied}
-          setDiscountApplied={(applied: boolean) => {
-            if (selectedTable) {
-              setTableDiscounts(prev => ({ ...prev, [selectedTable]: applied }));
-            }
-          }}
+          setDiscountApplied={setDiscountApplied}
         />
       </CartModal>
 
@@ -996,7 +555,7 @@ function POSPage({ currentStore }: { currentStore: any }) {
           dishName={selectedDish.name}
           currentPrice={getOverridePrice(selectedDish.id)}
           defaultPrice={Number(selectedDish.selling_price)}
-          onSave={(newPrice) => setOverridePrice(selectedDish.id, newPrice)}
+          onSave={newPrice => setOverridePrice(selectedDish.id, newPrice)}
           onRemoveOverride={() => removeOverridePrice(selectedDish.id)}
         />
       )}
@@ -1008,7 +567,7 @@ function POSPage({ currentStore }: { currentStore: any }) {
           bundle={selectedBundle}
           dishes={dishes}
           effectivePrice={getEffectiveBundlePrice(selectedBundle.id, Number(selectedBundle.default_price))}
-          onConfirm={(selectedDishIds) => addBundleToCart(selectedBundle, selectedDishIds)}
+          onConfirm={selectedDishIds => addBundleToCart(selectedBundle, selectedDishIds)}
         />
       )}
 
@@ -1019,23 +578,25 @@ function POSPage({ currentStore }: { currentStore: any }) {
           title={selectedDish.name}
           dishes={dishes}
           price={getEffectivePrice(selectedDish.id, Number(selectedDish.selling_price))}
-          onConfirm={(selectedDishIds) => {
-            // Logic to add the custom breakfast bundle to cart
+          onConfirm={selectedDishIds => {
             if (!selectedTable) return;
             const effectivePrice = getEffectivePrice(selectedDish.id, Number(selectedDish.selling_price));
             const bundleDishId = `breakfast-${selectedDish.id}-${Date.now()}`;
 
             setTableCarts(prev => ({
               ...prev,
-              [selectedTable]: [...(prev[selectedTable] || []), {
-                dish: { ...selectedDish, id: bundleDishId },
-                quantity: 1,
-                unitPrice: effectivePrice,
-                isBundle: true,
-                bundleDishId: selectedDish.id,
-                bundleName: selectedDish.name,
-                selectedDishIds: selectedDishIds,
-              }]
+              [selectedTable]: [
+                ...(prev[selectedTable] || []),
+                {
+                  dish: { ...selectedDish, id: bundleDishId },
+                  quantity: 1,
+                  unitPrice: effectivePrice,
+                  isBundle: true,
+                  bundleDishId: selectedDish.id,
+                  bundleName: selectedDish.name,
+                  selectedDishIds: selectedDishIds,
+                },
+              ],
             }));
             toast({ title: 'Breakfast added', description: `${selectedDishIds.length} items selected` });
           }}
