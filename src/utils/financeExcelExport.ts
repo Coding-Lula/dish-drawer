@@ -23,6 +23,8 @@ interface ExportData {
     grossProfit: number;
     grossMarginPercent: number;
     operationalExpenses: number;
+    financialExpenses?: number;
+    totalExpenses?: number;
     netProfit: number;
     netMarginPercent: number;
   };
@@ -52,7 +54,8 @@ export function exportFinancialReport(data: ExportData) {
       ['(+) Receita Bruta de Vendas:', formatCurrency(data.incomeStatement.grossRevenue)],
       ['(-) Custo das Mercadorias Vendidas (CMV):', formatCurrency(data.incomeStatement.cogs)],
       ['(=) Lucro Bruto:', `${formatCurrency(data.incomeStatement.grossProfit)} (${data.incomeStatement.grossMarginPercent.toFixed(1)}%)`],
-      ['(-) Despesas Operacionais e Financeiras:', formatCurrency(data.incomeStatement.operationalExpenses)],
+      ['(-) Despesas Operacionais:', formatCurrency(data.incomeStatement.operationalExpenses)],
+      ['(-) Despesas Financeiras:', formatCurrency(data.incomeStatement.financialExpenses || 0)],
       ['(=) Lucro Líquido do Período:', `${formatCurrency(data.incomeStatement.netProfit)} (${data.incomeStatement.netMarginPercent.toFixed(1)}%)`],
       []
     );

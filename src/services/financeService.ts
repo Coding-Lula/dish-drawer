@@ -24,18 +24,28 @@ export interface LowMarginItem extends Dish {
   totalCost: number;
 }
 
+export interface ExpenseCategoryBreakdown {
+  categoryName: string;
+  totalAmount: number;
+}
+
 export interface IncomeStatement {
   grossRevenue: number;
   cogs: number; // Custo das Mercadorias Vendidas (CMV)
   grossProfit: number;
   grossMarginPercent: number;
   operationalExpenses: number;
+  financialExpenses: number;
+  totalExpenses: number;
   netProfit: number;
   netMarginPercent: number;
+  operationalBreakdown: ExpenseCategoryBreakdown[];
+  financialBreakdown: ExpenseCategoryBreakdown[];
 }
 
 /**
- * Calculates Cost of Goods Sold (COGS / CMV) based on sold transaction items and ingredient costs.
+ * Calculates Cost of Goods Sold (COGS / CMV) based on sold transaction items,
+ * ingredient costs, and expenses categorized as type Stock (Estoque).
  */
 export function calculateCOGS(
   transactions: Transaction[],
@@ -44,7 +54,8 @@ export function calculateCOGS(
   ingredients: Ingredient[],
   storeId: string,
   monthStart: string,
-  monthEnd: string
+  monthEnd: string,
+  rawExpenses: Expense[] = []
 ): number {
   const storeTxIds = new Set(
     transactions
@@ -76,7 +87,21 @@ export function calculateCOGS(
     totalCOGS += unitIngredientCost * Number(item.quantity);
   });
 
-  return totalCOGS;
+  // Include expenses categorized as 'Stock' / 'Estoque'
+  const stockExpenses = rawExpenses
+    .filter(e => {
+      const eDate = e.date?.split('T')[0];
+      const category = (e.category || '').toLowerCase();
+      return (
+        e.store_id === storeId &&
+        eDate >= monthStart &&
+        eDate <= monthEnd &&
+        (category === 'stock' || category === 'estoque')
+      );
+    })
+    .reduce((sum, e) => sum + Number(e.amount), 0);
+
+  return totalCOGS + stockExpenses;
 }
 
 /**
@@ -89,6 +114,7 @@ export function calculateIncomeStatement(
   ingredients: Ingredient[],
   rawExpenses: Expense[],
   financialTransactions: FinancialTransaction[],
+  expenseCategories: { id: string; name: string }[] = [],
   storeId: string,
   monthStart: string,
   monthEnd: string
@@ -101,20 +127,28 @@ export function calculateIncomeStatement(
     ingredients,
     storeId,
     monthStart,
-    monthEnd
+    monthEnd,
+    rawExpenses
   );
   const grossProfit = grossRevenue - cogs;
   const grossMarginPercent = grossRevenue > 0 ? (grossProfit / grossRevenue) * 100 : 0;
 
-  const { total: operationalExpenses } = calculateStoreExpenses(
+  const {
+    operational: operationalExpenses,
+    financial: financialExpenses,
+    total: totalExpenses,
+    operationalBreakdown,
+    financialBreakdown,
+  } = calculateStoreExpenses(
     rawExpenses,
     financialTransactions,
     storeId,
     monthStart,
-    monthEnd
+    monthEnd,
+    expenseCategories
   );
 
-  const netProfit = grossProfit - operationalExpenses;
+  const netProfit = grossProfit - totalExpenses;
   const netMarginPercent = grossRevenue > 0 ? (netProfit / grossRevenue) * 100 : 0;
 
   return {
@@ -123,8 +157,12 @@ export function calculateIncomeStatement(
     grossProfit,
     grossMarginPercent,
     operationalExpenses,
+    financialExpenses,
+    totalExpenses,
     netProfit,
     netMarginPercent,
+    operationalBreakdown,
+    financialBreakdown,
   };
 }
 
@@ -154,22 +192,55 @@ export function calculateStoreRevenue(
 
 /**
  * Calculates total operational & financial expenses for a specific store within a date range.
+ * Note: Operational expenses exclude Stock (Estoque) expenses since those are included in CMV.
  */
 export function calculateStoreExpenses(
   rawExpenses: Expense[],
   financialTransactions: FinancialTransaction[],
   storeId: string,
   monthStart: string,
-  monthEnd: string
-): { operational: number; financial: number; total: number } {
-  const operational = rawExpenses
+  monthEnd: string,
+  expenseCategories: { id: string; name: string }[] = []
+): {
+  operational: number;
+  financial: number;
+  total: number;
+  operationalBreakdown: ExpenseCategoryBreakdown[];
+  financialBreakdown: ExpenseCategoryBreakdown[];
+} {
+  // Operational expenses breakdown (excluding Stock/Estoque)
+  const opMap: Record<string, number> = {};
+  rawExpenses
     .filter(e => {
       const eDate = e.date?.split('T')[0];
-      return e.store_id === storeId && eDate >= monthStart && eDate <= monthEnd;
+      const category = (e.category || '').toLowerCase();
+      return (
+        e.store_id === storeId &&
+        eDate >= monthStart &&
+        eDate <= monthEnd &&
+        category !== 'stock' &&
+        category !== 'estoque'
+      );
     })
-    .reduce((sum, e) => sum + Number(e.amount), 0);
+    .forEach(e => {
+      let catName = e.category;
+      if (!catName && e.category_id) {
+        const found = expenseCategories.find(c => c.id === e.category_id);
+        if (found) catName = found.name;
+      }
+      catName = catName?.trim() || 'Outras Despesas Operacionais';
+      opMap[catName] = (opMap[catName] || 0) + Number(e.amount);
+    });
 
-  const financial = financialTransactions
+  const operationalBreakdown: ExpenseCategoryBreakdown[] = Object.entries(opMap)
+    .map(([categoryName, totalAmount]) => ({ categoryName, totalAmount }))
+    .sort((a, b) => b.totalAmount - a.totalAmount);
+
+  const operational = operationalBreakdown.reduce((sum, item) => sum + item.totalAmount, 0);
+
+  // Financial expenses breakdown
+  const finMap: Record<string, number> = {};
+  financialTransactions
     .filter(t => {
       return (
         t.store_id === storeId &&
@@ -178,12 +249,28 @@ export function calculateStoreExpenses(
         t.date <= monthEnd
       );
     })
-    .reduce((sum, t) => sum + Number(t.amount), 0);
+    .forEach(t => {
+      let catName: string | undefined;
+      if (t.expense_category_id) {
+        const found = expenseCategories.find(c => c.id === t.expense_category_id);
+        if (found) catName = found.name;
+      }
+      catName = catName?.trim() || 'Outras Despesas Financeiras';
+      finMap[catName] = (finMap[catName] || 0) + Number(t.amount);
+    });
+
+  const financialBreakdown: ExpenseCategoryBreakdown[] = Object.entries(finMap)
+    .map(([categoryName, totalAmount]) => ({ categoryName, totalAmount }))
+    .sort((a, b) => b.totalAmount - a.totalAmount);
+
+  const financial = financialBreakdown.reduce((sum, item) => sum + item.totalAmount, 0);
 
   return {
     operational,
     financial,
     total: operational + financial,
+    operationalBreakdown,
+    financialBreakdown,
   };
 }
 

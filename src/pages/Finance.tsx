@@ -8,6 +8,7 @@ import { Progress } from '@/components/ui/progress';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogDescription } from '@/components/ui/dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { useState } from 'react';
 import {
   TrendingUp,
   Wallet,
@@ -19,12 +20,17 @@ import {
   Building2,
   Settings,
   FileText,
+  ChevronDown,
+  ChevronRight,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { DateRangePicker } from '@/components/ui/date-range-picker';
 import { useFinancePage } from '@/hooks/useFinancePage';
 
 function FinanceContent() {
+  const [isOperationalExpanded, setIsOperationalExpanded] = useState(false);
+  const [isFinancialExpanded, setIsFinancialExpanded] = useState(false);
+
   const {
     currentStore,
     isManager,
@@ -349,10 +355,10 @@ function FinanceContent() {
 
               <div className="p-4 rounded-lg bg-muted/30 border">
                 <span className="text-xs text-muted-foreground font-medium uppercase tracking-wider block">
-                  Despesas Operacionais
+                  Despesas Operacionais e Fin.
                 </span>
                 <span className="text-xl font-bold text-destructive mt-1 block">
-                  - {incomeStatement.operationalExpenses.toLocaleString()} MT
+                  - {(incomeStatement.totalExpenses ?? (incomeStatement.operationalExpenses + (incomeStatement.financialExpenses || 0))).toLocaleString()} MT
                 </span>
               </div>
 
@@ -429,9 +435,18 @@ function FinanceContent() {
                     {incomeStatement.grossMarginPercent.toFixed(1)}%
                   </TableCell>
                 </TableRow>
-                <TableRow>
-                  <TableCell className="font-medium text-destructive">
-                    (-) Despesas Operacionais e Financeiras
+                {/* Expandable Operational Expenses Row */}
+                <TableRow
+                  className="cursor-pointer hover:bg-muted/50 transition-colors"
+                  onClick={() => setIsOperationalExpanded(!isOperationalExpanded)}
+                >
+                  <TableCell className="font-medium text-destructive flex items-center gap-2">
+                    {isOperationalExpanded ? (
+                      <ChevronDown className="w-4 h-4 text-muted-foreground shrink-0" />
+                    ) : (
+                      <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0" />
+                    )}
+                    (-) Despesas Operacionais
                   </TableCell>
                   <TableCell className="text-right font-medium text-destructive">
                     - {incomeStatement.operationalExpenses.toLocaleString()} MT
@@ -443,6 +458,92 @@ function FinanceContent() {
                     %
                   </TableCell>
                 </TableRow>
+
+                {isOperationalExpanded && (
+                  <>
+                    {incomeStatement.operationalBreakdown && incomeStatement.operationalBreakdown.length > 0 ? (
+                      incomeStatement.operationalBreakdown.map((item) => (
+                        <TableRow key={item.categoryName} className="bg-muted/20 border-l-4 border-l-destructive/40">
+                          <TableCell className="pl-8 text-sm text-muted-foreground font-medium">
+                            {item.categoryName}
+                          </TableCell>
+                          <TableCell className="text-right text-sm text-destructive font-medium">
+                            - {item.totalAmount.toLocaleString()} MT
+                          </TableCell>
+                          <TableCell className="text-right text-xs text-muted-foreground">
+                            {incomeStatement.grossRevenue > 0
+                              ? ((item.totalAmount / incomeStatement.grossRevenue) * 100).toFixed(1)
+                              : '0.0'}
+                            %
+                          </TableCell>
+                        </TableRow>
+                      ))
+                    ) : (
+                      <TableRow className="bg-muted/20 border-l-4 border-l-destructive/40">
+                        <TableCell className="pl-8 text-sm text-muted-foreground italic">
+                          Nenhuma despesa operacional registada
+                        </TableCell>
+                        <TableCell className="text-right text-sm text-muted-foreground">0 MT</TableCell>
+                        <TableCell className="text-right text-xs text-muted-foreground">0.0%</TableCell>
+                      </TableRow>
+                    )}
+                  </>
+                )}
+
+                {/* Expandable Financial Expenses Row */}
+                <TableRow
+                  className="cursor-pointer hover:bg-muted/50 transition-colors"
+                  onClick={() => setIsFinancialExpanded(!isFinancialExpanded)}
+                >
+                  <TableCell className="font-medium text-destructive flex items-center gap-2">
+                    {isFinancialExpanded ? (
+                      <ChevronDown className="w-4 h-4 text-muted-foreground shrink-0" />
+                    ) : (
+                      <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0" />
+                    )}
+                    (-) Despesas Financeiras
+                  </TableCell>
+                  <TableCell className="text-right font-medium text-destructive">
+                    - {(incomeStatement.financialExpenses || 0).toLocaleString()} MT
+                  </TableCell>
+                  <TableCell className="text-right text-muted-foreground">
+                    {incomeStatement.grossRevenue > 0
+                      ? (((incomeStatement.financialExpenses || 0) / incomeStatement.grossRevenue) * 100).toFixed(1)
+                      : '0.0'}
+                    %
+                  </TableCell>
+                </TableRow>
+
+                {isFinancialExpanded && (
+                  <>
+                    {incomeStatement.financialBreakdown && incomeStatement.financialBreakdown.length > 0 ? (
+                      incomeStatement.financialBreakdown.map((item) => (
+                        <TableRow key={item.categoryName} className="bg-muted/20 border-l-4 border-l-destructive/40">
+                          <TableCell className="pl-8 text-sm text-muted-foreground font-medium">
+                            {item.categoryName}
+                          </TableCell>
+                          <TableCell className="text-right text-sm text-destructive font-medium">
+                            - {item.totalAmount.toLocaleString()} MT
+                          </TableCell>
+                          <TableCell className="text-right text-xs text-muted-foreground">
+                            {incomeStatement.grossRevenue > 0
+                              ? ((item.totalAmount / incomeStatement.grossRevenue) * 100).toFixed(1)
+                              : '0.0'}
+                            %
+                          </TableCell>
+                        </TableRow>
+                      ))
+                    ) : (
+                      <TableRow className="bg-muted/20 border-l-4 border-l-destructive/40">
+                        <TableCell className="pl-8 text-sm text-muted-foreground italic">
+                          Nenhuma despesa financeira registada
+                        </TableCell>
+                        <TableCell className="text-right text-sm text-muted-foreground">0 MT</TableCell>
+                        <TableCell className="text-right text-xs text-muted-foreground">0.0%</TableCell>
+                      </TableRow>
+                    )}
+                  </>
+                )}
                 <TableRow className="bg-primary/10 font-bold text-lg border-t-2">
                   <TableCell className="text-primary">(=) Lucro Líquido do Período</TableCell>
                   <TableCell
