@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react';
 import { useCurrentStore } from '@/components/layout/MainLayout';
 import { useToast } from '@/hooks/use-toast';
-import { useTransactions, useExpenses, useStores, useDishes, useRecipes, useIngredients } from '@/hooks/useSupabaseData';
+import { useTransactions, useExpenses, useStores, useDishes, useRecipes, useIngredients, useExpenseCategories } from '@/hooks/useSupabaseData';
 import { useTransactionItems } from '@/hooks/useTransactionItems';
 import {
   useIncomeSources,
@@ -80,6 +80,7 @@ export function useFinancePage() {
   const { dishes: allDishes } = useDishes();
   const { recipes } = useRecipes();
   const { ingredients } = useIngredients();
+  const { categories: expenseCategories } = useExpenseCategories();
 
   // Scoped to currentStore
   const posTransactions = useMemo(
@@ -107,6 +108,7 @@ export function useFinancePage() {
       ingredients,
       allStoreExpenses,
       allFinancialTransactions,
+      expenseCategories,
       currentStore.id,
       monthStart,
       monthEnd
@@ -119,6 +121,7 @@ export function useFinancePage() {
     ingredients,
     allStoreExpenses,
     allFinancialTransactions,
+    expenseCategories,
     monthStart,
     monthEnd,
   ]);
