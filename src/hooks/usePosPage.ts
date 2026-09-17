@@ -16,7 +16,7 @@ import { useStoreCategories } from '@/hooks/useStoreCategories';
 import { useBundles, useStoreBundlePrices } from '@/hooks/useBundles';
 import { useAuth } from '@/hooks/useAuth';
 import { getNextOrderNumber } from '@/hooks/useOrderNumber';
-import { buildReceiptBytes, sendToPrinter, printViaSystem, ReceiptOrder } from '@/utils/escposReceipt';
+import { buildReceiptBytes, sendToPrinter, printViaSystem, printViaElectron, isElectron, ReceiptOrder } from '@/utils/escposReceipt';
 import logoAsset from '@/assets/360-logo.bmp.asset.json';
 import {
   PosCartItem,
@@ -479,6 +479,19 @@ export function usePosPage(currentStore: any) {
         storeName: currentStore?.name,
         tableName: tableLabel,
       };
+      // Desktop build: print silently through the Windows printer driver
+      if (isElectron()) {
+        const printed = await printViaElectron(
+          order,
+          new URL(logoAsset.url, window.location.href).href
+        );
+        toast({
+          title: `Pedido Nº ${orderNumber}`,
+          description: printed ? 'Enviado para a impressora' : 'Falha ao imprimir no desktop',
+          variant: printed ? 'default' : 'destructive',
+        });
+        return;
+      }
       const bytes = await buildReceiptBytes(order);
       const result = await sendToPrinter(bytes, `pedido-${orderNumber}.bin`);
       if (result.mode === 'usb') {
