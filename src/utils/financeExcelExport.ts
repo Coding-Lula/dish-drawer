@@ -17,6 +17,12 @@ interface ExportData {
   expensesByParentCategory: { parent: ExpenseParentCategory; amount: number }[];
   transactions: FinancialTransaction[];
   storeName: string;
+  marginThreshold?: number;
+  performanceAnalytics?: {
+    topCategories: { name: string; revenue: number; quantity: number }[];
+    topItems: { name: string; revenue: number; quantity: number }[];
+  };
+  lowMarginItems?: { name: string; selling_price: number; totalCost: number; margin: number }[];
   incomeStatement?: {
     grossRevenue: number;
     cogs: number;
@@ -27,6 +33,8 @@ interface ExportData {
     totalExpenses?: number;
     netProfit: number;
     netMarginPercent: number;
+    operationalBreakdown?: { categoryName: string; totalAmount: number }[];
+    financialBreakdown?: { categoryName: string; totalAmount: number }[];
   };
 }
 
@@ -55,7 +63,25 @@ export function exportFinancialReport(data: ExportData) {
       ['(-) Custo das Mercadorias Vendidas (CMV):', formatCurrency(data.incomeStatement.cogs)],
       ['(=) Lucro Bruto:', `${formatCurrency(data.incomeStatement.grossProfit)} (${data.incomeStatement.grossMarginPercent.toFixed(1)}%)`],
       ['(-) Despesas Operacionais:', formatCurrency(data.incomeStatement.operationalExpenses)],
+    );
+
+    if (data.incomeStatement.operationalBreakdown && data.incomeStatement.operationalBreakdown.length > 0) {
+      data.incomeStatement.operationalBreakdown.forEach(op => {
+        summaryData.push([`   • ${op.categoryName}:`, formatCurrency(op.totalAmount)]);
+      });
+    }
+
+    summaryData.push(
       ['(-) Despesas Financeiras:', formatCurrency(data.incomeStatement.financialExpenses || 0)],
+    );
+
+    if (data.incomeStatement.financialBreakdown && data.incomeStatement.financialBreakdown.length > 0) {
+      data.incomeStatement.financialBreakdown.forEach(fin => {
+        summaryData.push([`   • ${fin.categoryName}:`, formatCurrency(fin.totalAmount)]);
+      });
+    }
+
+    summaryData.push(
       ['(=) Lucro Líquido do Período:', `${formatCurrency(data.incomeStatement.netProfit)} (${data.incomeStatement.netMarginPercent.toFixed(1)}%)`],
       []
     );
@@ -70,10 +96,54 @@ export function exportFinancialReport(data: ExportData) {
   );
   
   const summarySheet = XLSX.utils.aoa_to_sheet(summaryData);
-  summarySheet['!cols'] = [{ wch: 25 }, { wch: 20 }];
+  summarySheet['!cols'] = [{ wch: 35 }, { wch: 25 }];
   XLSX.utils.book_append_sheet(wb, summarySheet, 'Summary');
 
-  // Sheet 2: Detailed Transactions
+  // Sheet 2: Performance & Product Margins (Filtered by Margin Threshold)
+  if (data.performanceAnalytics || data.lowMarginItems) {
+    const threshold = data.marginThreshold ?? 10;
+    const performanceData: any[][] = [
+      ['RELATÓRIO DE DESEMPENHO E MARGENS (ITENS REGULARES)'],
+      [`LIMIAR MÍNIMO DE MARGEM APLICADO: ${threshold}%`],
+      [],
+    ];
+
+    if (data.performanceAnalytics) {
+      performanceData.push(
+        ['TOP CATEGORIAS POR RECEITA'],
+        ['Categoria', 'Receita (MT)', 'Quantidade Vendida'],
+        ...data.performanceAnalytics.topCategories.map(c => [c.name, Number(c.revenue), Number(c.quantity)]),
+        [],
+        ['TOP ITENS POR QUANTIDADE'],
+        ['Item', 'Receita (MT)', 'Quantidade Vendida'],
+        ...data.performanceAnalytics.topItems.map(i => [i.name, Number(i.revenue), Number(i.quantity)]),
+        []
+      );
+    }
+
+    if (data.lowMarginItems) {
+      const minThresholdRatio = threshold / 100;
+      // Filter out low margin items so only items meeting or exceeding margin threshold are exported
+      const regularMarginItems = data.lowMarginItems.filter(i => i.margin >= minThresholdRatio);
+
+      performanceData.push(
+        [`ITENS COM MARGEM ADEQUADA (≥ ${threshold}%)`],
+        ['Item', 'Preço de Venda (MT)', 'Custo Total (MT)', 'Margem de Lucro (%)'],
+        ...regularMarginItems.map(i => [
+          i.name,
+          Number(i.selling_price),
+          Number(i.totalCost.toFixed(2)),
+          `${(i.margin * 100).toFixed(1)}%`
+        ])
+      );
+    }
+
+    const performanceSheet = XLSX.utils.aoa_to_sheet(performanceData);
+    performanceSheet['!cols'] = [{ wch: 30 }, { wch: 20 }, { wch: 20 }, { wch: 20 }];
+    XLSX.utils.book_append_sheet(wb, performanceSheet, 'Desempenho & Margens');
+  }
+
+  // Sheet 3: Detailed Transactions
   const transactionsData = [
     ['Date', 'Type', 'Supplier', 'Amount (MT)', 'Category', 'Source', 'Invoice', 'Description'],
     ...data.transactions.map(t => [

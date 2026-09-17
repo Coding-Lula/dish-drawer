@@ -82,18 +82,23 @@ export function encodeReceipt(
 
   let result = encoder.initialize().align('center');
 
+  let hasLogo = false;
   if (logo) {
     try {
       result = result.image(logo as HTMLCanvasElement, LOGO_SIZE, LOGO_SIZE, 'atkinson').newline();
+      hasLogo = true;
     } catch {
       /* printer/logo not available – continue text-only */
     }
   }
 
+  if (!hasLogo) {
+    result = result.bold(true).line(order.storeName || 'Pizzaria 360°').bold(false);
+  }
+
   result = result
+    .newline() // extra breathing room
     .bold(true)
-    .line(order.storeName || 'Pizzaria 360°')
-    .bold(false)
     .line(`Pedido Nº ${order.orderNumber}`)
     .line(dt.toLocaleString('pt-PT'));
 
@@ -161,8 +166,8 @@ export function buildReceiptHtml(order: ReceiptOrder, logoUrl?: string): string 
   const rows = order.items
     .map(
       i => `<tr>
-        <td class="l">${i.qty}x ${esc(i.name)}</td>
-        <td class="r">${money(i.qty * i.price)}</td>
+        <td class="l font-heavy">${i.qty}x ${esc(i.name)}</td>
+        <td class="r font-heavy">${money(i.qty * i.price)}</td>
       </tr>`
     )
     .join('');
@@ -177,26 +182,29 @@ export function buildReceiptHtml(order: ReceiptOrder, logoUrl?: string): string 
   * { box-sizing: border-box; }
   body {
     width: 72mm; margin: 0 auto; padding: 0;
-    font-family: 'Courier New', monospace; font-size: 12px; color: #000;
+    font-family: 'Courier New', monospace; font-size: 13px; color: #000;
+    font-weight: 800;
+    -webkit-print-color-adjust: exact;
   }
   .center { text-align: center; }
-  .bold { font-weight: bold; }
-  .logo { display: block; margin: 0 auto 4px; max-width: 45mm; max-height: 45mm; }
-  hr { border: none; border-top: 1px dashed #000; margin: 6px 0; }
+  .bold, .font-heavy { font-weight: 800; }
+  .logo { display: block; margin: 0 auto 12px; max-width: 48mm; max-height: 48mm; }
+  .header-spacer { margin-bottom: 12px; }
+  hr { border: none; border-top: 2px solid #000; margin: 8px 0; }
   table { width: 100%; border-collapse: collapse; }
-  td { padding: 1px 0; vertical-align: top; }
+  td { padding: 2px 0; vertical-align: top; font-weight: 800; }
   .l { text-align: left; }
   .r { text-align: right; white-space: nowrap; }
-  .total { font-size: 18px; font-weight: bold; text-align: right; margin-top: 6px; }
+  .total { font-size: 19px; font-weight: 800; text-align: right; margin-top: 8px; }
 </style>
 </head>
 <body>
   <div class="center">
-    ${logoUrl ? `<img class="logo" src="${logoUrl}" alt="">` : ''}
-    <div class="bold">${esc(order.storeName || 'Pizzaria 360°')}</div>
-    <div>Pedido Nº ${esc(String(order.orderNumber))}</div>
-    <div>${dt.toLocaleString('pt-PT')}</div>
-    ${order.tableName ? `<div>${esc(order.tableName)}</div>` : ''}
+    ${logoUrl ? `<img class="logo" src="${logoUrl}" alt="">` : `<div class="bold" style="font-size: 16px; margin-bottom: 8px;">${esc(order.storeName || 'Pizzaria 360°')}</div>`}
+    <div class="header-spacer"></div>
+    <div class="bold">Pedido Nº ${esc(String(order.orderNumber))}</div>
+    <div class="bold">${dt.toLocaleString('pt-PT')}</div>
+    ${order.tableName ? `<div class="bold">${esc(order.tableName)}</div>` : ''}
   </div>
   <hr>
   <table>
@@ -275,11 +283,22 @@ export function printViaSystem(order: ReceiptOrder, logoUrl?: string): boolean {
  * POS terminal. Logs every step to the console for diagnostics.
  */
 export interface PrintResult {
-  mode: 'usb' | 'download';
+  mode: 'usb' | 'failed';
   error?: string;
 }
 
-export async function sendToPrinter(bytes: Uint8Array, filename = 'recibo.bin'): Promise<PrintResult> {
+/** Manual helper to download raw .bin file if user explicitly requests as last resort */
+export function downloadReceiptBin(bytes: Uint8Array, filename = 'recibo.bin') {
+  const blob = new Blob([bytes as unknown as BlobPart], { type: 'application/octet-stream' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+export async function sendToPrinter(bytes: Uint8Array): Promise<PrintResult> {
   const log = (...args: unknown[]) => console.log('[ESC/POS]', ...args);
   const nav = navigator as Navigator & { usb?: any };
   let lastError: string | undefined;
@@ -289,91 +308,83 @@ export async function sendToPrinter(bytes: Uint8Array, filename = 'recibo.bin'):
   if (!nav.usb?.requestDevice) {
     lastError = 'WebUSB não suportado neste navegador (use Chrome/Edge em HTTPS).';
     log('WebUSB unavailable');
-  } else {
-    let device: any;
-    try {
-      const known = await nav.usb.getDevices();
-      log('previously authorised devices:', known.map((d: any) => `${d.productName ?? '?'} ${d.vendorId}:${d.productId}`));
-      device = known[0];
-      if (!device) {
-        device = await nav.usb.requestDevice({ filters: [] });
-      }
-      log('device selected:', {
-        productName: device.productName,
-        manufacturerName: device.manufacturerName,
-        vendorId: device.vendorId,
-        productId: device.productId,
-        opened: device.opened,
-      });
-
-      if (!device.opened) await device.open();
-      log('device opened');
-
-      if (device.configuration === null) {
-        await device.selectConfiguration(1);
-        log('configuration 1 selected');
-      }
-
-      const interfaces = device.configuration.interfaces;
-      log(
-        'interfaces:',
-        interfaces.map((i: any) => ({
-          number: i.interfaceNumber,
-          class: i.alternate.interfaceClass,
-          endpoints: i.alternate.endpoints.map((e: any) => `${e.direction}#${e.endpointNumber}/${e.type}`),
-        }))
-      );
-
-      // Prefer a printer-class interface (7) with a bulk OUT endpoint
-      const candidates = interfaces.filter((i: any) =>
-        i.alternate.endpoints.some((e: any) => e.direction === 'out' && e.type === 'bulk')
-      );
-      const iface =
-        candidates.find((i: any) => i.alternate.interfaceClass === 7) ?? candidates[0];
-      if (!iface) throw new Error('Nenhuma interface de impressão (bulk OUT) encontrada no dispositivo.');
-      log('using interface', iface.interfaceNumber, 'class', iface.alternate.interfaceClass);
-
-      await device.claimInterface(iface.interfaceNumber);
-      log('interface claimed');
-
-      const endpoint = iface.alternate.endpoints.find(
-        (e: any) => e.direction === 'out' && e.type === 'bulk'
-      );
-      const res = await device.transferOut(endpoint.endpointNumber, bytes);
-      log('transferOut result:', res.status, 'bytesWritten:', res.bytesWritten);
-
-      try {
-        await device.releaseInterface(iface.interfaceNumber);
-        await device.close();
-      } catch (closeErr) {
-        log('close warning:', closeErr);
-      }
-
-      if (res.status !== 'ok') throw new Error(`Transferência falhou: ${res.status}`);
-      return { mode: 'usb' };
-    } catch (err: any) {
-      lastError = err?.message ?? String(err);
-      console.error('[ESC/POS] USB print failed:', err);
-      if (/access denied|não foi possível reivindicar|claim/i.test(lastError ?? '')) {
-        lastError +=
-          ' — o Windows está a usar o driver da impressora. Substitua o driver por WinUSB (Zadig) ou imprima através do driver do sistema.';
-      }
-      try {
-        await device?.close();
-      } catch {
-        /* ignore */
-      }
-    }
+    return { mode: 'failed', error: lastError };
   }
 
-  const blob = new Blob([bytes as unknown as BlobPart], { type: 'application/octet-stream' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = filename;
-  a.click();
-  URL.revokeObjectURL(url);
-  log('fell back to file download:', filename, 'reason:', lastError);
-  return { mode: 'download', error: lastError };
+  let device: any;
+  try {
+    const known = await nav.usb.getDevices();
+    log('previously authorised devices:', known.map((d: any) => `${d.productName ?? '?'} ${d.vendorId}:${d.productId}`));
+    device = known[0];
+    if (!device) {
+      device = await nav.usb.requestDevice({ filters: [] });
+    }
+    log('device selected:', {
+      productName: device.productName,
+      manufacturerName: device.manufacturerName,
+      vendorId: device.vendorId,
+      productId: device.productId,
+      opened: device.opened,
+    });
+
+    if (!device.opened) await device.open();
+    log('device opened');
+
+    if (device.configuration === null) {
+      await device.selectConfiguration(1);
+      log('configuration 1 selected');
+    }
+
+    const interfaces = device.configuration.interfaces;
+    log(
+      'interfaces:',
+      interfaces.map((i: any) => ({
+        number: i.interfaceNumber,
+        class: i.alternate.interfaceClass,
+        endpoints: i.alternate.endpoints.map((e: any) => `${e.direction}#${e.endpointNumber}/${e.type}`),
+      }))
+    );
+
+    // Prefer a printer-class interface (7) with a bulk OUT endpoint
+    const candidates = interfaces.filter((i: any) =>
+      i.alternate.endpoints.some((e: any) => e.direction === 'out' && e.type === 'bulk')
+    );
+    const iface =
+      candidates.find((i: any) => i.alternate.interfaceClass === 7) ?? candidates[0];
+    if (!iface) throw new Error('Nenhuma interface de impressão (bulk OUT) encontrada no dispositivo.');
+    log('using interface', iface.interfaceNumber, 'class', iface.alternate.interfaceClass);
+
+    await device.claimInterface(iface.interfaceNumber);
+    log('interface claimed');
+
+    const endpoint = iface.alternate.endpoints.find(
+      (e: any) => e.direction === 'out' && e.type === 'bulk'
+    );
+    const res = await device.transferOut(endpoint.endpointNumber, bytes);
+    log('transferOut result:', res.status, 'bytesWritten:', res.bytesWritten);
+
+    try {
+      await device.releaseInterface(iface.interfaceNumber);
+      await device.close();
+    } catch (closeErr) {
+      log('close warning:', closeErr);
+    }
+
+    if (res.status !== 'ok') throw new Error(`Transferência falhou: ${res.status}`);
+    return { mode: 'usb' };
+  } catch (err: any) {
+    lastError = err?.message ?? String(err);
+    console.error('[ESC/POS] USB print failed:', err);
+    if (/access denied|não foi possível reivindicar|claim/i.test(lastError ?? '')) {
+      lastError +=
+        ' — o Windows está a usar o driver da impressora. Substitua o driver por WinUSB (Zadig) ou imprima através do driver do sistema.';
+    }
+    try {
+      await device?.close();
+    } catch {
+      /* ignore */
+    }
+    return { mode: 'failed', error: lastError };
+  }
 }
 
