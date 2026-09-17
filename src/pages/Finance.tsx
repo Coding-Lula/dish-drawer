@@ -28,8 +28,8 @@ import { DateRangePicker } from '@/components/ui/date-range-picker';
 import { useFinancePage } from '@/hooks/useFinancePage';
 
 function FinanceContent() {
-  const [isOperationalExpanded, setIsOperationalExpanded] = useState(false);
-  const [isFinancialExpanded, setIsFinancialExpanded] = useState(false);
+  const [isOperationalExpanded, setIsOperationalExpanded] = useState(true);
+  const [isFinancialExpanded, setIsFinancialExpanded] = useState(true);
 
   const {
     currentStore,
@@ -92,8 +92,13 @@ function FinanceContent() {
           <p className="text-muted-foreground">{currentStore.name} • Store financial overview & controls</p>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <DateRangePicker date={dateRange} setDate={setDateRange} />
+
+          <Button variant="outline" className="gap-2" onClick={handleExportData}>
+            <Download className="w-4 h-4" />
+            Exportar Relatório
+          </Button>
 
           {dateRange?.from && (
             <Badge variant="secondary" className="gap-1">

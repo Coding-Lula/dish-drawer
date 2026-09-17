@@ -397,7 +397,7 @@ function POSPage({ currentStore }: { currentStore: any }) {
         </div>
 
         <div className="flex-1 overflow-auto">
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+          <div className="grid grid-cols-[repeat(auto-fill,minmax(180px,1fr))] gap-3 w-full">
             {filteredDishes.map(dish => {
               const effectivePrice = getEffectivePrice(dish.id, Number(dish.selling_price));
               const isOverridden = hasOverride(dish.id);
@@ -408,7 +408,7 @@ function POSPage({ currentStore }: { currentStore: any }) {
               return (
                 <Card
                   key={dish.id}
-                  className="transition-all hover:shadow-lg relative overflow-hidden active:scale-[0.98] active:brightness-[0.85] duration-150"
+                  className="transition-all hover:shadow-lg relative overflow-hidden active:scale-[0.98] active:brightness-[0.85] duration-150 h-full flex flex-col"
                 >
                   <button
                     type="button"
@@ -426,32 +426,37 @@ function POSPage({ currentStore }: { currentStore: any }) {
                       setTimeout(() => circle.remove(), 500);
                       addToCart(dish);
                     }}
-                    className="relative w-full text-left cursor-pointer"
+                    className="relative w-full text-left cursor-pointer flex-1 flex flex-col min-h-[150px] p-3 justify-between"
                   >
-                    <CardContent className="p-3 flex items-center justify-between gap-3">
-                      <h3 className="font-semibold text-sm text-left flex-1 min-w-0 truncate">
+                    <div className={cn("w-full leading-snug", isManager ? "pr-8" : "pr-2")}>
+                      <h3 className="font-semibold text-sm whitespace-normal line-clamp-3 break-words text-foreground">
                         {dish.name}
                       </h3>
-                      <div className="flex items-center gap-2 shrink-0">
+                    </div>
+
+                    <div className="mt-auto pt-3 flex items-end justify-between w-full">
+                      <div>
                         {cartQty > 0 && (
-                          <span className="text-xs font-bold text-muted-foreground">
+                          <Badge variant="secondary" className="font-bold text-xs px-1.5 py-0.5">
                             x{cartQty}
-                          </span>
+                          </Badge>
                         )}
-                        <p className="text-base font-bold text-primary text-right tabular-nums">
-                          {effectivePrice.toLocaleString()} MT
-                          {isOverridden && (
-                            <span className="text-[10px] ml-1 text-muted-foreground">(custom)</span>
-                          )}
-                        </p>
                       </div>
-                    </CardContent>
+                      <div className="text-right">
+                        <p className="text-base font-bold text-primary tabular-nums leading-none">
+                          {effectivePrice.toLocaleString()} MT
+                        </p>
+                        {isOverridden && (
+                          <span className="text-[10px] text-muted-foreground block leading-tight mt-0.5">(custom)</span>
+                        )}
+                      </div>
+                    </div>
                   </button>
                   {isManager && (
                     <Button
                       variant="ghost"
                       size="icon"
-                      className="absolute top-1 right-1 h-7 w-7"
+                      className="absolute top-2 right-2 h-7 w-7 z-10"
                       onClick={() => {
                         setSelectedDish(dish);
                         setShowEditPriceModal(true);

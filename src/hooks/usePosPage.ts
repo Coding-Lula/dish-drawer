@@ -493,22 +493,23 @@ export function usePosPage(currentStore: any) {
         return;
       }
       const bytes = await buildReceiptBytes(order);
-      const result = await sendToPrinter(bytes, `pedido-${orderNumber}.bin`);
+      const result = await sendToPrinter(bytes);
       if (result.mode === 'usb') {
         toast({ title: `Pedido Nº ${orderNumber}`, description: 'Enviado para a impressora' });
-      } else if (result.error && /access denied|open/i.test(result.error)) {
-        const opened = printViaSystem(order, new URL(logoAsset.url, window.location.origin).href);
+        return;
+      }
+
+      // First fallback on WebUSB failure/unavailability: trigger system print dialog
+      const opened = printViaSystem(order, new URL(logoAsset.url, window.location.origin).href);
+      if (opened) {
         toast({
           title: `Pedido Nº ${orderNumber}`,
-          description: opened
-            ? 'A abrir a janela de impressão do sistema — selecione a Xprinter'
-            : 'Pop-up bloqueado. Permita pop-ups para imprimir via sistema.',
-          variant: opened ? 'default' : 'destructive',
+          description: 'A abrir a janela de impressão do sistema',
         });
       } else {
         toast({
-          title: `Pedido Nº ${orderNumber} - impressora não usada`,
-          description: result.error ? `Recibo descarregado. Motivo: ${result.error}` : 'Recibo descarregado',
+          title: `Pedido Nº ${orderNumber} - Impressão falhou`,
+          description: 'Janela de impressão bloqueada pelo navegador. Permita pop-ups.',
           variant: 'destructive',
         });
       }

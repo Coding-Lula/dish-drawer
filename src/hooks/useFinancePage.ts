@@ -20,6 +20,7 @@ import {
   calculateLowMarginItems,
   calculateIncomeStatement,
 } from '@/services/financeService';
+import { exportFinancialReport } from '@/utils/financeExcelExport';
 
 export function useFinancePage() {
   const { currentStore } = useCurrentStore();
@@ -258,6 +259,11 @@ export function useFinancePage() {
     return calculateLowMarginItems(allDishes, recipes, ingredients, marginThreshold);
   }, [allDishes, recipes, ingredients, marginThreshold]);
 
+  // All Dishes with Margins (for Export filtering)
+  const allDishesWithMargin = useMemo(() => {
+    return calculateLowMarginItems(allDishes, recipes, ingredients, 100);
+  }, [allDishes, recipes, ingredients]);
+
   const isCurrentMonthLocked = dateRange?.from
     ? isMonthLocked(dateRange.from.getFullYear(), dateRange.from.getMonth() + 1)
     : false;
@@ -387,5 +393,54 @@ export function useFinancePage() {
     handleSaveAllocations,
     handleAddEnvelope,
     handleInternalTransfer,
+    handleExportData: () => {
+      if (!currentStore) return;
+      try {
+        const fromDate = dateRange?.from || new Date();
+        const month = fromDate.getMonth() + 1;
+        const year = fromDate.getFullYear();
+        const lockDate = monthEnd;
+
+        // Calculate expenses by parent category for Excel summary
+        const parentExpMap: Record<string, number> = {};
+        rawExpenses.forEach(e => {
+          const catName = e.category || 'Outras';
+          parentExpMap[catName] = (parentExpMap[catName] || 0) + Number(e.amount);
+        });
+        const expensesByParentCategory = Object.entries(parentExpMap).map(([name, amount]) => ({
+          parent: { id: name, name },
+          amount,
+        }));
+
+        const fileName = exportFinancialReport({
+          month,
+          year,
+          lockDate,
+          totalIncome: currentStoreSummary.revenue,
+          totalExpenses: currentStoreSummary.expenses,
+          globalBalance: currentStoreSummary.netTotal,
+          incomeBySource,
+          expensesByParentCategory,
+          transactions: financialTransactions,
+          storeName: currentStore.name,
+          marginThreshold,
+          performanceAnalytics,
+          lowMarginItems: allDishesWithMargin,
+          incomeStatement,
+        });
+
+        toast({
+          title: 'Relatório Exportado',
+          description: `Ficheiro ${fileName} descarregado com sucesso.`,
+        });
+      } catch (err: any) {
+        console.error('[Export] Error generating excel:', err);
+        toast({
+          title: 'Erro na Exportação',
+          description: 'Não foi possível gerar o ficheiro de relatório.',
+          variant: 'destructive',
+        });
+      }
+    },
   };
 }
