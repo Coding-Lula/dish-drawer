@@ -216,6 +216,45 @@ export function buildReceiptHtml(order: ReceiptOrder, logoUrl?: string): string 
  * dialog, so printing goes through the OS printer driver (works with any
  * printer installed on the computer, no WebUSB needed).
  */
+/** True when running inside the Electron desktop build. */
+export function isElectron(): boolean {
+  return !!(window as any).electronPrint?.isElectron;
+}
+
+/** Converts a URL to a data URI so it renders inside the silent print window. */
+async function toDataUrl(url?: string): Promise<string | undefined> {
+  if (!url) return undefined;
+  try {
+    const res = await fetch(url);
+    const blob = await res.blob();
+    return await new Promise<string>((resolve, reject) => {
+      const r = new FileReader();
+      r.onload = () => resolve(String(r.result));
+      r.onerror = reject;
+      r.readAsDataURL(blob);
+    });
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * Desktop (Electron) printing: renders the receipt HTML in the main process
+ * and prints it silently through the installed Windows printer driver.
+ */
+export async function printViaElectron(order: ReceiptOrder, logoUrl?: string, deviceName?: string): Promise<boolean> {
+  const api = (window as any).electronPrint;
+  if (!api?.printHtml) return false;
+  const logo = await toDataUrl(logoUrl);
+  const html = buildReceiptHtml(order, logo);
+  try {
+    return !!(await api.printHtml(html, deviceName));
+  } catch (err) {
+    console.error('[ESC/POS] electron print failed:', err);
+    return false;
+  }
+}
+
 export function printViaSystem(order: ReceiptOrder, logoUrl?: string): boolean {
   const win = window.open('', '_blank', 'width=400,height=600');
   if (!win) return false; // popup blocked

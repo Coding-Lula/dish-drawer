@@ -97,8 +97,12 @@ export function useFinancePage() {
         grossProfit: 0,
         grossMarginPercent: 0,
         operationalExpenses: 0,
+        financialExpenses: 0,
+        totalExpenses: 0,
         netProfit: 0,
         netMarginPercent: 0,
+        operationalBreakdown: [],
+        financialBreakdown: [],
       };
     }
     return calculateIncomeStatement(
