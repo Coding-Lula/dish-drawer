@@ -224,6 +224,7 @@ function POSPage({ currentStore }: { currentStore: any }) {
     isManager,
     allStores,
     tableCarts,
+    setTableCarts,
     selectedCategory,
     setSelectedCategory,
     selectedPayment,
