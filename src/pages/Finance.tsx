@@ -22,6 +22,7 @@ import {
   FileText,
   ChevronDown,
   ChevronRight,
+  Download,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { DateRangePicker } from '@/components/ui/date-range-picker';
@@ -74,6 +75,7 @@ function FinanceContent() {
     handleSaveAllocations,
     handleAddEnvelope,
     handleInternalTransfer,
+    handleExportData,
   } = useFinancePage();
 
   if (!currentStore) {

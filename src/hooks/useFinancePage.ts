@@ -408,7 +408,7 @@ export function useFinancePage() {
           parentExpMap[catName] = (parentExpMap[catName] || 0) + Number(e.amount);
         });
         const expensesByParentCategory = Object.entries(parentExpMap).map(([name, amount]) => ({
-          parent: { id: name, name },
+          parent: { id: name, name, display_order: 0, created_at: '' },
           amount,
         }));
 
