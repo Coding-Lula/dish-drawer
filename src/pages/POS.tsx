@@ -9,7 +9,8 @@ import { SplitBillModal } from '@/components/modals/SplitBillModal';
 import { TableMapModal } from '@/components/modals/TableMapModal';
 import { BundleSelectorModal } from '@/components/modals/BundleSelectorModal';
 import { DishSelectionModal } from '@/components/modals/DishSelectionModal';
-import { Plus, Minus, Trash2, ShoppingBag, CreditCard, Printer, Table, Split, Pencil, Coffee, Search } from 'lucide-react';
+import { Plus, Minus, Trash2, ShoppingBag, CreditCard, Printer, Table, Split, Pencil, Coffee, Search, Check, X } from 'lucide-react';
+import { useState } from 'react';
 import { cn } from '@/lib/utils';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -57,12 +58,15 @@ function CartContent({
   isProcessing,
   selectedTable,
   tables,
+  tableNames,
   dishes,
   isDiscountEnabled,
   discountApplied,
   setDiscountApplied,
 }: any) {
-  const currentTableName = tables.find((t: any) => t.id === selectedTable)?.name || 'No Table';
+  const currentTableName = selectedTable
+    ? tableNames[selectedTable] || tables.find((t: any) => t.id === selectedTable)?.name || 'No Table'
+    : 'No Table';
 
   return (
     <>
@@ -225,6 +229,9 @@ function POSPage({ currentStore }: { currentStore: any }) {
     allStores,
     tableCarts,
     setTableCarts,
+    temporaryTableNames,
+    setTemporaryTableName,
+    getTableDisplayName,
     selectedCategory,
     setSelectedCategory,
     selectedPayment,
@@ -282,6 +289,20 @@ function POSPage({ currentStore }: { currentStore: any }) {
     handlePrintBill,
     handlePrintReceipt,
   } = usePosPage(currentStore);
+  const [editingTableName, setEditingTableName] = useState(false);
+  const [tableNameDraft, setTableNameDraft] = useState('');
+
+  const beginTableNameEdit = () => {
+    if (!selectedTable) return;
+    setTableNameDraft(getTableDisplayName(selectedTable));
+    setEditingTableName(true);
+  };
+
+  const saveTableName = () => {
+    if (!selectedTable) return;
+    setTemporaryTableName(selectedTable, tableNameDraft);
+    setEditingTableName(false);
+  };
 
   return (
     <div className="h-[calc(100vh-3rem)] w-full max-w-full flex flex-col lg:flex-row gap-6">
@@ -295,28 +316,71 @@ function POSPage({ currentStore }: { currentStore: any }) {
             <ManageTablesModal tables={tables} onAddTable={addTable} onDeleteTable={deleteTable} />
             <div className="flex items-center gap-2 flex-1">
               <Table className="w-4 h-4 text-muted-foreground" />
-              <Select value={selectedTable || ''} onValueChange={setSelectedTable}>
-                <SelectTrigger className="w-full">
-                  <SelectValue placeholder="Selecionar Mesa" />
-                </SelectTrigger>
-                <SelectContent>
-                  {tables.map(table => {
-                    const isOccupied = tableCarts[table.id]?.length > 0;
-                    return (
-                      <SelectItem key={table.id} value={table.id}>
-                        <div className="flex items-center justify-between">
-                          <span>{table.name}</span>
-                          {isOccupied && (
-                            <Badge variant="secondary" className="ml-2 text-xs">
-                              {tableCarts[table.id]?.reduce((sum, item) => sum + item.quantity, 0)} items
-                            </Badge>
-                          )}
-                        </div>
-                      </SelectItem>
-                    );
-                  })}
-                </SelectContent>
-              </Select>
+              {editingTableName && selectedTable ? (
+                <div className="flex min-w-0 flex-1 items-center gap-1">
+                  <input
+                    autoFocus
+                    value={tableNameDraft}
+                    maxLength={40}
+                    aria-label="Nome do cliente"
+                    onChange={event => setTableNameDraft(event.target.value)}
+                    onKeyDown={event => {
+                      if (event.key === 'Enter') saveTableName();
+                      if (event.key === 'Escape') setEditingTableName(false);
+                    }}
+                    className="h-10 min-w-0 flex-1 rounded-md border bg-background px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                  />
+                  <Button variant="ghost" size="icon" className="h-9 w-9" onClick={saveTableName} title="Guardar nome">
+                    <Check className="h-4 w-4" />
+                  </Button>
+                  <Button variant="ghost" size="icon" className="h-9 w-9" onClick={() => setEditingTableName(false)} title="Cancelar">
+                    <X className="h-4 w-4" />
+                  </Button>
+                </div>
+              ) : (
+                <div className="group relative min-w-0 flex-1">
+                  <Select value={selectedTable || ''} onValueChange={setSelectedTable}>
+                    <SelectTrigger className="w-full pr-16">
+                      <span className="truncate">
+                        {selectedTable ? getTableDisplayName(selectedTable) : 'Selecionar Mesa'}
+                      </span>
+                    </SelectTrigger>
+                    <SelectContent>
+                      {tables.map(table => {
+                        const isOccupied = tableCarts[table.id]?.length > 0;
+                        return (
+                          <SelectItem key={table.id} value={table.id}>
+                            <div className="flex items-center justify-between">
+                              <span>{getTableDisplayName(table.id)}</span>
+                              {isOccupied && (
+                                <Badge variant="secondary" className="ml-2 text-xs">
+                                  {tableCarts[table.id]?.reduce((sum, item) => sum + item.quantity, 0)} items
+                                </Badge>
+                              )}
+                            </div>
+                          </SelectItem>
+                        );
+                      })}
+                    </SelectContent>
+                  </Select>
+                  {selectedTable && (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="absolute right-7 top-1/2 z-10 h-7 w-7 -translate-y-1/2 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100"
+                      onClick={event => {
+                        event.stopPropagation();
+                        beginTableNameEdit();
+                      }}
+                      title="Renomear para o cliente"
+                      aria-label="Renomear mesa para o cliente"
+                    >
+                      <Pencil className="h-3.5 w-3.5" />
+                    </Button>
+                  )}
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -487,6 +551,7 @@ function POSPage({ currentStore }: { currentStore: any }) {
             isProcessing={isProcessing}
             selectedTable={selectedTable}
             tables={tables}
+            tableNames={temporaryTableNames}
             toast={toast}
             dishes={dishes}
             isDiscountEnabled={isDiscountEnabled}
@@ -517,6 +582,7 @@ function POSPage({ currentStore }: { currentStore: any }) {
         tables={tables}
         onSelectTable={setSelectedTable}
         tableOrders={tableCarts}
+        tableNames={temporaryTableNames}
       />
 
       <CartModal open={showCart} onOpenChange={setShowCart}>
@@ -533,6 +599,7 @@ function POSPage({ currentStore }: { currentStore: any }) {
           isProcessing={isProcessing}
           selectedTable={selectedTable}
           tables={tables}
+          tableNames={temporaryTableNames}
           dishes={dishes}
           isDiscountEnabled={isDiscountEnabled}
           discountApplied={discountApplied}
@@ -548,7 +615,7 @@ function POSPage({ currentStore }: { currentStore: any }) {
         onProcessSingleBill={handleProcessSingleBill}
         onPrintBill={handlePrintBill}
         storeName={currentStore?.name || ''}
-        tableName={tables.find(t => t.id === selectedTable)?.name || 'Table'}
+        tableName={selectedTable ? getTableDisplayName(selectedTable) : 'Table'}
         existingCustomers={existingCustomerNames}
         stores={allStores.map(s => ({ id: s.id, name: s.name }))}
         currentStoreId={currentStore?.id}

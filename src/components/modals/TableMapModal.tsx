@@ -7,30 +7,16 @@ interface CartItem {
   quantity: number;
 }
 
-interface SplitBill {
-  id: string;
-  items: CartItem[];
-  paymentMethod: string | null;
-  isPaid: boolean;
-}
-
-// ============ TableMapModal Component ============
 interface TableMapModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   tables: RestaurantTable[];
   onSelectTable: (tableId: string) => void;
-  tableOrders: Record<string, CartItem[]>; // Added
+  tableOrders: Record<string, CartItem[]>;
+  tableNames?: Record<string, string>;
 }
 
-interface TableMapModalProps {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  tables: RestaurantTable[];
-  onSelectTable: (tableId: string) => void;
-}
-
-export function TableMapModal({ open, onOpenChange, tables, onSelectTable, tableOrders }: TableMapModalProps) {
+export function TableMapModal({ open, onOpenChange, tables, onSelectTable, tableOrders, tableNames = {} }: TableMapModalProps) {
   const getTableStatus = (tableId: string) => {
     const orders = tableOrders[tableId];
     return orders && orders.length > 0;
@@ -57,7 +43,7 @@ export function TableMapModal({ open, onOpenChange, tables, onSelectTable, table
                   onOpenChange(false);
                 }}
               >
-                <span className="font-medium">{table.name}</span>
+                <span className="font-medium">{tableNames[table.id] || table.name}</span>
                 {isOccupied && (
                   <div className="flex flex-col items-center mt-1">
                     <span className="text-xs bg-white/20 px-2 py-1 rounded-full mb-1">

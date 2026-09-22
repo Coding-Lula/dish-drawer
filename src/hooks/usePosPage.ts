@@ -55,6 +55,7 @@ export function usePosPage(currentStore: any) {
 
   const [tableCarts, setTableCarts] = useState<Record<string, PosCartItem[]>>({});
   const [tableDiscounts, setTableDiscounts] = useState<Record<string, boolean>>({});
+  const [temporaryTableNames, setTemporaryTableNames] = useState<Record<string, string>>({});
 
   const cartStorageKey =
     user?.id && currentStore?.id ? `pos_cart::${user.id}::${currentStore.id}` : null;
@@ -177,6 +178,23 @@ export function usePosPage(currentStore: any) {
   }, [credits, payments]);
 
   const currentCart = selectedTable ? tableCarts[selectedTable] || [] : [];
+  const getTableDisplayName = (tableId: string) => {
+    const table = tables.find(item => item.id === tableId);
+    return temporaryTableNames[tableId] || table?.name || `Table ${table?.table_number ?? ''}`.trim();
+  };
+
+  const setTemporaryTableName = (tableId: string, name: string) => {
+    const trimmedName = name.trim();
+    setTemporaryTableNames(previous => {
+      const next = { ...previous };
+      if (trimmedName) {
+        next[tableId] = trimmedName;
+      } else {
+        delete next[tableId];
+      }
+      return next;
+    });
+  };
   const breakfastDish = dishes.find(d => d.name.toLowerCase() === 'breakfast');
 
   const allCategories = [...new Set(dishes.map(d => d.category).filter(Boolean))] as string[];
@@ -520,12 +538,12 @@ export function usePosPage(currentStore: any) {
   };
 
   const handlePrintBill = (bill: SplitBill, billNumber: number) => {
-    const tableLabel = `${tables.find(t => t.id === selectedTable)?.name || 'N/A'} - Conta ${billNumber}`;
+    const tableLabel = `${selectedTable ? getTableDisplayName(selectedTable) : 'N/A'} - Conta ${billNumber}`;
     void printOrder(bill.items, tableLabel);
   };
 
   const handlePrintReceipt = () => {
-    void printOrder(currentCart, tables.find(t => t.id === selectedTable)?.name || '');
+    void printOrder(currentCart, selectedTable ? getTableDisplayName(selectedTable) : '');
   };
 
   const setDiscountApplied = (applied: boolean) => {
@@ -545,6 +563,9 @@ export function usePosPage(currentStore: any) {
     tableCarts,
     setTableCarts,
     tableDiscounts,
+    temporaryTableNames,
+    setTemporaryTableName,
+    getTableDisplayName,
     selectedCategory,
     setSelectedCategory,
     selectedPayment,
