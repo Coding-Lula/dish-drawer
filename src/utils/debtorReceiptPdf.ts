@@ -6,6 +6,7 @@ export interface ReceiptRow {
   description: string;
   qty: number | null;
   total: number;
+  saldo?: number;
 }
 
 export interface ReceiptData {
@@ -44,10 +45,11 @@ export function buildHtml(data: ReceiptData): string {
           <td style="padding:11px 0;font-size:15px;color:${SOFT};text-align:center;">${escapeHtml(r.date)}</td>
           <td style="padding:11px 0;font-size:15px;color:${SOFT};text-align:center;">${r.qty ?? '—'}</td>
           <td style="padding:11px 0;font-size:15px;color:${INK};text-align:right;">${fmt(r.total)} MT</td>
+          <td style="padding:11px 0;font-size:15px;color:${INK};text-align:right;">${typeof r.saldo === 'number' ? `${fmt(r.saldo)} MT` : '—'}</td>
         </tr>`
           )
           .join('')
-      : `<tr class="pdf-block"><td colspan="4" style="padding:24px 0;text-align:center;color:${SOFT};font-size:14px;">Sem movimentos</td></tr>`;
+      : `<tr class="pdf-block"><td colspan="5" style="padding:24px 0;text-align:center;color:${SOFT};font-size:14px;">Sem movimentos</td></tr>`;
 
   // Determine period or date display label
   const dateLabel = data.periodLabel ? 'PERÍODO' : 'DATA';
@@ -84,6 +86,7 @@ export function buildHtml(data: ReceiptData): string {
           <th style="padding:14px 0;font-size:13px;letter-spacing:1.5px;text-align:center;">DATA</th>
           <th style="padding:14px 0;font-size:13px;letter-spacing:1.5px;text-align:center;">QTD</th>
           <th style="padding:14px 0;font-size:13px;letter-spacing:1.5px;text-align:right;">TOTAL</th>
+          <th style="padding:14px 0;font-size:13px;letter-spacing:1.5px;text-align:right;">SALDO</th>
         </tr>
       </thead>
       <tbody>${rows}</tbody>

@@ -311,13 +311,22 @@ function DebtorsContent() {
   ) => {
     if (!selectedDebtorForBilling) return;
 
-    // Convert preview rows to ReceiptRow interface
-    const pdfRows: ReceiptRow[] = salesRows.map((row) => ({
-      date: row.date.split(' ')[0], // only show dd/MM/yyyy in PDF row
-      description: row.dish_name,
-      qty: row.quantity,
-      total: row.total,
-    }));
+    // Convert preview rows to ReceiptRow interface with running balance (saldo)
+    let runningSaldo = previousBalance;
+    const pdfRows: ReceiptRow[] = salesRows.map((row) => {
+      // In salesRows:
+      // - Consumptions / purchases have positive row.total (e.g. 20 MT). They reduce debtor balance.
+      // - Payments have negative row.total (e.g. -30 MT). They increase debtor balance.
+      // So runningSaldo = runningSaldo - row.total
+      runningSaldo -= row.total;
+      return {
+        date: row.date.split(' ')[0], // only show dd/MM/yyyy in PDF row
+        description: row.dish_name,
+        qty: row.quantity,
+        total: row.total,
+        saldo: runningSaldo,
+      };
+    });
 
     const periodLabel = `${format(startDate, 'dd/MM/yyyy')} - ${format(endDate, 'dd/MM/yyyy')}`;
 
