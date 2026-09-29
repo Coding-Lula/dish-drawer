@@ -12,6 +12,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { downloadDebtorReceiptPdf, type ReceiptRow } from '@/utils/debtorReceiptPdf';
 import { DebtorBillingModal } from '@/components/modals/DebtorBillingModal';
+import { GlobalDebtorReportModal } from '@/components/modals/GlobalDebtorReportModal';
 import { format } from 'date-fns';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
@@ -117,6 +118,9 @@ function DebtorsContent() {
   // Billing modal states
   const [billingModalOpen, setBillingModalOpen] = useState(false);
   const [selectedDebtorForBilling, setSelectedDebtorForBilling] = useState<GroupedDebtor | null>(null);
+
+  // Global report modal state
+  const [globalReportModalOpen, setGlobalReportModalOpen] = useState(false);
 
   // Fetch transaction items for all credits
   useEffect(() => {
@@ -249,50 +253,8 @@ function DebtorsContent() {
 
   const loading = creditsLoading || itemsLoading || paymentsLoading;
 
-  const handleDownload = () => {
-    // Sheet 1: Summary (one row per debtor)
-    const summaryData = groupedDebtors.map(debtor => ({
-      'Nome do Devedor': debtor.customer_name,
-      'Total em Dívida (MT)': debtor.total_owed
-    }));
-
-    // Sheet 2: Detailed breakdown
-    const detailData = groupedDebtors.flatMap(debtor =>
-      debtor.bills.flatMap(bill => {
-        if (bill.items.length === 0) {
-          return [{
-            'Data': new Date(bill.credit.date).toLocaleDateString(),
-            'Devedor': debtor.customer_name,
-            'Item': 'Sem detalhes de itens',
-            'Quantidade': 0,
-            'Preço Unitário (MT)': 0,
-            'Total (MT)': Number(bill.credit.sale_amount)
-          }];
-        }
-        return bill.items.map(item => ({
-          'Data': new Date(bill.credit.date).toLocaleDateString(),
-          'Devedor': debtor.customer_name,
-          'Item': item.dishes?.name || 'Item Desconhecido',
-          'Quantidade': item.quantity,
-          'Preço Unitário (MT)': item.unit_price,
-          'Total (MT)': item.quantity * item.unit_price
-        }));
-      })
-    );
-
-    const wb = XLSX.utils.book_new();
-    const ws1 = XLSX.utils.json_to_sheet(summaryData);
-    const ws2 = XLSX.utils.json_to_sheet(detailData);
-
-    // Set column widths
-    ws1['!cols'] = [{ wch: 30 }, { wch: 20 }];
-    ws2['!cols'] = [{ wch: 15 }, { wch: 30 }, { wch: 30 }, { wch: 12 }, { wch: 18 }, { wch: 15 }];
-
-    XLSX.utils.book_append_sheet(wb, ws1, 'Resumo');
-    XLSX.utils.book_append_sheet(wb, ws2, 'Detalhes');
-
-    const date = new Date().toISOString().split('T')[0];
-    XLSX.writeFile(wb, `Relatorio_Devedores_${date}.xlsx`);
+  const handleOpenGlobalReportModal = () => {
+    setGlobalReportModalOpen(true);
   };
 
   const handleOpenBillingModal = (debtor: GroupedDebtor) => {
@@ -357,9 +319,9 @@ function DebtorsContent() {
           <Button
             variant="ghost"
             size="icon"
-            onClick={handleDownload}
+            onClick={handleOpenGlobalReportModal}
             disabled={groupedDebtors.length === 0}
-            title="Descarregar Lista"
+            title="Descarregar Relatório Geral de Devedores"
           >
             <Download className="h-5 w-5" />
           </Button>
@@ -588,6 +550,13 @@ function DebtorsContent() {
           onDownload={handleGeneratePdf}
         />
       )}
+
+      {/* Global Debtor Report Modal */}
+      <GlobalDebtorReportModal
+        open={globalReportModalOpen}
+        onOpenChange={setGlobalReportModalOpen}
+        groupedDebtors={groupedDebtors}
+      />
 
       <AlertDialog open={confirmDeleteOpen} onOpenChange={setConfirmDeleteOpen}>
         <AlertDialogContent>
