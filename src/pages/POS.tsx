@@ -10,11 +10,12 @@ import { TableMapModal } from '@/components/modals/TableMapModal';
 import { BundleSelectorModal } from '@/components/modals/BundleSelectorModal';
 import { DishSelectionModal } from '@/components/modals/DishSelectionModal';
 import { Plus, Minus, Trash2, ShoppingBag, CreditCard, Printer, Table, Split, Pencil, Coffee, Search, Check, X } from 'lucide-react';
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { cn } from '@/lib/utils';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { CartModal } from '@/components/modals/CartModal';
 import { EditPriceModal } from '@/components/modals/EditPriceModal';
 import { usePosPage, SplitBill } from '@/hooks/usePosPage';
@@ -67,6 +68,47 @@ function CartContent({
   const currentTableName = selectedTable
     ? tableNames[selectedTable] || tables.find((t: any) => t.id === selectedTable)?.name || 'No Table'
     : 'No Table';
+
+  const [showSummaryModal, setShowSummaryModal] = useState(false);
+  const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const isLongPressRef = useRef(false);
+
+  useEffect(() => {
+    return () => {
+      if (longPressTimerRef.current) {
+        clearTimeout(longPressTimerRef.current);
+      }
+    };
+  }, []);
+
+  const handlePressStart = () => {
+    if (cart.length === 0) return;
+    if (longPressTimerRef.current) {
+      clearTimeout(longPressTimerRef.current);
+    }
+    isLongPressRef.current = false;
+    longPressTimerRef.current = setTimeout(() => {
+      isLongPressRef.current = true;
+      setShowSummaryModal(true);
+    }, 1000);
+  };
+
+  const handlePressEnd = () => {
+    if (longPressTimerRef.current) {
+      clearTimeout(longPressTimerRef.current);
+      longPressTimerRef.current = null;
+    }
+  };
+
+  const handlePrinterClick = (e: React.MouseEvent) => {
+    if (isLongPressRef.current) {
+      e.preventDefault();
+      e.stopPropagation();
+      isLongPressRef.current = false;
+      return;
+    }
+    handlePrintReceipt();
+  };
 
   return (
     <>
@@ -201,7 +243,20 @@ function CartContent({
             <span className="text-2xl font-bold">{cartTotal.toLocaleString()} MT</span>
           </div>
           <div className="flex gap-2">
-            <Button variant="outline" size="sm" onClick={handlePrintReceipt} disabled={cart.length === 0}>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={cart.length === 0}
+              onMouseDown={handlePressStart}
+              onMouseUp={handlePressEnd}
+              onMouseLeave={handlePressEnd}
+              onTouchStart={handlePressStart}
+              onTouchEnd={handlePressEnd}
+              onTouchCancel={handlePressEnd}
+              onContextMenu={e => e.preventDefault()}
+              onClick={handlePrinterClick}
+              title="Clique para imprimir / Mantenha pressionado para ver resumo"
+            >
               <Printer className="w-4 h-4" />
             </Button>
             <Button
@@ -214,6 +269,40 @@ function CartContent({
           </div>
         </div>
       </div>
+
+      <Dialog open={showSummaryModal} onOpenChange={setShowSummaryModal}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Resumo do Pedido</DialogTitle>
+            {currentTableName && (
+              <DialogDescription>Mesa: {currentTableName}</DialogDescription>
+            )}
+          </DialogHeader>
+          <div className="py-2 space-y-3 max-h-[60vh] overflow-y-auto pr-1">
+            {cart.map((item: PosCartItem) => {
+              const itemGroupTotal = Number(item.unitPrice) * item.quantity;
+              return (
+                <div key={item.dish.id} className="flex justify-between items-center border-b pb-2 text-sm">
+                  <div className="font-medium text-foreground">
+                    {item.dish.name} <span className="text-muted-foreground ml-1">x{item.quantity}</span>
+                  </div>
+                  <div className="font-semibold tabular-nums">
+                    {itemGroupTotal.toLocaleString()} MT
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+          <DialogFooter className="flex-col sm:flex-row items-center justify-between border-t pt-3 gap-2">
+            <div className="text-base font-bold text-foreground">
+              Total: {cartTotal.toLocaleString()} MT
+            </div>
+            <Button variant="outline" size="sm" onClick={() => setShowSummaryModal(false)}>
+              Fechar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </>
   );
 }
